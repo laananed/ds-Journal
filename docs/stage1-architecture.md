@@ -116,6 +116,24 @@ frontend/src/
 - PostgreSQL
 - Alembic
 
+### Local Backend Environment
+
+Stage 1 后端本机环境：
+
+- Python 3.12（使用 `py -3.12` 启动）
+- 依赖隔离：`backend/.venv`，由标准库 `venv` 创建
+- 依赖管理：`pip`，实际安装版本记录在 `backend/requirements.txt`
+- 执行命令统一使用：
+  `backend\.venv\Scripts\python.exe`
+  不使用全局 pip
+
+Stage 1 不使用：
+
+- uv
+- Poetry
+- Conda 项目环境
+- 其它额外包管理配置
+
 ---
 
 ## 7. Backend Structure
@@ -132,6 +150,52 @@ backend/app/
     ├── models.py
     └── service.py
 ```
+
+### Implementation Progress
+
+上述结构是 Stage 1 的目标结构，
+不代表当前已经全部建立。
+
+Task 1：
+Frontend 初始化完成。
+
+Task 2：
+Backend 初始化。
+
+Task 2 只创建：
+
+```text
+backend/
+├── app/
+│   ├── __init__.py
+│   └── main.py
+├── requirements.txt
+└── README.md
+```
+
+`main.py` 只负责：
+
+- 创建 FastAPI Application；
+- 直接定义 `GET /api/health`。
+
+Task 2 暂不创建：
+
+- `database.py`
+- `journal/`
+- `router.py`
+- `schemas.py`
+- `models.py`
+- `service.py`
+
+也不引入：
+
+- 应用工厂；
+- 配置层；
+- 响应包装；
+- 业务 Router。
+
+数据库结构与 pytest 要求保持不变，
+在对应的后续 Task 中再实现。
 
 ---
 

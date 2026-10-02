@@ -644,7 +644,67 @@ Backend Stage 1 不负责推断用户想写哪一天。
 
 ---
 
-## 15. API Summary
+## 15. GET /api/health
+
+用途：
+
+验证应用是否存活。
+
+```text
+GET /api/health
+```
+
+它只表示：
+
+FastAPI 应用可以响应 HTTP 请求。
+
+它不表示：
+
+- 数据库可以连接；
+- 数据库 Schema 正确；
+- Journal 业务可用。
+
+也就是：
+
+该接口不检查数据库。
+
+### Success
+
+HTTP:
+
+`200 OK`
+
+Response Content-Type:
+
+`application/json`
+
+Response：
+
+```json
+{
+  "status": "ok"
+}
+```
+
+### Failure
+
+应用无法响应时：
+
+请求不会得到 `200`。
+
+Stage 1 不为该接口设计额外的错误响应结构。
+
+### Scope
+
+该接口：
+
+- 不改变任何 Journal 契约；
+- 不返回 Journal 数据；
+- 不接受请求参数或请求体。
+
+---
+
+## 16. API Summary
 
 | Method | Endpoint | Purpose |
 |---|---|---|
@@ -654,10 +714,11 @@ Backend Stage 1 不负责推断用户想写哪一天。
 | GET | `/api/journals/{id}` | 获取单篇 Journal |
 | PATCH | `/api/journals/{id}` | 修改 Journal |
 | DELETE | `/api/journals/{id}` | 删除 Journal |
+| GET | `/api/health` | 验证应用存活（不检查数据库） |
 
 ---
 
-## 16. API Change Protocol
+## 17. API Change Protocol
 
 如果开发过程中发现 API 设计存在问题：
 
