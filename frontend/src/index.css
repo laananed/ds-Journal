@@ -1,0 +1,9 @@
+:root {
+  font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
+  color: #08060d;
+  background: #fff;
+}
+
+body {
+  margin: 0;
+}

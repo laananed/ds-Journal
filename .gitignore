@@ -1,2 +1,16 @@
 # Codex workspace
 **/.omx/
+
+# WorkBuddy workspace
+/.workbuddy/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment files
+.env
+.env.*
+!.env.example
