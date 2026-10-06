@@ -248,6 +248,48 @@ backend/
 
 ---
 
+### Task 4
+
+实现并验证 `POST /api/journals` 创建链路。
+
+Task 4 分两阶段实施，不扩展到其他 CRUD 或 Frontend。
+以下定义记录已确定的开发范围，不代表当前已经实现。
+
+#### Task 4.1：Journal 创建请求与响应 Schema
+
+包含：
+
+- `backend/app/journal/schemas.py`；
+- `JournalCreate` 与 `JournalResponse`；
+- 最小 Schema 测试；
+- 必要的 pytest 依赖记录和 Backend README 更新。
+
+Schema 行为遵守 `docs/stage1-api.md`，不增加未规定的业务限制。
+验收仅使用内存数据或未持久化的 ORM 对象，不连接或修改数据库。
+
+本阶段不包含：
+
+- `JournalUpdate` 或其他未来 Schema；
+- Service、Router、Session 注入或 `main.py` 注册；
+- 数据库写入、CRUD API 或 Frontend；
+- Migration 或 Model 修改。
+
+#### Task 4.2：Journal 创建 API
+
+在 Task 4.1 验收通过后实现：
+
+- 创建 Service；
+- POST Router；
+- 必要的 Session 注入；
+- `main.py` 中的 Router 注册；
+- 最小创建 API 测试。
+
+本阶段只完成 `POST /api/journals` 创建链路，
+不实现其他 CRUD、Frontend、额外架构层或 Stage 2 功能。
+API Contract 与 Journal 数据模型保持不变。
+
+---
+
 ## 8. Backend Responsibilities
 
 ### main.py

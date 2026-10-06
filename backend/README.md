@@ -1,6 +1,6 @@
 # SeekJournal Backend
 
-SeekJournal 后端（Stage 1 / Task 3 第二步产物）。
+SeekJournal 后端（Stage 1 / Task 4.1 产物）。
 
 当前包含：
 
@@ -10,9 +10,12 @@ SeekJournal 后端（Stage 1 / Task 3 第二步产物）。
 - SQLAlchemy 2.x 数据库基础（Engine / Session 工厂 / Declarative Base）；
 - Journal SQLAlchemy Model；
 - Alembic 首次迁移，已在本地数据库建立 `journals` 表；
+- Journal 的 Pydantic Schema（`JournalCreate` / `JournalResponse`）；
+- 只使用内存数据的 Schema 测试（pytest）；
 - 一个只读的历史连接验证脚本。
 
-Journal CRUD API 尚未实现，前端尚未接入。
+还没有任何接口：`POST /api/journals` 的 Service、Router 与 API 测试尚未实现，
+前端尚未接入。
 
 ## 环境要求
 
@@ -29,7 +32,10 @@ backend/
 │   ├── database.py             # Engine / SessionLocal / Base
 │   └── journal/
 │       ├── __init__.py
-│       └── models.py           # Journal Model
+│       ├── models.py           # Journal Model
+│       └── schemas.py          # JournalCreate / JournalResponse
+├── tests/
+│   └── test_journal_schemas.py # Task 4.1 的 Schema 测试（内存数据）
 ├── alembic/
 │   ├── env.py
 │   ├── script.py.mako
@@ -205,6 +211,37 @@ PASS  数据库连接可用，且尚未创建业务表
 .\.venv\Scripts\python.exe -m alembic current
 ```
 
+## 运行 Schema 测试
+
+Stage 1 / Task 4.1 的 Pydantic Schema 测试在 `tests/test_journal_schemas.py`。
+在 `backend/` 目录下执行：
+
+```powershell
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_journal_schemas.py
+```
+
+说明：
+
+- 必须在 `backend/` 目录下运行，`app` 包才能被导入；
+- `-B` 不写 `.pyc`，`-p no:cacheprovider` 不生成 `.pytest_cache`；
+- 这些测试**只使用内存数据与未持久化的 ORM 对象**：不创建数据库连接、
+  不创建 Session、不 flush / commit、不执行 SQL；
+- 因此运行测试**不需要启动 Docker 或 PostgreSQL**；
+- 导入 Model 会经 `app/database.py` 读取本机 `backend/.env` 并建立 Engine 对象，
+  但 `create_engine` 是惰性的，不会真的连接数据库。
+
+已覆盖：
+
+- `JournalCreate`：`title` 省略默认 `None`、显式 `null`、普通字符串；
+  缺少 `content` / `journal_date`；必填字段为 `null`；
+  合法日期（含有效闰日 2024-02-29）；非法日期（2026-02-30、无效闰日 2026-02-29 等）；
+  `content` 空字符串被接受；
+- 额外字段策略：`id` / `created_at` / `updated_at` 等未知字段被忽略，
+  不会出现在 `model_dump()` 中；
+- `JournalResponse`：恰好六个字段、要求六字段齐全、`title` 可为 `null`；
+- JSON 序列化：`journal_date` 表达为 `YYYY-MM-DD`，时间可解析回带时区原值；
+- 未持久化 `Journal` 对象经 `model_validate()` 转换为 `JournalResponse`，字段值一致。
+
 ## 启动应用
 
 ```powershell
@@ -259,13 +296,16 @@ docker compose --env-file backend/.env stop
 - SQLAlchemy 2.x 数据库基础：Engine、Session 工厂、共享 Declarative Base（`app/database.py`）
 - Journal Model：`journals` 表六个字段（`app/journal/models.py`）
 - Alembic 首次迁移，`journals` 表已在本地数据库建立
+- Journal Pydantic Schema：`JournalCreate` / `JournalResponse`（`app/journal/schemas.py`）
+- Schema 测试（`tests/test_journal_schemas.py`，pytest，全部使用内存数据）
 - 只读的历史连接验证脚本（`scripts/check_db.py`）
 
-尚未实现：
+尚未实现（Task 4.2 及以后）：
 
-- Journal CRUD API（`POST` / `GET` / `PATCH` / `DELETE` `/api/journals`）；
-- Pydantic Schema、Router、Service；
-- CORS、认证、pytest；
+- `POST /api/journals` 的 Service、Router、Session 注入与 `main.py` 注册；
+- `JournalUpdate` 与其他 CRUD Schema（`GET` / `PATCH` / `DELETE`）；
+- API 测试（TestClient）；
+- CORS、认证；
 - 前端调用。
 
-`journals` 表已经存在，但还没有任何接口能读写它。
+`journals` 表已经存在，Schema 也已完成，但还没有任何接口能读写它。
