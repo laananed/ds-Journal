@@ -400,6 +400,61 @@ Task 6.2 的验收除功能正确外，还包括：
 
 ---
 
+### Task 7
+
+实现并验证 `DELETE /api/journals/{id}` 硬删除链路。
+
+Task 7 分两阶段实施，不扩展到回收箱、软删除、Frontend 或 Stage 2 功能。
+以下定义记录已确定的开发范围，不代表当前已经实现。
+
+完整 API 定义在 `docs/stage1-api.md` 第 9 节，这里不重复维护。
+删除策略遵守本文档第 17 节：Stage 1 使用硬删除，
+不添加 `deleted_at`，回收箱属于后续 Stage。
+
+#### Task 7.1：删除 Service、DELETE Router 与最小 API 测试
+
+包含：
+
+- 删除 Service（按主键硬删除，未命中返回 `False`）；
+- `DELETE /api/journals/{id}` Router 与 Session 注入；
+- 最小真实数据库 API 测试（复用共享 `api` fixture）；
+- Backend README 更新。
+
+行为：
+
+- 记录存在：硬删除，成功 `commit`，返回 `204 No Content`，响应体为空；
+- 记录不存在：返回 `404 Not Found`；
+- 非整数路径参数：由 FastAPI / Pydantic 返回标准 `422`；
+- 写入失败时 `rollback` 并继续抛异常，不吞异常、不返回伪成功，
+  也不把写入失败改写成 `404`。
+
+`delete` 与 `commit` 的写入路径必须置于异常处理范围内。
+Service 不依赖 FastAPI `HTTPException`，
+不引入软删除字段、Repository 或额外抽象层，
+不全表遍历、不批量删除、不直接拼接 SQL。
+
+本阶段不包含：
+
+- 故障注入与失败回滚的专项验证；
+- 同日其他记录不受影响的专项验证；
+- 删除后详情 `404`、列表 / 日期筛选不再出现的联动验证；
+- `DELETE` 之外的 CRUD、Frontend、额外依赖或架构层；
+- Model、Schema、Migration、API Contract 或产品需求修改。
+
+#### Task 7.2：删除失败回滚、影响范围与完整回归
+
+在 Task 7.1 验收通过后实现并验证：
+
+- 故障注入与失败回滚：`rollback` 后记录恢复、无半截删除，Session 仍可继续使用；
+- 同日其他记录不受影响；
+- 删除后 `GET /api/journals/{id}` 返回 `404`；
+- 删除后列表与按 `journal_date` 筛选不再出现该记录；
+- 完整回归与无残留验收。
+
+Task 7.1 通过不代表整个 Task 7 完成。
+
+---
+
 ## 8. Backend Responsibilities
 
 ### main.py

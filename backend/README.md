@@ -1,6 +1,6 @@
 # SeekJournal Backend
 
-SeekJournal 后端（Stage 1 / Task 6.2 产物）。
+SeekJournal 后端（Stage 1 / Task 7.1 产物）。
 
 当前包含：
 
@@ -16,12 +16,14 @@ SeekJournal 后端（Stage 1 / Task 6.2 产物）。
 - `GET /api/journals` 列表，以及可选的 `journal_date` 精确日期筛选；
 - `GET /api/journals/{id}` 单篇详情（不存在返回 `404`）；
 - `PATCH /api/journals/{id}` 部分更新（记录不存在返回 `404`）；
-- 六套 pytest 测试：Schema 测试（创建 / 响应）、`JournalUpdate` Schema 测试
+- `DELETE /api/journals/{id}` 硬删除（成功返回 `204` 与空响应体，不存在返回 `404`）；
+- 七套 pytest 测试：Schema 测试（创建 / 响应）、`JournalUpdate` Schema 测试
   （两者只用内存数据）、创建 API 测试、列表 / 筛选 API 测试、
-  详情 API 测试、修改（PATCH）API 测试（后四套使用 TestClient + 真实 PostgreSQL）；
+  详情 API 测试、修改（PATCH）API 测试、删除（DELETE）API 测试
+  （后五套使用 TestClient + 真实 PostgreSQL）；
 - 一个只读的历史连接验证脚本。
 
-`DELETE` 尚未实现，前端尚未接入。
+前端尚未接入。
 
 ## 环境要求
 
@@ -40,8 +42,8 @@ backend/
 │       ├── __init__.py
 │       ├── models.py           # Journal Model
 │       ├── schemas.py          # JournalCreate / JournalUpdate / JournalResponse
-│       ├── service.py          # create_journal（事务边界）/ list_journals / get_journal / update_journal
-│       └── router.py           # POST / GET /api/journals、GET / PATCH /api/journals/{id}
+│       ├── service.py          # create_journal（事务边界）/ list_journals / get_journal / update_journal / delete_journal
+│       └── router.py           # POST / GET /api/journals、GET / PATCH / DELETE /api/journals/{id}
 ├── tests/
 │   ├── conftest.py             # 共享 api fixture（事务隔离 + 无残留检查）
 │   ├── test_journal_schemas.py # Task 4.1 的 Schema 测试（只用内存数据）
@@ -49,7 +51,8 @@ backend/
 │   ├── test_journal_api.py     # Task 4.2 的创建 API 测试（真实 PostgreSQL）
 │   ├── test_journal_read_api.py   # Task 5.1 的列表 / 筛选测试（真实 PostgreSQL）
 │   ├── test_journal_detail_api.py # Task 5.2 的详情测试（真实 PostgreSQL）
-│   └── test_journal_update_api.py # Task 6.2 的修改 API 测试（真实 PostgreSQL）
+│   ├── test_journal_update_api.py # Task 6.2 的修改 API 测试（真实 PostgreSQL）
+│   └── test_journal_delete_api.py # Task 7.1 的删除 API 测试（真实 PostgreSQL）
 ├── alembic/
 │   ├── env.py
 │   ├── script.py.mako
@@ -504,6 +507,54 @@ Stage 1 / Task 6.2 的部分更新测试在 `tests/test_journal_update_api.py`�
 修改 `journal_date` 后同一天仍允许存在多篇记录（该列不是 UNIQUE），
 测试只在返回结果里定位自己创建的 id，不假设整个列表的内容。
 
+## 运行删除（DELETE）API 测试
+
+Stage 1 / Task 7.1 的硬删除测试在 `tests/test_journal_delete_api.py`。
+在 `backend/` 目录下执行：
+
+```powershell
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_journal_delete_api.py
+```
+
+同样需要一个正在运行的本地 PostgreSQL，并复用同一个 `api` fixture。
+
+### 行为
+
+- 记录存在：硬删除，成功 `commit`，返回 `204 No Content` 与**空响应体**
+  （不是 `null`、`{}`、Journal 对象或成功消息）；
+- 记录不存在：返回 `404`；
+- 非整数路径参数返回标准 `422`；
+- Stage 1 使用硬删除：记录直接从 PostgreSQL 移除，不做软删除、不写 `deleted_at`。
+
+失败的删除（`delete` / `commit` 报错）在 Service 内 `rollback` 后继续抛出异常，
+不吞异常、不返回伪成功，也不把写入失败改写成 `404`。
+`404` 与 `422` 都发生在写入之前，不会改变任何数据。
+
+### 覆盖范围
+
+- 删除已存在的记录返回 `204`，响应体为 `b""`；
+- 用**原生 SQL** 确认该 `id` 在本次测试事务里已经不存在（不依赖 Session identity map）；
+- 删除只影响目标行：其余记录逐字段原样保留；
+- 同一记录删两次，第二次返回 `404`；
+- 不存在的合法整数 `id` 返回 `404`，且不会顺手创建任何东西；
+- `0` 与负数同样返回 `404` —— 契约没有规定 `gt=0`；
+- 非整数路径参数（`abc`、`12abc`、`1.5`、`null`、`true`、`2026-10-02`）返回标准 `422`；
+- `404` 与 `422` 前后整表六字段快照与记录数量都不变；
+- 独立连接看不到任何变化：删除只存在于被回滚的外层事务里。
+
+### 删除目标只用测试自己创建的数据
+
+删除是一类不可逆操作，因此本文件的删除目标**一律是本测试自己创建的合成记录**，
+不存在「删掉既有数据」的路径：
+
+- 数据由 `_seed()`（`session.add` + `flush`）在当前外层事务内创建；
+- 不存在的 `id` 从当前事务里真实存在的 `id` 集合反推，不写死固定值；
+- conftest 在导入应用之前已把连接切到测试库 `seekjournal_test`，
+  所以这些删除不会落在开发库 `seekjournal` 上。
+
+测试结束由 fixture 回滚外层事务，记录随之恢复，测试库回到运行前的行数；
+`id` 同样会跳号（sequence 不随事务回滚）。
+
 ## 独立测试数据库与完整回归
 
 API 测试现在使用同一 PostgreSQL 服务中的独立数据库 `seekjournal_test`，
@@ -601,12 +652,15 @@ docker compose --env-file backend/.env stop
 - `GET /api/journals/{id}`：返回单篇 Journal，不存在时返回 `404`
 - `PATCH /api/journals/{id}`：部分更新，成功返回 `200` 与完整六字段记录，
   不存在时返回 `404`，空更新不产生写入
+- `DELETE /api/journals/{id}`：硬删除，成功返回 `204` 与空响应体，不存在时返回 `404`
 - 请求级 Session 依赖 `get_db()`（`app/database.py`）
 - 创建 Service `create_journal()`：成功 commit、失败 rollback；
   查询 Service `list_journals()`（排序与筛选都在 SQL 里完成）与
   `get_journal()`（按主键取单篇，未命中返回 `None`）；
   更新 Service `update_journal()`（部分更新、空更新直接返回、未命中返回 `None`、
-  失败 rollback）（`app/journal/service.py`）
+  失败 rollback）；
+  删除 Service `delete_journal()`（按主键硬删除、未命中返回 `False`、失败 rollback）
+  （`app/journal/service.py`）
 - Journal Router（`app/journal/router.py`），已在 `app/main.py` 注册
 - 本地 PostgreSQL 开发数据库的 Compose 配置
 - SQLAlchemy 2.x 数据库基础：Engine、Session 工厂、共享 Declarative Base（`app/database.py`）
@@ -614,20 +668,20 @@ docker compose --env-file backend/.env stop
 - Alembic 首次迁移，`journals` 表已在本地数据库建立
 - Journal Pydantic Schema：`JournalCreate` / `JournalUpdate` / `JournalResponse`
   （`app/journal/schemas.py`）
-- 六套 pytest 测试：`tests/test_journal_schemas.py`、
+- 七套 pytest 测试：`tests/test_journal_schemas.py`、
   `tests/test_journal_update_schemas.py`（两者只用内存数据）、
   `tests/test_journal_api.py`、`tests/test_journal_read_api.py`、
-  `tests/test_journal_detail_api.py`、`tests/test_journal_update_api.py`
-  （后四套均为 TestClient + 真实 PostgreSQL），
+  `tests/test_journal_detail_api.py`、`tests/test_journal_update_api.py`、
+  `tests/test_journal_delete_api.py`
+  （后五套均为 TestClient + 真实 PostgreSQL），
   共享 fixture 在 `tests/conftest.py`
 - 只读的历史连接验证脚本（`scripts/check_db.py`）
 
 尚未实现：
 
-- `DELETE /api/journals/{id}`；
 - 分页、搜索与排序查询参数；
 - CORS、认证；
 - 前端调用。
 
-`journals` 表现在能创建、能列出、能按日期筛选、能按 `id` 取单篇，也能部分更新；
-删除接口尚未实现，前端尚未接入。
+`journals` 表现在能创建、能列出、能按日期筛选、能按 `id` 取单篇、
+能部分更新，也能硬删除；前端尚未接入。

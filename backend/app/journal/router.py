@@ -4,6 +4,7 @@ Stage 1 / Task 4.2：`POST /api/journals`。
 Stage 1 / Task 5.1：`GET /api/journals`（可选 `journal_date` 精确筛选）。
 Stage 1 / Task 5.2：`GET /api/journals/{id}` 单篇详情。
 Stage 1 / Task 6.2：`PATCH /api/journals/{id}` 部分更新。
+Stage 1 / Task 7.1：`DELETE /api/journals/{id}` 硬删除。
 
 Router 只负责：
 
@@ -13,15 +14,13 @@ Router 只负责：
 - 返回 HTTP 响应。
 
 Router 不写业务规则，也不直接使用 SQLAlchemy。
-
-DELETE 属于后续 Task，本文件暂不实现。
 """
 
 from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -114,3 +113,33 @@ def update_journal(
             detail="Journal not found",
         )
     return journal
+
+
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_journal(
+    id: int,
+    db: Session = Depends(get_db),
+) -> Response:
+    """硬删除一篇 Journal，成功返回 204 与空响应体。
+
+    - 路径参数 `id` 由 FastAPI / Pydantic 解析为整数，
+      非整数（例如 `/api/journals/abc`）返回标准 422；
+    - 合法整数但记录不存在时返回 404；
+    - 成功时返回显式的空 `Response` 与 204：
+      不返回 `null`、`{}`、Journal 对象或成功消息，
+      因此 HTTP 响应体是空字节串；
+    - Stage 1 使用硬删除：记录直接从 PostgreSQL 移除，
+      不使用回收箱或软删除。
+
+    这里只做「调用 Service + 把 False 转成 404」，
+    业务规则与事务边界都在 Service；
+    使用 FastAPI 自带的 `HTTPException` 与标准状态码，
+    不自定义错误包装、错误码或全局异常体系。
+    删除成功不设置 `response_model`：204 本来就没有响应体。
+    """
+    if not service.delete_journal(db, id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Journal not found",
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

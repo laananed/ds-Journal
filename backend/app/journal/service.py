@@ -4,16 +4,18 @@ Stage 1 / Task 4.2：Create。
 Stage 1 / Task 5.1：List（含可选 journal_date 精确筛选）。
 Stage 1 / Task 5.2：Get（按主键取单篇）。
 Stage 1 / Task 6.2：Update（部分更新）。
+Stage 1 / Task 7.1：Delete（按主键硬删除）。
 
 调用关系：Router → Service → SQLAlchemy → psycopg → PostgreSQL。
 
 Service 负责业务行为与事务边界：
 
-- 写入（create / update）：成功 commit，失败 rollback 并把异常继续抛给上层；
+- 写入（create / update / delete）：成功 commit，失败 rollback 并把异常继续抛给上层；
 - 读取（list / get）：只查，不 add / flush / commit，也不修改任何字段。
 
 读取函数不感知 HTTP：找不到记录时返回 None，
-由 Router 决定对外的状态码（当前是 404），
+删除函数不感知 HTTP：找不到记录时返回 False，
+由 Router 决定对外的状态码（当前都是 404），
 因此这里不导入 FastAPI 的 HTTPException。
 
 不包含 Repository、不引入额外抽象层。
@@ -168,3 +170,40 @@ def update_journal(
     # 保证返回的记录带有数据库真正持久化的值（包括新的 updated_at）。
     db.refresh(journal)
     return journal
+
+
+def delete_journal(db: Session, journal_id: int) -> bool:
+    """按主键硬删除一篇 Journal；成功返回 True，记录不存在返回 False。
+
+    Stage 1 使用硬删除（见 `docs/stage1-architecture.md` 第 17 节）：
+    记录直接从 PostgreSQL 移除，不做软删除、不写 `deleted_at`，
+    也不全表遍历或批量删除。
+
+    先用 `Session.get()` 按主键确认记录是否存在：
+
+    - 不存在：直接返回 False，不做任何写入，也不 commit；
+      Router 据此返回 404；
+    - 存在：`Session.delete()` 标记删除，`commit()` 时真正发出 DELETE。
+
+    `delete()` 与 `commit()` 都在同一个异常处理范围内：
+    写入失败时 rollback 并把异常继续抛给上层，
+    不吞异常、不返回伪成功，也不把数据库错误改写成 404。
+
+    删除后**不** refresh 已删除的对象：该记录已经不在数据库里，
+    refresh 只会失败，这里也不需要回读任何字段。
+
+    本函数不感知 HTTP，因此不导入 FastAPI 的 HTTPException。
+    """
+    journal = db.get(Journal, journal_id)
+    if journal is None:
+        return False
+
+    try:
+        db.delete(journal)
+        db.commit()
+    except Exception:
+        # 删除失败必须回滚，否则该 Session 会停留在待回滚状态。
+        db.rollback()
+        raise
+
+    return True
