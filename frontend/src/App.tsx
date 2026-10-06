@@ -1,8 +1,13 @@
 /**
- * SeekJournal 主页（Stage 1 / Task 8.1）。
+ * SeekJournal 主页。
  *
- * 通过真实 HTTP `GET` 请求读取 FastAPI 的 Journal 列表，支持按 `journal_date`
- * 精确筛选与清除筛选，并处理加载中 / 有记录 / 空列表 / 日期无记录 / 请求失败与重试。
+ * Stage 1 / Task 8.1：通过真实 HTTP `GET` 请求读取 FastAPI 的 Journal 列表，
+ * 支持按 `journal_date` 精确筛选与清除筛选，并处理加载中 / 有记录 / 空列表 /
+ * 日期无记录 / 请求失败与重试。
+ *
+ * Stage 1 / Task 8.2：接入创建表单 `JournalEditor`，
+ * 保存成功后按**当前筛选语义**刷新列表（全部还是全部，某日期还是该日期），
+ * 不偷偷改筛选去让新记录出现。
  *
  * 设计要点：
  *
@@ -12,12 +17,15 @@
  * - 用 `AbortController` 在筛选变化或组件卸载时取消上一次请求，
  *   既避免「旧日期的迟到响应覆盖新日期结果」，也不会把取消误报成错误；
  * - 「进入加载中」的状态在事件处理器里设置（而不是在 effect 内同步 setState），
- *   effect 只负责发起请求与收尾，避免级联渲染。
+ *   effect 只负责发起请求与收尾，避免级联渲染；
+ * - 列表刷新与「保存成功」互相独立：保存状态由表单负责，
+ *   这里刷新失败只在列表区域提示，不会被当成保存失败。
  */
 
 import { useEffect, useState } from 'react'
 import './App.css'
 import { listJournals } from './api/journals'
+import JournalEditor from './components/JournalEditor'
 import JournalList from './components/JournalList'
 import type { Journal } from './types/journal'
 
@@ -30,7 +38,7 @@ function App() {
   const [journals, setJournals] = useState<Journal[]>([])
   const [status, setStatus] = useState<LoadStatus>('loading')
   const [errorMessage, setErrorMessage] = useState('')
-  // 失败后点击「重试」时自增，作为 effect 的依赖重新触发请求。
+  // 失败后点击「重试」或保存成功后自增，作为 effect 的依赖重新触发请求。
   const [reloadToken, setReloadToken] = useState(0)
 
   useEffect(() => {
@@ -87,6 +95,18 @@ function App() {
     setReloadToken((token) => token + 1)
   }
 
+  /**
+   * 创建成功后的列表刷新。
+   *
+   * 只触发一次重新加载，保持当前筛选含义不变；
+   * 不在这里等待请求、也不向上抛异常——
+   * 列表刷新失败会在列表区域单独提示，不会被误报成「保存失败」。
+   */
+  function handleJournalSaved() {
+    beginLoading()
+    setReloadToken((token) => token + 1)
+  }
+
   const isFiltering = filterDate !== ''
 
   return (
@@ -95,6 +115,8 @@ function App() {
         <h1>SeekJournal</h1>
         <p className="app-subtitle">查看你的 Journal 记录</p>
       </header>
+
+      <JournalEditor listFilterDate={filterDate} onSaved={handleJournalSaved} />
 
       <section className="app-toolbar">
         <label className="app-filter">
@@ -118,7 +140,7 @@ function App() {
 
       {status === 'error' && (
         <div className="app-state app-state-error" role="alert">
-          <p>加载失败：{errorMessage}</p>
+          <p>列表加载失败：{errorMessage}</p>
           <button type="button" onClick={handleRetry}>
             重试
           </button>

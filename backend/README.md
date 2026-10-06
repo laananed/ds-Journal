@@ -1,6 +1,6 @@
 # SeekJournal Backend
 
-SeekJournal 后端（Stage 1 / Task 8.1 产物）。
+SeekJournal 后端（Stage 1 / Task 8.1 列表接入与 Task 8.2 创建接入的后端产物）。
 
 当前包含：
 
@@ -17,7 +17,8 @@ SeekJournal 后端（Stage 1 / Task 8.1 产物）。
 - `GET /api/journals/{id}` 单篇详情（不存在返回 `404`）；
 - `PATCH /api/journals/{id}` 部分更新（记录不存在返回 `404`）；
 - `DELETE /api/journals/{id}` 硬删除（成功返回 `204` 与空响应体，不存在返回 `404`）；
-- 本地开发用的最小 CORS（只允许 `127.0.0.1:5173` 与 `localhost:5173` 的 `GET`）；
+- 本地开发用的最小 CORS（只允许 `127.0.0.1:5173` 与 `localhost:5173` 的
+  `GET` 与 `POST`，并允许 JSON 请求体所需的 `Content-Type` 请求头）；
 - 七套 pytest 测试：Schema 测试（创建 / 响应）、`JournalUpdate` Schema 测试
   （两者只用内存数据）、创建 API 测试、列表 / 筛选 API 测试、
   详情 API 测试、修改（PATCH）API 测试、删除（DELETE）API 测试
@@ -26,7 +27,8 @@ SeekJournal 后端（Stage 1 / Task 8.1 产物）。
 - 一个测试库隔离守卫（`test_test_database.py`，断言测试进程连的是 `seekjournal_test`）；
 - 一个只读的历史连接验证脚本。
 
-前端（React）通过真实 HTTP `GET` 读取本 API，接入范围见 `frontend/README.md`。
+前端（React）通过真实 HTTP `GET`（列表、筛选）与 `POST`（创建）调用本 API，
+接入范围见 `frontend/README.md`。
 
 ## 环境要求
 
@@ -56,7 +58,7 @@ backend/
 │   ├── test_journal_detail_api.py # Task 5.2 的详情测试（真实 PostgreSQL）
 │   ├── test_journal_update_api.py # Task 6.2 的修改 API 测试（真实 PostgreSQL）
 │   ├── test_journal_delete_api.py # Task 7.1 / 7.2 的删除 API 测试（真实 PostgreSQL）
-│   ├── test_cors.py            # 最小 CORS 测试（只读 GET / 预检，不写数据库）
+│   ├── test_cors.py            # 最小 CORS 测试（只读 GET / POST 预检，不写数据库）
 │   └── test_test_database.py   # 隔离守卫：断言测试进程连的是 seekjournal_test（不建连接）
 ├── alembic/
 │   ├── env.py
@@ -620,7 +622,7 @@ Schema 测试仍只使用内存，不建立数据库连接。
 `tests/test_test_database.py` 是一道隔离守卫：它断言测试进程内的 Engine
 指向 `seekjournal_test`（而不是开发库），本身不建立数据库连接。
 
-当前用例数（`pytest --collect-only`，合计 **223**）：
+当前用例数（`pytest --collect-only`，合计 **227**）：
 
 | 文件 | 用例数 | 是否连库 |
 |---|---|---|
@@ -631,7 +633,7 @@ Schema 测试仍只使用内存，不建立数据库连接。
 | `test_journal_detail_api.py` | 21 | 是（测试库） |
 | `test_journal_update_api.py` | 51 | 是（测试库） |
 | `test_journal_delete_api.py` | 25 | 是（测试库） |
-| `test_cors.py` | 8 | 否（只读 health / 预检） |
+| `test_cors.py` | 12 | 否（只读 health / 预检） |
 | `test_test_database.py` | 1 | 否（只读 Engine 元数据） |
 
 ## 测试库需要空白业务数据基线
@@ -653,13 +655,16 @@ Schema 测试仍只使用内存，不建立数据库连接。
 浏览器需要 CORS 才允许读取响应。配置在 `app/main.py`：
 
 - 允许来源：`http://127.0.0.1:5173`、`http://localhost:5173`；
-- 允许方法：仅 `GET`（本阶段前端只做读取），
-  后续写接口按需再扩展；
+- 允许方法：`GET`（列表 / 详情读取）与 `POST`（创建）；
+- 允许请求头：`Content-Type`（浏览器发 JSON POST 前的预检需要它）；
 - **不使用通配来源**，**不开启 credentials**。
 
+`PATCH` / `DELETE` 的浏览器支持留给 Task 8.3，届时再扩展 `allow_methods`。
+
 `tests/test_cors.py` 覆盖：允许来源的 `GET` 响应带正确 `Allow-Origin`、
-允许来源的 `GET` 预检成功、未允许来源拿不到允许头、`POST` 不在允许方法内。
-该文件只打 `GET /api/health` 与 `OPTIONS`，不写数据库。
+允许来源的 `GET` 预检成功、允许来源的 `POST` 预检成功且允许 `Content-Type`、
+未允许来源拿不到允许头（读取与预检都不给）、`PATCH` / `DELETE` 预检被拒绝、
+以及不使用通配来源。该文件只打 `GET /api/health` 与 `OPTIONS`，不写数据库。
 
 ## 启动应用
 
@@ -670,7 +675,7 @@ Schema 测试仍只使用内存，不建立数据库连接。
 - 应用地址：http://127.0.0.1:8000
 - 交互式文档：http://127.0.0.1:8000/docs
 
-配合前端时，另开一个终端启动 Vite（默认 `http://localhost:5173`），
+配合前端时，另开一个终端启动 Vite（固定在 `http://127.0.0.1:5173`），
 两者同时运行，浏览器打开前端地址即可（CORS 已按上文配置）。
 前端启动方式见 `frontend/README.md`。
 
@@ -746,7 +751,8 @@ docker compose --env-file backend/.env stop
   共享 fixture 在 `tests/conftest.py`
 - 测试库隔离守卫 `tests/test_test_database.py`（断言测试进程连的是 `seekjournal_test`）
 - CORS 测试 `tests/test_cors.py`（只读，不写数据库）
-- 本地开发 CORS（`app/main.py`，仅允许两个本地来源的 `GET`）
+- 本地开发 CORS（`app/main.py`，仅允许两个本地来源的 `GET` 与 `POST`，
+  并允许 `Content-Type` 请求头）
 - 只读的历史连接验证脚本（`scripts/check_db.py`）
 - 独立测试库准备脚本（`scripts/prepare_test_db.py`）
 
@@ -754,8 +760,9 @@ docker compose --env-file backend/.env stop
 
 - 分页、搜索与排序查询参数；
 - 认证；
-- 创建 / 详情 / 修改 / 删除的前端 UI（Task 8.2 及以后）。
+- `PATCH` / `DELETE` 的浏览器端 CORS（Task 8.3）；
+- 详情 / 修改 / 删除的前端 UI（Task 8.3）。
 
 `journals` 表现在能创建、能列出、能按日期筛选、能按 `id` 取单篇、
-能部分更新，也能硬删除；前端已能通过 `GET` 读取列表并按日期筛选
-（Task 8.1），创建与详情等 UI 尚未实现。
+能部分更新，也能硬删除；前端已能通过 `GET` 读取列表并按日期筛选（Task 8.1），
+也能通过表单真实创建记录（Task 8.2）；详情 / 修改 / 删除 UI 尚未实现。

@@ -45,7 +45,9 @@
 }
 
 .app-toolbar button,
-.app-state-error button {
+.app-state-error button,
+.editor-actions button,
+.editor-day button {
   font: inherit;
   padding: 6px 14px;
   border: 1px solid #cfc9d6;
@@ -54,9 +56,91 @@
   cursor: pointer;
 }
 
-.app-toolbar button:disabled {
+.app-toolbar button:disabled,
+.editor-actions button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ---- 新建表单（Task 8.2） ---- */
+
+.journal-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e5e2ea;
+  border-radius: 10px;
+  background: #faf9fc;
+}
+
+.journal-editor h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #4a4453;
+}
+
+.editor-field input,
+.editor-field textarea {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid #cfc9d6;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.editor-field textarea {
+  resize: vertical;
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.editor-state {
+  font-size: 14px;
+  color: #4a4453;
+}
+
+.editor-success {
+  margin: 0;
+  font-size: 14px;
+  color: #21623a;
+}
+
+.editor-error {
+  margin: 0;
+  font-size: 14px;
+  color: #8a2f2f;
+}
+
+.editor-day {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed #d8d3de;
+}
+
+.editor-day-title {
+  margin: 0;
+  font-size: 14px;
+  color: #4a4453;
 }
 
 .app-state {

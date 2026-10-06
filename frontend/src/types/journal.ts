@@ -20,3 +20,20 @@ export interface Journal {
   /** 更新时间字符串，保持字符串。 */
   updated_at: string
 }
+
+/**
+ * 创建 Journal 的请求体（Stage 1 / Task 8.2）。
+ *
+ * 对应 `POST /api/journals` 的请求契约，只包含客户端可以提供的三个字段；
+ * `id` / `created_at` / `updated_at` 由后端生成，
+ * 这里**不声明**，避免前端把它们发出去。
+ *
+ * - `title`：传 `null` 表示不设标题（不是空字符串）；
+ * - `content`：必填，但允许空字符串；
+ * - `journal_date`：必填，`YYYY-MM-DD`。
+ */
+export interface JournalCreate {
+  title: string | null
+  content: string
+  journal_date: string
+}

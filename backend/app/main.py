@@ -10,15 +10,17 @@ app = FastAPI(title="SeekJournal API")
 #
 # - 不使用通配来源（`*`）；
 # - 不开启 credentials（当前不需要携带 Cookie / 凭据）；
-# - 当前阶段只允许 GET，后续写接口按需再扩展。
+# - 当前允许 GET（列表 / 详情读取）与 POST（创建），
+#   并允许 JSON 请求体所需的 `Content-Type` 请求头；
+# - PATCH / DELETE 的浏览器支持留给 Task 8.3，届时再扩展。
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://127.0.0.1:5173",
         "http://localhost:5173",
     ],
-    allow_methods=["GET"],
-    allow_headers=[],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 app.include_router(journal_router)
