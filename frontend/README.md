@@ -1,6 +1,6 @@
 # SeekJournal Frontend
 
-SeekJournal 前端项目（Stage 1 / Task 8.1 列表 + Task 8.2 创建 + Task 8.3 详情 / 修改 / 删除）。
+SeekJournal 前端项目（Stage 1 / Task 8.1 列表 + Task 8.2 创建 + Task 8.3 详情 / 修改 / 删除 + Task 8.4 整体验收）。
 
 ## 技术栈
 
@@ -213,3 +213,23 @@ npm run preview
 尚未实现（后续阶段）：
 
 - 分页、搜索、路由、全局状态管理、前端测试框架。
+
+## Stage 1 整体验收（Task 8.4）
+
+Stage 1 的整体验收记录在
+[`docs/stage1-acceptance.md`](../docs/stage1-acceptance.md)，包含验收时 HEAD / 日期 / 环境、
+逐项证据、真实与合成证据的区分、持久化专项、数据保护与未验证项。
+
+前端侧的可复现检查（本目录执行）：
+
+```bash
+npm run build
+npm run lint
+node --experimental-strip-types src/utils/journalDate.test.ts
+node --experimental-strip-types src/utils/journalDetail.test.ts
+```
+
+浏览器验收的做法：在 5173 上运行真实前端，用 Playwright 把 API 的 **端口 8000 换成指向
+测试库的临时后端**（`page.route` 改写 URL），页面 / React / `fetch` / CORS /
+FastAPI / PostgreSQL 全真，只有端口不同；且**所有写请求都不落到开发库**。
+完整命令与证据见上述验收文档。

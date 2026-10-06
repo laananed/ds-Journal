@@ -1,7 +1,7 @@
 # SeekJournal Backend
 
-SeekJournal 后端（Stage 1 / Task 8.1 列表接入、Task 8.2 创建接入与
-Task 8.3 详情 / 修改 / 删除接入的后端产物）。
+SeekJournal 后端（Stage 1 / Task 8.1 列表接入、Task 8.2 创建接入、
+Task 8.3 详情 / 修改 / 删除接入与 Task 8.4 整体验收的后端产物）。
 
 当前包含：
 
@@ -778,3 +778,21 @@ docker compose --env-file backend/.env stop
 通过表单真实创建记录（Task 8.2）、查看详情 / 修改 / 硬删除（Task 8.3）。
 Task 8.3 只改了 `app/main.py` 的 CORS 与 `tests/test_cors.py`，
 没有改动任何业务 Router、Service、Schema、Model 或 Migration。
+
+## Stage 1 整体验收（Task 8.4）
+
+Stage 1 的整体验收记录在
+[`docs/stage1-acceptance.md`](../docs/stage1-acceptance.md)：包含验收时 HEAD / 日期 / 环境、
+功能与技术验收矩阵、逐项证据、真实与合成证据的区分、持久化专项、
+两库数据保护、未验证项与用户确认事项。
+
+Task 8.4 **没有修改任何后端源码或测试**：只运行了既有测试、做了只读的
+Alembic / Compose / 表结构核对，并在**指向测试库**的临时后端上完成浏览器验收。
+后端侧的可复现命令：
+
+```powershell
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests   # 232 passed
+.\.venv\Scripts\python.exe -m pip check                               # No broken requirements found.
+.\.venv\Scripts\python.exe -m alembic current                          # 3a70890ddb10 (head)
+.\.venv\Scripts\python.exe -m alembic check                            # No new upgrade operations detected.
+```
