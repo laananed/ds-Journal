@@ -1,25 +1,119 @@
 .app {
-  min-height: 100svh;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  gap: 20px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 32px;
+}
+
+.app-subtitle {
+  margin: 4px 0 0;
+  color: #6b6375;
+}
+
+.app-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
   gap: 12px;
-  padding: 24px;
+  padding: 16px;
+  border: 1px solid #e5e2ea;
+  border-radius: 10px;
+  background: #faf9fc;
+}
+
+.app-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #4a4453;
+}
+
+.app-filter input {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid #cfc9d6;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.app-toolbar button,
+.app-state-error button {
+  font: inherit;
+  padding: 6px 14px;
+  border: 1px solid #cfc9d6;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.app-toolbar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.app-state {
+  margin: 0;
+  padding: 16px;
+  color: #4a4453;
+  border: 1px dashed #d8d3de;
+  border-radius: 10px;
   text-align: center;
 }
 
-.app h1 {
+.app-state-error {
+  border-style: solid;
+  border-color: #e3b7b7;
+  background: #fdf4f4;
+  color: #8a2f2f;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.journal-list {
+  list-style: none;
   margin: 0;
-  font-size: 40px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.app-status {
-  font-size: 20px;
-  color: #08060d;
+.journal-item {
+  padding: 16px;
+  border: 1px solid #e5e2ea;
+  border-radius: 10px;
+  background: #fff;
 }
 
-.app-note {
-  font-size: 15px;
+.journal-item-title {
+  margin: 0;
+  font-size: 18px;
+  word-break: break-word;
+}
+
+.journal-item-date {
+  margin: 4px 0 0;
+  font-size: 13px;
   color: #6b6375;
+}
+
+.journal-item-content {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* 简洁正文预览：超出 3 行时截断，避免单条过长。 */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
