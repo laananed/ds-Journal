@@ -1,6 +1,6 @@
 # SeekJournal Backend
 
-SeekJournal 后端（Stage 1 / Task 7.1 产物）。
+SeekJournal 后端（Stage 1 / Task 7.2 产物）。
 
 当前包含：
 
@@ -21,6 +21,7 @@ SeekJournal 后端（Stage 1 / Task 7.1 产物）。
   （两者只用内存数据）、创建 API 测试、列表 / 筛选 API 测试、
   详情 API 测试、修改（PATCH）API 测试、删除（DELETE）API 测试
   （后五套使用 TestClient + 真实 PostgreSQL）；
+- 一个测试库隔离守卫（`test_test_database.py`，断言测试进程连的是 `seekjournal_test`）；
 - 一个只读的历史连接验证脚本。
 
 前端尚未接入。
@@ -52,7 +53,8 @@ backend/
 │   ├── test_journal_read_api.py   # Task 5.1 的列表 / 筛选测试（真实 PostgreSQL）
 │   ├── test_journal_detail_api.py # Task 5.2 的详情测试（真实 PostgreSQL）
 │   ├── test_journal_update_api.py # Task 6.2 的修改 API 测试（真实 PostgreSQL）
-│   └── test_journal_delete_api.py # Task 7.1 的删除 API 测试（真实 PostgreSQL）
+│   ├── test_journal_delete_api.py # Task 7.1 / 7.2 的删除 API 测试（真实 PostgreSQL）
+│   └── test_test_database.py   # 隔离守卫：断言测试进程连的是 seekjournal_test（不建连接）
 ├── alembic/
 │   ├── env.py
 │   ├── script.py.mako
@@ -61,7 +63,8 @@ backend/
 │       └── 3a70890ddb10_create_journals_table.py
 ├── alembic.ini
 ├── scripts/
-│   └── check_db.py             # Task 3 第一步的历史脚本
+│   ├── check_db.py             # Task 3 第一步的历史脚本
+│   └── prepare_test_db.py      # 创建 / 迁移独立测试库 seekjournal_test
 ├── .env.example
 ├── .env                        # 本机配置，不提交 Git
 ├── requirements.txt
@@ -509,7 +512,8 @@ Stage 1 / Task 6.2 的部分更新测试在 `tests/test_journal_update_api.py`�
 
 ## 运行删除（DELETE）API 测试
 
-Stage 1 / Task 7.1 的硬删除测试在 `tests/test_journal_delete_api.py`。
+Stage 1 / Task 7.1 的硬删除测试与 Task 7.2 的失败回滚 / 影响范围 / 查询联动测试
+都在 `tests/test_journal_delete_api.py`。
 在 `backend/` 目录下执行：
 
 ```powershell
@@ -535,12 +539,39 @@ Stage 1 / Task 7.1 的硬删除测试在 `tests/test_journal_delete_api.py`。
 - 删除已存在的记录返回 `204`，响应体为 `b""`；
 - 用**原生 SQL** 确认该 `id` 在本次测试事务里已经不存在（不依赖 Session identity map）；
 - 删除只影响目标行：其余记录逐字段原样保留；
+- 同日其他记录（含 `title=null` 的一篇）与其他日期记录的六个字段完全不变，总行数只少一条；
 - 同一记录删两次，第二次返回 `404`；
 - 不存在的合法整数 `id` 返回 `404`，且不会顺手创建任何东西；
 - `0` 与负数同样返回 `404` —— 契约没有规定 `gt=0`；
 - 非整数路径参数（`abc`、`12abc`、`1.5`、`null`、`true`、`2026-10-02`）返回标准 `422`；
 - `404` 与 `422` 前后整表六字段快照与记录数量都不变；
 - 独立连接看不到任何变化：删除只存在于被回滚的外层事务里。
+
+### 失败回滚（Task 7.2）
+
+失败路径不使用「commit 前直接抛异常」的假故障，而是**先真实 `flush()` 出 DELETE**，
+再抛出受控异常，因此能证明已经发到 PostgreSQL 的删除被 `rollback` 撤销：
+
+- **Service 层**：目标行先用 `POST` 建好（已 RELEASE SAVEPOINT，留在外层事务内），
+  再替换 Session 的 `commit` 为「`flush()` + 抛异常」；`delete_journal` 继续抛异常，
+  `rollback` 后目标行恢复原值、整表快照回到失败前，`SELECT 1` 仍可执行；
+- **恢复后可用**：撤掉故障注入后，对同一 Session 再删一次能成功返回 `True`；
+- **HTTP 层**：同样注入故障，`DELETE` 返回 `500`（不是 `204` 也不是 `404`），
+  原生 SQL 确认目标记录仍在、Session 仍可查询。
+
+故障注入全部通过 `pytest` 的 `monkeypatch` 局限于单个测试，产品代码不做任何改动。
+
+### 删除后的查询联动（Task 7.2）
+
+在同一个回滚事务里验证：
+
+- `DELETE` 目标返回 `204` 且响应体为空；
+- `GET /api/journals/{id}` 对已删记录返回 `404`；
+- `GET /api/journals` 列表不再包含目标 `id`；
+- `GET /api/journals?journal_date=...` 对应日期筛选不再包含目标 `id`；
+- 同日其他记录仍可经详情读取、仍出现在该日期的筛选里；
+- 另一日期的记录仍可正常读取、出现在自己的日期筛选里；
+- 对已删目标二次删除返回 `404`，其余记录快照不变。
 
 ### 删除目标只用测试自己创建的数据
 
@@ -582,6 +613,22 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 Schema 测试仍只使用内存，不建立数据库连接。
 现有外层事务与 savepoint 隔离保持不变，测试结束后测试库无日记残留。
 测试可能增加测试库的 sequence 取值，但不影响开发库的 sequence。
+
+`tests/test_test_database.py` 是一道隔离守卫：它断言测试进程内的 Engine
+指向 `seekjournal_test`（而不是开发库），本身不建立数据库连接。
+
+当前用例数（`pytest --collect-only`，合计 **215**）：
+
+| 文件 | 用例数 | 是否连库 |
+|---|---|---|
+| `test_journal_schemas.py` | 37 | 否（纯内存） |
+| `test_journal_update_schemas.py` | 41 | 否（纯内存） |
+| `test_journal_api.py` | 21 | 是（测试库） |
+| `test_journal_read_api.py` | 18 | 是（测试库） |
+| `test_journal_detail_api.py` | 21 | 是（测试库） |
+| `test_journal_update_api.py` | 51 | 是（测试库） |
+| `test_journal_delete_api.py` | 25 | 是（测试库） |
+| `test_test_database.py` | 1 | 否（只读 Engine 元数据） |
 
 ## 测试库需要空白业务数据基线
 
@@ -675,7 +722,9 @@ docker compose --env-file backend/.env stop
   `tests/test_journal_delete_api.py`
   （后五套均为 TestClient + 真实 PostgreSQL），
   共享 fixture 在 `tests/conftest.py`
+- 测试库隔离守卫 `tests/test_test_database.py`（断言测试进程连的是 `seekjournal_test`）
 - 只读的历史连接验证脚本（`scripts/check_db.py`）
+- 独立测试库准备脚本（`scripts/prepare_test_db.py`）
 
 尚未实现：
 

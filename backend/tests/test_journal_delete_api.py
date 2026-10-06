@@ -43,6 +43,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import engine
+from app.journal import service
 from app.journal.models import Journal
 
 LIST_URL = "/api/journals"
@@ -125,6 +126,36 @@ def _row_if_any(session: Session, journal_id: int) -> tuple | None:
     """按 id 取一行实际列值；不存在时返回 None（原生 SQL，绕开 identity map）。"""
     row = session.execute(_ROW_SQL, {"journal_id": journal_id}).one_or_none()
     return None if row is None else tuple(row)
+
+
+def _list_ids(client: TestClient, **params) -> list[int]:
+    """通过 GET /api/journals 拿到 id 列表（可选带筛选参数）。"""
+    response = client.get(LIST_URL, params=params)
+    assert response.status_code == 200
+    return [item["id"] for item in response.json()]
+
+
+def _seed_via_api(client: TestClient, **payload) -> dict:
+    """用 POST 建一条记录，返回响应体。
+
+    失败路径用例不能用 `session.add()` + `flush()` 造数据：
+    `Session.rollback()` 会回滚到 Session 自己的 savepoint，
+    连测试刚 flush 但还没 release 的行一起撤销，
+    于是「删除失败后记录是否恢复」就无从验证。
+    走一次 POST 会 RELEASE SAVEPOINT，把该行留在外层事务里（仍未提交），
+    之后的 rollback 只会撤销这次失败的 DELETE。
+    """
+    response = client.post(
+        LIST_URL,
+        json={
+            "title": None,
+            "content": "原始正文",
+            "journal_date": DAY.isoformat(),
+            **payload,
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
 
 
 # ==========================================================================
@@ -341,3 +372,224 @@ def test_health_endpoint_is_unchanged(api):
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
     assert response.headers["content-type"].startswith("application/json")
+
+
+# ==========================================================================
+# E. 删除失败与回滚（正式验证真实 DELETE 被撤销）
+# ==========================================================================
+
+
+def test_service_delete_commit_failure_rolls_back_and_restores_the_row(api, monkeypatch):
+    """受控 commit 故障：先真实 flush 出 DELETE，再抛异常。
+
+    `flush()` 让 DELETE 真正发送到 PostgreSQL，因此这不是「commit 前直接抛异常」
+    的假故障：能验证已经发出的删除被 `rollback` 撤销、记录恢复原值。
+
+    目标记录先用 POST 建好（已 RELEASE SAVEPOINT，位于外层事务内），
+    所以失败后的 rollback 只撤销那次 DELETE，能真正检查记录是否恢复。
+    """
+    client, session = api
+
+    created = _seed_via_api(client, title="要删但不该删掉", content="必须保留的正文")
+    target_id = created["id"]
+    other = _seed_via_api(
+        client, title="另一行", content="也要保留", journal_date=OTHER_DAY.isoformat()
+    )
+    other_id = other["id"]
+    before = _row_if_any(session, target_id)
+    assert before is not None
+    snapshot_before = _snapshot(session)
+
+    def failing_commit(self):
+        self.flush()  # 让 DELETE 真的发到 PostgreSQL
+        raise RuntimeError("受控的 commit 故障")
+
+    monkeypatch.setattr(Session, "commit", failing_commit)
+
+    with pytest.raises(RuntimeError):
+        service.delete_journal(session, target_id)
+
+    # 没有半截删除：目标行恢复，且与失败前逐字段一致
+    assert _row_if_any(session, target_id) == before
+    # 其它行也没被牵连，整表快照回到失败前
+    assert _snapshot(session) == snapshot_before
+    assert _row_if_any(session, other_id) is not None
+    # rollback 之后 Session 已回到可用状态
+    assert session.execute(text("SELECT 1")).scalar_one() == 1
+
+
+def test_service_normal_delete_succeeds_after_recovering_from_fault(api, monkeypatch):
+    """确认 rollback 之后 Session 仍然可用：撤掉故障后正常删除能成功。"""
+    client, session = api
+
+    created = _seed_via_api(client, title="最终要删掉", content="正文")
+    target_id = created["id"]
+
+    real_commit = Session.commit
+
+    def failing_commit(self):
+        self.flush()
+        raise RuntimeError("受控的 commit 故障")
+
+    monkeypatch.setattr(Session, "commit", failing_commit)
+    with pytest.raises(RuntimeError):
+        service.delete_journal(session, target_id)
+    # 失败后记录仍在
+    assert _row_if_any(session, target_id) is not None
+
+    # 恢复真实的 commit，再删一次：应当成功
+    monkeypatch.setattr(Session, "commit", real_commit)
+
+    assert service.delete_journal(session, target_id) is True
+    assert _row_if_any(session, target_id) is None
+
+
+def test_delete_commit_failure_returns_500_not_204_and_keeps_the_row(api, monkeypatch):
+    """HTTP 层：真实 DELETE + 受控提交失败时返回 500，绝不是 204 / 404。
+
+    与 Service 层用例使用同一种故障注入：先真实 flush 出 DELETE，再抛异常，
+    因此能证明「已经发到数据库的删除被回滚，HTTP 报 500」。
+    """
+    client, session = api
+
+    created = _seed_via_api(client, title="不会真的删掉", content="必须保留")
+    target_id = created["id"]
+    before = _row_if_any(session, target_id)
+    assert before is not None
+
+    def failing_commit(self):
+        self.flush()
+        raise RuntimeError("受控的 commit 故障")
+
+    monkeypatch.setattr(Session, "commit", failing_commit)
+
+    response = _delete(client, target_id)
+
+    assert response.status_code == 500
+    assert response.status_code not in (204, 404)
+    # 原生 SQL 确认目标记录仍然存在，且与失败前一致
+    assert _row_if_any(session, target_id) == before
+    # Session 仍可查询
+    assert session.execute(text("SELECT 1")).scalar_one() == 1
+
+
+# ==========================================================================
+# F. 同日其它记录不受影响
+# ==========================================================================
+
+
+def test_delete_does_not_affect_same_day_siblings_or_other_days(api):
+    """删除一个明确目标后：同日的另一篇（含 title=null）与其他日期的记录都不变。"""
+    client, session = api
+
+    target = _seed(
+        session,
+        _make_journal(title="要删的", content="正文 T", journal_date=DAY),
+    )
+    sibling_null = _seed(
+        session,
+        _make_journal(title=None, content="同日的无标题记录", journal_date=DAY),
+    )
+    sibling_named = _seed(
+        session,
+        _make_journal(title="同日的另一篇", content="正文 B", journal_date=DAY),
+    )
+    other_day = _seed(
+        session,
+        _make_journal(title="另一天", content="正文 C", journal_date=OTHER_DAY),
+    )
+
+    before = {
+        jid: _row_if_any(session, jid)
+        for jid in (sibling_null.id, sibling_named.id, other_day.id)
+    }
+    snapshot_before = _snapshot(session)
+
+    assert _delete(client, target.id).status_code == 204
+
+    after = _snapshot(session)
+    # 总行数只减少一条
+    assert len(after) == len(snapshot_before) - 1
+    # 删掉的正是目标 id
+    assert _row_if_any(session, target.id) is None
+    # 同日两篇与其他日期记录的六个字段逐字段完全不变
+    for jid, row in before.items():
+        assert _row_if_any(session, jid) == row
+    # 整表除目标外逐行一致
+    assert [r for r in after if r[0] != target.id] == [
+        r for r in snapshot_before if r[0] != target.id
+    ]
+
+
+# ==========================================================================
+# G. 删除后的查询联动
+# ==========================================================================
+
+
+def test_deleted_record_disappears_from_detail_list_and_filter(api):
+    """删除后：详情 404、列表与日期筛选都不再包含该 id，二次删除 404 且数据不变。"""
+    client, session = api
+
+    target = _seed(
+        session,
+        _make_journal(title="会被删的", content="正文 T", journal_date=DAY),
+    )
+    _seed(
+        session,
+        _make_journal(title=None, content="同日的另一篇", journal_date=DAY),
+    )
+    target_id = target.id
+
+    # 删除前：目标出现在详情、列表与日期筛选中
+    assert client.get(_delete_url(target_id)).status_code == 200
+    assert target_id in _list_ids(client)
+    assert target_id in _list_ids(client, journal_date=DAY.isoformat())
+
+    response = _delete(client, target_id)
+    assert response.status_code == 204
+    assert response.content == b""
+
+    # 删除后：详情 404
+    assert client.get(_delete_url(target_id)).status_code == 404
+    # 列表与日期筛选都不再包含目标（不断言整体为空：库里可能有其它数据）
+    assert target_id not in _list_ids(client)
+    assert target_id not in _list_ids(client, journal_date=DAY.isoformat())
+
+    # 二次删除返回 404，且不会改动其余数据
+    snapshot_before_second = _snapshot(session)
+    assert _delete(client, target_id).status_code == 404
+    assert _snapshot(session) == snapshot_before_second
+
+
+def test_same_day_sibling_and_other_day_record_stay_readable(api):
+    """目标删除后：同日另一篇仍在详情与日期筛选里，另一日期记录仍可正常读取。"""
+    client, session = api
+
+    target = _seed(
+        session,
+        _make_journal(title="要删的", content="正文 T", journal_date=DAY),
+    )
+    sibling = _seed(
+        session,
+        _make_journal(title="同日的另一篇", content="正文 B", journal_date=DAY),
+    )
+    other = _seed(
+        session,
+        _make_journal(title="另一天", content="正文 C", journal_date=OTHER_DAY),
+    )
+
+    assert _delete(client, target.id).status_code == 204
+
+    # 同日另一篇：详情可读，且仍出现在同日筛选里
+    sibling_detail = client.get(_delete_url(sibling.id))
+    assert sibling_detail.status_code == 200
+    assert sibling_detail.json()["id"] == sibling.id
+    assert sibling.id in _list_ids(client, journal_date=DAY.isoformat())
+
+    # 另一日期记录：详情可读，且出现在它自己的日期筛选里
+    other_detail = client.get(_delete_url(other.id))
+    assert other_detail.status_code == 200
+    assert other_detail.json()["id"] == other.id
+    assert other.id in _list_ids(client, journal_date=OTHER_DAY.isoformat())
+    # 它没有跑到被删记录那一天
+    assert other.id not in _list_ids(client, journal_date=DAY.isoformat())
