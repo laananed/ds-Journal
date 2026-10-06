@@ -290,6 +290,48 @@ API Contract 与 Journal 数据模型保持不变。
 
 ---
 
+### Task 5
+
+实现并验证 Journal 读取 API。
+
+Task 5 分两阶段实施，不扩展到修改、删除、分页、搜索或 Frontend。
+以下定义记录已确定的开发范围，不代表当前已经实现。
+
+#### Task 5.1：Journal 列表与日期筛选
+
+包含：
+
+- `GET /api/journals` 列表；
+- 可选 `journal_date` 精确日期筛选；
+- 对应的查询 Service 与 Router；
+- 共用测试 fixture 与真实数据库 API 测试；
+- Backend README 更新。
+
+排序遵守 `docs/stage1-api.md`：
+
+- 第一排序 `journal_date DESC`；
+- 同日第二排序 `created_at DESC`。
+
+排序与筛选在数据库查询中完成，不在 Python 侧过滤或排序。
+
+API Contract、Journal 数据模型与数据库结构保持不变。
+
+本阶段不包含：
+
+- `GET /api/journals/{id}` 单篇详情；
+- 分页、搜索或排序查询参数；
+- `PATCH` / `DELETE` 或其他 CRUD；
+- Frontend。
+
+#### Task 5.2：Journal 单篇详情
+
+在 Task 5.1 验收通过后实现并验证：
+
+- `GET /api/journals/{id}`；
+- 单篇不存在时返回 `404 Not Found`。
+
+---
+
 ## 8. Backend Responsibilities
 
 ### main.py

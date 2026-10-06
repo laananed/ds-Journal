@@ -5,6 +5,10 @@ Stage 1 / Task 4.2。
 这些测试使用 FastAPI TestClient 与**真实 PostgreSQL**，
 完整走一遍：HTTP → Pydantic → Router → Service → SQLAlchemy → psycopg → PostgreSQL。
 
+共享的 `api` fixture（TestClient + 测试 Session）位于 `tests/conftest.py`：
+Task 5.1 把它从本文件最小提取出去，让创建测试与读取测试共用。
+本文件原有的断言与用例未做任何改动。
+
 ## 事务隔离方式（为什么测试不会污染真实数据）
 
 每个测试用一个「外层事务 + savepoint」把 Service 的 `commit()` 关在里面：
@@ -51,12 +55,13 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.database import engine, get_db
 from app.journal import service
 from app.journal.models import Journal
 from app.journal.schemas import JournalCreate
-from app.main import app
 
+# 共享 fixture `api`（TestClient + 测试 Session，含事务隔离与无残留检查）
+# 已提取到 tests/conftest.py，创建测试与读取测试共用同一份实现。
+# 本模块只保留创建测试自己用到的局部 helper。
 DAY = "2026-10-02"
 RESPONSE_FIELDS = {
     "id",
@@ -68,54 +73,9 @@ RESPONSE_FIELDS = {
 }
 
 
-def _count_rows_with_engine() -> int:
-    """用一条独立连接数总行数（在外层事务之外）。"""
-    with engine.connect() as connection:
-        return connection.execute(text("SELECT count(*) FROM journals")).scalar_one()
-
-
 def _count_rows_in(session: Session) -> int:
     """在当前 Session 所在的事务里数行数。"""
     return session.execute(text("SELECT count(*) FROM journals")).scalar_one()
-
-
-@pytest.fixture
-def api():
-    """提供 (TestClient, 测试 Session)，并保证测试结束后数据无残留。
-
-    这里注入的 Session 与真实运行时 `get_db` 产出的 Session 用法完全一致，
-    区别只有一个：它绑定的是一条已经开着外层事务的连接，
-    所以 Service 的 commit() 只会释放 savepoint。
-    """
-    baseline = _count_rows_with_engine()
-
-    connection = engine.connect()
-    outer_transaction = connection.begin()
-    session = Session(bind=connection, join_transaction_mode="create_savepoint")
-
-    def override_get_db():
-        """替换 get_db：提供上面这个测试 Session。
-
-        由 fixture 负责它的关闭，这里不再重复关闭。
-        """
-        yield session
-
-    app.dependency_overrides[get_db] = override_get_db
-    try:
-        with TestClient(app, raise_server_exceptions=False) as client:
-            yield client, session
-    finally:
-        # 1. 撤掉注入
-        app.dependency_overrides.clear()
-        # 2. 关闭 Session（只归还连接，不提交）
-        session.close()
-        # 3. 回滚外层事务并关闭连接，测试数据随之消失
-        outer_transaction.rollback()
-        connection.close()
-
-    # 每个测试结束后都验证一次：数据库回到测试前的状态。
-    assert _count_rows_with_engine() == baseline, "测试数据残留"
-    assert get_db not in app.dependency_overrides
 
 
 def _post(client: TestClient, **payload):

@@ -1,6 +1,6 @@
 # SeekJournal Backend
 
-SeekJournal 后端（Stage 1 / Task 4.2 产物）。
+SeekJournal 后端（Stage 1 / Task 5.1 产物）。
 
 当前包含：
 
@@ -11,12 +11,14 @@ SeekJournal 后端（Stage 1 / Task 4.2 产物）。
 - Journal SQLAlchemy Model；
 - Alembic 首次迁移，已在本地数据库建立 `journals` 表；
 - Journal 的 Pydantic Schema（`JournalCreate` / `JournalResponse`）；
-- `POST /api/journals` 的 Service 与 Router，打通
+- `POST /api/journals` 创建链路，打通
   HTTP → Pydantic → Router → Service → SQLAlchemy → psycopg → PostgreSQL；
-- 两套 pytest 测试：Schema 测试（只用内存数据）+ 创建 API 测试（TestClient + 真实 PostgreSQL）；
+- `GET /api/journals` 列表，以及可选的 `journal_date` 精确日期筛选；
+- 三套 pytest 测试：Schema 测试（只用内存数据）、创建 API 测试、列表 / 筛选 API 测试
+  （后两套使用 TestClient + 真实 PostgreSQL）；
 - 一个只读的历史连接验证脚本。
 
-其他 CRUD（`GET` / `PATCH` / `DELETE`）尚未实现，前端尚未接入。
+单篇详情（`GET /api/journals/{id}`）与 `PATCH` / `DELETE` 尚未实现，前端尚未接入。
 
 ## 环境要求
 
@@ -35,11 +37,13 @@ backend/
 │       ├── __init__.py
 │       ├── models.py           # Journal Model
 │       ├── schemas.py          # JournalCreate / JournalResponse
-│       ├── service.py          # create_journal（事务边界在这里）
-│       └── router.py           # POST /api/journals
+│       ├── service.py          # create_journal（事务边界）/ list_journals（只读查询）
+│       └── router.py           # POST / GET /api/journals
 ├── tests/
+│   ├── conftest.py             # 共享 api fixture（事务隔离 + 无残留检查）
 │   ├── test_journal_schemas.py # Task 4.1 的 Schema 测试（只用内存数据）
-│   └── test_journal_api.py     # Task 4.2 的创建 API 测试（真实 PostgreSQL）
+│   ├── test_journal_api.py     # Task 4.2 的创建 API 测试（真实 PostgreSQL）
+│   └── test_journal_read_api.py # Task 5.1 的列表 / 筛选测试（真实 PostgreSQL）
 ├── alembic/
 │   ├── env.py
 │   ├── script.py.mako
@@ -313,6 +317,37 @@ Session 自己的事务在连接上表现为一个 SAVEPOINT，因此 Service �
   `journals_id_seq` 的当前值会前进。这不代表数据残留。
 - 测试只插入，不删除、不清空任何既有数据；每次运行前后 `journals` 的行数不变。
 
+## 运行列表 / 筛选 API 测试
+
+Stage 1 / Task 5.1 的读取 API 测试在 `tests/test_journal_read_api.py`。
+在 `backend/` 目录下执行：
+
+```powershell
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_journal_read_api.py
+```
+
+与创建测试一样，它也需要一个正在运行的本地 PostgreSQL。
+
+覆盖：
+
+- `GET /api/journals` 返回 `200` 与完整 Journal 数组，
+  每个元素恰好六个字段，且各字段值与数据库里的实际记录一致；
+- 空库返回 `[]`；无匹配日期返回 `200` 与 `[]`；
+- 默认排序 `journal_date DESC`，同一天内 `created_at DESC`；
+  测试手动指定时间并**乱序插入**，证明确实由数据库查询排序，
+  而不是插入顺序或 Python 侧排序；
+- `?journal_date=YYYY-MM-DD` 精确匹配，不含相邻日期；同日多篇全部返回；
+- 非法日历日期（2026-02-30、无效闰日 2026-02-29）、格式错误与无法解析的字符串
+  返回标准 `422`；
+- `title` 为 `null` 时返回 `null`；
+- 发出列表与筛选请求后，六个字段的实际列值与请求前完全一致
+  （`GET` 不修改任何记录）。
+
+共享 fixture `api` 位于 `tests/conftest.py`，创建测试与读取测试共用它：
+它返回 `(TestClient, 测试 Session)`，并负责事务隔离与结束时的无残留检查。
+隔离原理与上面「测试数据为什么不会留在数据库里」一节完全相同，
+因此 `journal_date` 筛选测试同样不会写入真实数据，`id` 同样会跳号。
+
 ## 启动应用
 
 ```powershell
@@ -364,25 +399,32 @@ docker compose --env-file backend/.env stop
 
 - `GET /api/health`（不检查数据库）
 - `POST /api/journals`：创建 Journal，成功返回 `201` 与完整六字段记录
+- `GET /api/journals`：返回 Journal 列表，成功返回 `200` 与完整数组
+- `GET /api/journals?journal_date=YYYY-MM-DD`：按日期精确筛选
 - 请求级 Session 依赖 `get_db()`（`app/database.py`）
-- 创建 Service `create_journal()`：成功 commit、失败 rollback（`app/journal/service.py`）
+- 创建 Service `create_journal()`：成功 commit、失败 rollback；
+  查询 Service `list_journals()`：只读，排序与筛选都在 SQL 里完成（`app/journal/service.py`）
 - Journal Router（`app/journal/router.py`），已在 `app/main.py` 注册
 - 本地 PostgreSQL 开发数据库的 Compose 配置
 - SQLAlchemy 2.x 数据库基础：Engine、Session 工厂、共享 Declarative Base（`app/database.py`）
 - Journal Model：`journals` 表六个字段（`app/journal/models.py`）
 - Alembic 首次迁移，`journals` 表已在本地数据库建立
 - Journal Pydantic Schema：`JournalCreate` / `JournalResponse`（`app/journal/schemas.py`）
-- 两套 pytest 测试：`tests/test_journal_schemas.py`（只用内存数据）、
-  `tests/test_journal_api.py`（TestClient + 真实 PostgreSQL）
+- 三套 pytest 测试：`tests/test_journal_schemas.py`（只用内存数据）、
+  `tests/test_journal_api.py`（TestClient + 真实 PostgreSQL）、
+  `tests/test_journal_read_api.py`（TestClient + 真实 PostgreSQL），
+  共享 fixture 在 `tests/conftest.py`
 - 只读的历史连接验证脚本（`scripts/check_db.py`）
 
 尚未实现：
 
-- `GET /api/journals`、`GET /api/journals?journal_date=YYYY-MM-DD`、`GET /api/journals/{id}`；
+- `GET /api/journals/{id}` 单篇详情（Task 5.2）；
 - `PATCH /api/journals/{id}`、`DELETE /api/journals/{id}`；
+- 分页、搜索与排序查询参数；
 - `JournalUpdate` 与其他后续 Schema；
 - CORS、认证；
 - 前端调用。
 
-`journals` 表现在可以写入：`POST /api/journals` 能创建记录，
-但还读不出来 —— 列表、详情、修改、删除接口都还没有。
+`journals` 表现在既能写入也能读出：`POST /api/journals` 创建记录，
+`GET /api/journals` 列表与按日期筛选都能使用；
+单篇详情、修改与删除接口尚未实现。
