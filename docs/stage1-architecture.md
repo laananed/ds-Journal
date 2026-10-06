@@ -197,6 +197,55 @@ Task 2 暂不创建：
 数据库结构与 pytest 要求保持不变，
 在对应的后续 Task 中再实现。
 
+### Task 3
+
+配置 PostgreSQL 本地开发数据库，
+并建立 Python 到数据库的基础连接。
+
+Task 3 分两步实施。
+
+#### Task 3 第一步
+
+只建立：
+
+- 本地 PostgreSQL 开发数据库；
+- Python 使用 `DATABASE_URL` 直连数据库的最小验证。
+
+新增：
+
+```text
+compose.yaml
+backend/
+├── .env.example
+└── scripts/
+    └── check_db.py
+```
+
+本机另有 `backend/.env`，
+用于保存开发环境真实配置，
+不提交 Git。
+
+第一步暂不创建：
+
+- `database.py`
+- SQLAlchemy Engine / Session
+- Alembic
+
+#### Task 3 第二步
+
+在第一步基础上再加入：
+
+- SQLAlchemy 2.x；
+- Alembic Migration。
+
+第一步与第二步之间，
+后端仍保持：
+
+`app/__init__.py` + `app/main.py`
+
+的结构，
+不因数据库配置而增加新的应用层。
+
 ---
 
 ## 8. Backend Responsibilities
@@ -309,6 +358,26 @@ Repository 暂时无法解决足够明确的问题。
 Stage 1 使用：
 
 一个 PostgreSQL 数据库。
+
+### Local Development Database
+
+本地开发数据库使用：
+
+| 项目 | 取值 |
+|---|---|
+| 数据库名 | `seekjournal` |
+| 用户名 | `seekjournal` |
+| 宿主端口 | `127.0.0.1:5432` |
+| 镜像 | `postgres:17` |
+
+数据库数据使用 named volume 保存，
+不随容器删除而丢失。
+
+真实密码只存在于本机 `backend/.env`，
+不写入文档、不提交 Git。
+
+开发阶段只有一个数据库服务，
+不划分多数据库、多 Schema。
 
 核心业务表：
 
@@ -437,6 +506,32 @@ SQLAlchemy
 
 Stage 1 一般不直接操作 psycopg API。
 
+例外：
+
+Task 3 第一步在建立 SQLAlchemy 之前，
+用 `backend/scripts/check_db.py`
+通过 psycopg 直连数据库，
+只验证连接是否可用。
+
+安装方式：
+
+使用 `psycopg[binary]`，
+即预编译二进制发行版。
+
+原因：
+
+Windows 本机不需要额外安装
+编译工具链与 PostgreSQL 开发库。
+
+它安装的是同一个 psycopg 驱动，
+只改变二进制分发形式，
+不改变驱动本身。
+
+该验证脚本不是产品代码，
+不参与 Runtime 数据访问；
+Runtime 数据访问仍由
+SQLAlchemy 负责。
+
 ---
 
 ## 15. Alembic
@@ -503,6 +598,22 @@ deleted_at。
 
 `DATABASE_URL`
 
+Backend 的本机配置文件为：
+
+`backend/.env`
+
+它同时提供：
+
+- `DATABASE_URL`：Python 连接数据库使用；
+- `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD`：
+  Docker Compose 初始化数据库容器使用。
+
+Python 侧读取 `DATABASE_URL`，
+不在代码中硬编码数据库地址或凭据。
+
+Stage 1 不因此引入
+Settings 类、配置层或数据库应用模块。
+
 ### Frontend
 
 使用：
@@ -518,6 +629,10 @@ deleted_at。
 项目提交：
 
 `.env.example`
+
+仓库提交 `backend/.env.example`，
+只包含占位符，
+不包含真实密码。
 
 ---
 
@@ -538,6 +653,36 @@ Docker / Docker Compose 运行。
 Stage 1 不要求：
 
 整个项目全部 Docker 化。
+
+### Local PostgreSQL Service
+
+仓库根目录提供 `compose.yaml`。
+
+它只定义一个服务：
+
+`postgres`
+
+约束：
+
+- 只包含数据库单服务；
+- 不容器化 Backend；
+- 不容器化 Frontend；
+- 不提供整套开发环境编排；
+- 端口仅绑定本机回环地址；
+- 数据使用 named volume 持久化；
+- 数据库名、用户名、密码从环境变量读取。
+
+Compose 文件不写入默认密码。
+
+缺少必需环境变量时应直接失败，
+而不是使用隐含的弱默认值。
+
+启动命令在仓库根目录执行，
+并通过 `--env-file backend/.env` 提供配置。
+
+数据库相关命令与验证步骤
+记录在 `backend/README.md`，
+不写入本架构文档。
 
 ---
 
