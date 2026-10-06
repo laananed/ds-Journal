@@ -37,3 +37,25 @@ export interface JournalCreate {
   content: string
   journal_date: string
 }
+
+/**
+ * 修改 Journal 的请求体（Stage 1 / Task 8.3）。
+ *
+ * 对应 `PATCH /api/journals/{id}`，三个可更新字段**都可以省略**：
+ *
+ * - 省略表示「本次不修改该字段」，**不是**把该字段置成 `null`；
+ * - `title`：省略不修改；显式 `null` 表示清空标题；字符串（含空字符串）原样保留；
+ * - `content`：省略不修改；一旦提交必须是字符串，**不允许 `null`**；
+ * - `journal_date`：省略不修改；一旦提交必须是 `YYYY-MM-DD`，**不允许 `null`**。
+ *
+ * `id` / `created_at` / `updated_at` 由后端维护，
+ * 这里刻意不声明，避免前端把它们放进请求体。
+ *
+ * 三个字段都是可选的，因此 `{}` 是合法请求体：
+ * 后端对空更新返回当前记录且不改变 `updated_at`。
+ */
+export interface JournalUpdate {
+  title?: string | null
+  content?: string
+  journal_date?: string
+}

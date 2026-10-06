@@ -1,6 +1,7 @@
 # SeekJournal Backend
 
-SeekJournal 后端（Stage 1 / Task 8.1 列表接入与 Task 8.2 创建接入的后端产物）。
+SeekJournal 后端（Stage 1 / Task 8.1 列表接入、Task 8.2 创建接入与
+Task 8.3 详情 / 修改 / 删除接入的后端产物）。
 
 当前包含：
 
@@ -18,7 +19,7 @@ SeekJournal 后端（Stage 1 / Task 8.1 列表接入与 Task 8.2 创建接入的
 - `PATCH /api/journals/{id}` 部分更新（记录不存在返回 `404`）；
 - `DELETE /api/journals/{id}` 硬删除（成功返回 `204` 与空响应体，不存在返回 `404`）；
 - 本地开发用的最小 CORS（只允许 `127.0.0.1:5173` 与 `localhost:5173` 的
-  `GET` 与 `POST`，并允许 JSON 请求体所需的 `Content-Type` 请求头）；
+  `GET` / `POST` / `PATCH` / `DELETE`，并允许 JSON 请求体所需的 `Content-Type` 请求头）；
 - 七套 pytest 测试：Schema 测试（创建 / 响应）、`JournalUpdate` Schema 测试
   （两者只用内存数据）、创建 API 测试、列表 / 筛选 API 测试、
   详情 API 测试、修改（PATCH）API 测试、删除（DELETE）API 测试
@@ -27,7 +28,8 @@ SeekJournal 后端（Stage 1 / Task 8.1 列表接入与 Task 8.2 创建接入的
 - 一个测试库隔离守卫（`test_test_database.py`，断言测试进程连的是 `seekjournal_test`）；
 - 一个只读的历史连接验证脚本。
 
-前端（React）通过真实 HTTP `GET`（列表、筛选）与 `POST`（创建）调用本 API，
+前端（React）通过真实 HTTP `GET`（列表、筛选、详情）、`POST`（创建）、
+`PATCH`（修改）与 `DELETE`（删除）调用本 API，
 接入范围见 `frontend/README.md`。
 
 ## 环境要求
@@ -58,7 +60,7 @@ backend/
 │   ├── test_journal_detail_api.py # Task 5.2 的详情测试（真实 PostgreSQL）
 │   ├── test_journal_update_api.py # Task 6.2 的修改 API 测试（真实 PostgreSQL）
 │   ├── test_journal_delete_api.py # Task 7.1 / 7.2 的删除 API 测试（真实 PostgreSQL）
-│   ├── test_cors.py            # 最小 CORS 测试（只读 GET / POST 预检，不写数据库）
+│   ├── test_cors.py            # 最小 CORS 测试（只读 health / 四种方法预检，不写数据库）
 │   └── test_test_database.py   # 隔离守卫：断言测试进程连的是 seekjournal_test（不建连接）
 ├── alembic/
 │   ├── env.py
@@ -622,7 +624,7 @@ Schema 测试仍只使用内存，不建立数据库连接。
 `tests/test_test_database.py` 是一道隔离守卫：它断言测试进程内的 Engine
 指向 `seekjournal_test`（而不是开发库），本身不建立数据库连接。
 
-当前用例数（`pytest --collect-only`，合计 **227**）：
+当前用例数（`pytest --collect-only`，合计 **232**）：
 
 | 文件 | 用例数 | 是否连库 |
 |---|---|---|
@@ -633,7 +635,7 @@ Schema 测试仍只使用内存，不建立数据库连接。
 | `test_journal_detail_api.py` | 21 | 是（测试库） |
 | `test_journal_update_api.py` | 51 | 是（测试库） |
 | `test_journal_delete_api.py` | 25 | 是（测试库） |
-| `test_cors.py` | 12 | 否（只读 health / 预检） |
+| `test_cors.py` | 17 | 否（只读 health / 预检） |
 | `test_test_database.py` | 1 | 否（只读 Engine 元数据） |
 
 ## 测试库需要空白业务数据基线
@@ -652,19 +654,29 @@ Schema 测试仍只使用内存，不建立数据库连接。
 ## 本地开发 CORS
 
 前端由 Vite 在 `5173` 端口提供，与本后端（`8000`）属于不同来源，
-浏览器需要 CORS 才允许读取响应。配置在 `app/main.py`：
+浏览器需要 CORS 才允许读取响应、并发起写请求。配置在 `app/main.py`：
 
 - 允许来源：`http://127.0.0.1:5173`、`http://localhost:5173`；
-- 允许方法：`GET`（列表 / 详情读取）与 `POST`（创建）；
-- 允许请求头：`Content-Type`（浏览器发 JSON POST 前的预检需要它）；
-- **不使用通配来源**，**不开启 credentials**。
+- 允许方法：`GET`（列表 / 详情读取）、`POST`（创建）、`PATCH`（修改）与
+  `DELETE`（删除），覆盖 Stage 1 前端用到的全部方法；
+- 允许请求头：`Content-Type`（浏览器发 JSON POST / PATCH 前的预检需要它）；
+- **不使用通配来源**，**也不使用通配方法**，**不开启 credentials**。
 
-`PATCH` / `DELETE` 的浏览器支持留给 Task 8.3，届时再扩展 `allow_methods`。
+Task 8.3 只是把 `allow_methods` 从 `GET, POST` 扩成 `GET, POST, PATCH, DELETE`，
+没有改动允许来源、允许请求头，也没有改动任何业务 Router 或 Service。
 
 `tests/test_cors.py` 覆盖：允许来源的 `GET` 响应带正确 `Allow-Origin`、
 允许来源的 `GET` 预检成功、允许来源的 `POST` 预检成功且允许 `Content-Type`、
-未允许来源拿不到允许头（读取与预检都不给）、`PATCH` / `DELETE` 预检被拒绝、
-以及不使用通配来源。该文件只打 `GET /api/health` 与 `OPTIONS`，不写数据库。
+允许来源的 `PATCH` / `DELETE` 预检成功、
+允许头里包含四种方法且**不含通配方法**、未允许来源拿不到允许头
+（读取、预检、以及新开放的 `PATCH` / `DELETE` 预检都不给）。
+该文件只打 `GET /api/health` 与 `OPTIONS`；预检由 `CORSMiddleware` 直接应答、
+不会进入业务路由，因此它不写数据库。
+
+> 顺带一提：实测本机（2026-10-06）浏览器确实会为跨来源的
+> `PATCH` / `DELETE` 发出 `OPTIONS` 预检，且带未在 `allow_headers` 里的
+> 自定义请求头时预检被拒（后端记录为 `OPTIONS ... 400`）。
+> 也就是说 CORS 不是「配置了但浏览器没真的检查」。
 
 ## 启动应用
 
@@ -751,18 +763,18 @@ docker compose --env-file backend/.env stop
   共享 fixture 在 `tests/conftest.py`
 - 测试库隔离守卫 `tests/test_test_database.py`（断言测试进程连的是 `seekjournal_test`）
 - CORS 测试 `tests/test_cors.py`（只读，不写数据库）
-- 本地开发 CORS（`app/main.py`，仅允许两个本地来源的 `GET` 与 `POST`，
-  并允许 `Content-Type` 请求头）
+- 本地开发 CORS（`app/main.py`，仅允许两个本地来源的
+  `GET` / `POST` / `PATCH` / `DELETE`，并允许 `Content-Type` 请求头）
 - 只读的历史连接验证脚本（`scripts/check_db.py`）
 - 独立测试库准备脚本（`scripts/prepare_test_db.py`）
 
 尚未实现：
 
 - 分页、搜索与排序查询参数；
-- 认证；
-- `PATCH` / `DELETE` 的浏览器端 CORS（Task 8.3）；
-- 详情 / 修改 / 删除的前端 UI（Task 8.3）。
+- 认证。
 
 `journals` 表现在能创建、能列出、能按日期筛选、能按 `id` 取单篇、
-能部分更新，也能硬删除；前端已能通过 `GET` 读取列表并按日期筛选（Task 8.1），
-也能通过表单真实创建记录（Task 8.2）；详情 / 修改 / 删除 UI 尚未实现。
+能部分更新，也能硬删除；前端已能通过 `GET` 读取列表并按日期筛选（Task 8.1）、
+通过表单真实创建记录（Task 8.2）、查看详情 / 修改 / 硬删除（Task 8.3）。
+Task 8.3 只改了 `app/main.py` 的 CORS 与 `tests/test_cors.py`，
+没有改动任何业务 Router、Service、Schema、Model 或 Migration。

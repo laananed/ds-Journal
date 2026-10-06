@@ -13,12 +13,18 @@
  * 3. **保存后的同步**：POST 成功后清空输入（保留日期，方便同日继续写），
  *    再通过 `onSaved()` 让父组件刷新列表，并自行重读「当天已有记录」。
  *
+ * Task 8.3 增加两点，都不改变上面的行为：
+ *
+ * - 「当天已有记录」列表里的每条记录都能**打开详情**（`onOpen`），
+ *   与主列表使用同一套入口；
+ * - 接受一个外部变更标记 `externalRevision`：详情面板修改或删除成功后父组件会
+ *   让它自增，这里只是**重新读取当天已有记录**；
+ *   表单里正在填写的标题、正文、日期完全不受影响，
+ *   也没有引入任何全局事件总线或共享状态。
+ *
  * 与「列表刷新」的关系：`onSaved()` 只负责通知父组件去重新加载列表，
  * 它不会抛异常，因此**列表刷新失败不会被误报成保存失败**——
  * 刷新失败由列表区域自己提示，这里的保存状态保持「已保存」。
- *
- * 本阶段不实现详情、编辑、删除 UI，因此这里不提供任何「打开」入口，
- * 只把当天已有记录摘要列出来。
  */
 
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
@@ -38,12 +44,28 @@ interface JournalEditorProps {
    * 实现上只做状态更新，不抛异常，也不等待列表请求。
    */
   onSaved: () => void
+  /**
+   * 外部变更版本号：详情面板修改 / 删除成功后父组件自增它，
+   * 这里据此重新读取「当天已有记录」。
+   * 它**只影响这一块读取**，不会重置正在填写的创建表单。
+   */
+  externalRevision: number
+  /** 打开「当天已有记录」里某一条的详情。 */
+  onOpen: (id: number) => void
+  /** 父组件有写操作进行中时传 `true`，避免写入期间切换目标。 */
+  openDisabled: boolean
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 type DayStatus = 'loading' | 'success' | 'error'
 
-function JournalEditor({ listFilterDate, onSaved }: JournalEditorProps) {
+function JournalEditor({
+  listFilterDate,
+  onSaved,
+  externalRevision,
+  onOpen,
+  openDisabled,
+}: JournalEditorProps) {
   // ---- 表单字段 ----
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
@@ -88,7 +110,9 @@ function JournalEditor({ listFilterDate, onSaved }: JournalEditorProps) {
     return () => {
       controller.abort()
     }
-  }, [journalDate, dayReloadToken])
+    // externalRevision 变化（详情里改过 / 删过）时重读当天记录；
+    // 它只是 effect 的触发条件，不会写入任何表单字段。
+  }, [journalDate, dayReloadToken, externalRevision])
 
   /** 切换日期：先进入「加载中」并清掉旧日期的列表，再更新日期。 */
   function handleJournalDateChange(event: ChangeEvent<HTMLInputElement>) {
@@ -236,7 +260,11 @@ function JournalEditor({ listFilterDate, onSaved }: JournalEditorProps) {
         )}
 
         {journalDate !== '' && dayStatus === 'success' && dayJournals.length > 0 && (
-          <JournalList journals={dayJournals} />
+          <JournalList
+            journals={dayJournals}
+            onOpen={onOpen}
+            openDisabled={openDisabled}
+          />
         )}
       </div>
     </section>

@@ -10,6 +10,12 @@
  *
  * - `POST /api/journals`
  *
+ * Stage 1 / Task 8.3：详情 / 修改 / 删除
+ *
+ * - `GET /api/journals/{id}`
+ * - `PATCH /api/journals/{id}`
+ * - `DELETE /api/journals/{id}`
+ *
  * 使用浏览器原生 `fetch`，不引入 Axios、React Query 等依赖，也不建通用 HTTP 客户端。
  *
  * ## 后端地址
@@ -21,10 +27,31 @@
  * 绝不放入数据库凭据或其它秘密。
  */
 
-import type { Journal, JournalCreate } from '../types/journal'
+import type { Journal, JournalCreate, JournalUpdate } from '../types/journal'
 
 /** 未配置 `VITE_API_BASE_URL` 时使用的本地默认地址（见 frontend/.env.example）。 */
 const DEFAULT_API_BASE_URL = 'http://127.0.0.1:8000'
+
+/**
+ * 携带 HTTP 状态的 API 错误（Stage 1 / Task 8.3）。
+ *
+ * 只是 `Error` 加一个 `status` 字段，让 UI 能区分
+ * 「记录已不存在（404）」与其它请求失败，
+ * 不引入通用错误框架、错误码体系或全局错误处理。
+ *
+ * `status` 的取值就是响应的 HTTP 状态码；
+ * 网络层失败（`fetch` 直接 reject、根本没有响应）不会走到这里，
+ * 调用方按「不是本类型」处理即可。
+ */
+export class JournalApiError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'JournalApiError'
+    this.status = status
+  }
+}
 
 /**
  * 读取后端根地址：优先 `VITE_API_BASE_URL`，否则用本地默认值。
@@ -131,4 +158,91 @@ export async function createJournal(payload: JournalCreate): Promise<Journal> {
   }
 
   return (await response.json()) as Journal
+}
+
+/**
+ * 读取单篇 Journal 的详情（Stage 1 / Task 8.3）。
+ *
+ * @param id 目标记录的主键。
+ * @param signal 可选的 `AbortSignal`，用于在快速切换记录时取消过期请求。
+ * @returns 后端返回的完整 Journal（六字段，200 成功时）。
+ *
+ * 说明：
+ *
+ * - 每次打开都真实请求详情接口，**不把列表里已有的那条记录当作详情**——
+ *   列表数据可能已经过期，详情必须以本次响应为准；
+ * - 只有 `200` 会被当作成功；`404` 与其它状态都会抛出带状态的
+ *   `JournalApiError`，调用方据此区分「记录不存在」与「普通加载失败」；
+ * - 不做自动重试，是否重试由用户决定。
+ */
+export async function getJournal(
+  id: number,
+  signal?: AbortSignal,
+): Promise<Journal> {
+  const response = await fetch(`${getApiBaseUrl()}/api/journals/${id}`, {
+    signal,
+  })
+
+  if (!response.ok) {
+    throw new JournalApiError(response.status, await readErrorMessage(response))
+  }
+
+  return (await response.json()) as Journal
+}
+
+/**
+ * 部分修改一篇 Journal（Stage 1 / Task 8.3）。
+ *
+ * @param id 目标记录的主键。
+ * @param payload 只包含**本次真正修改**的字段；没有改动时可以传 `{}`。
+ * @returns 后端返回的修改后完整 Journal（200 成功时）。
+ *
+ * 说明：
+ *
+ * - 请求体只放 `title` / `content` / `journal_date`，
+ *   `id` / `created_at` / `updated_at` 由后端维护，前端不发送；
+ * - `updated_at` 由后端更新，前端**不自己生成**时间；
+ * - 只有 `200` 会被当作成功；失败抛出带状态的 `JournalApiError`，
+ *   调用方保留用户输入并允许明确重试；
+ * - 不做自动重试，避免重复提交。
+ */
+export async function updateJournal(
+  id: number,
+  payload: JournalUpdate,
+): Promise<Journal> {
+  const response = await fetch(`${getApiBaseUrl()}/api/journals/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    throw new JournalApiError(response.status, await readErrorMessage(response))
+  }
+
+  return (await response.json()) as Journal
+}
+
+/**
+ * 硬删除一篇 Journal（Stage 1 / Task 8.3）。
+ *
+ * @param id 目标记录的主键。
+ *
+ * 说明：
+ *
+ * - 成功是 `204 No Content`：响应体为空，
+ *   因此这里**刻意不调用 `response.json()`**，
+ *   否则会因解析空响应体而抛错，把一次成功的删除误报成失败；
+ * - 记录不存在时后端返回 `404`，这里抛出带状态的 `JournalApiError`，
+ *   调用方必须把它呈现为「记录本来就不存在」，不能冒充「本次删除成功」；
+ * - 不做自动重试：删除不可逆，是否重试只能由用户决定。
+ */
+export async function deleteJournal(id: number): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/api/journals/${id}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    throw new JournalApiError(response.status, await readErrorMessage(response))
+  }
 }
