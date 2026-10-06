@@ -1,21 +1,22 @@
 # SeekJournal Backend
 
-SeekJournal 后端（Stage 1 / Task 4.1 产物）。
+SeekJournal 后端（Stage 1 / Task 4.2 产物）。
 
 当前包含：
 
 - 一个最小 FastAPI 应用；
 - 一个存活检查接口；
 - 一份本地 PostgreSQL 开发数据库的 Compose 配置；
-- SQLAlchemy 2.x 数据库基础（Engine / Session 工厂 / Declarative Base）；
+- SQLAlchemy 2.x 数据库基础（Engine / Session 工厂 / 请求级 Session 依赖 / Declarative Base）；
 - Journal SQLAlchemy Model；
 - Alembic 首次迁移，已在本地数据库建立 `journals` 表；
 - Journal 的 Pydantic Schema（`JournalCreate` / `JournalResponse`）；
-- 只使用内存数据的 Schema 测试（pytest）；
+- `POST /api/journals` 的 Service 与 Router，打通
+  HTTP → Pydantic → Router → Service → SQLAlchemy → psycopg → PostgreSQL；
+- 两套 pytest 测试：Schema 测试（只用内存数据）+ 创建 API 测试（TestClient + 真实 PostgreSQL）；
 - 一个只读的历史连接验证脚本。
 
-还没有任何接口：`POST /api/journals` 的 Service、Router 与 API 测试尚未实现，
-前端尚未接入。
+其他 CRUD（`GET` / `PATCH` / `DELETE`）尚未实现，前端尚未接入。
 
 ## 环境要求
 
@@ -33,9 +34,12 @@ backend/
 │   └── journal/
 │       ├── __init__.py
 │       ├── models.py           # Journal Model
-│       └── schemas.py          # JournalCreate / JournalResponse
+│       ├── schemas.py          # JournalCreate / JournalResponse
+│       ├── service.py          # create_journal（事务边界在这里）
+│       └── router.py           # POST /api/journals
 ├── tests/
-│   └── test_journal_schemas.py # Task 4.1 的 Schema 测试（内存数据）
+│   ├── test_journal_schemas.py # Task 4.1 的 Schema 测试（只用内存数据）
+│   └── test_journal_api.py     # Task 4.2 的创建 API 测试（真实 PostgreSQL）
 ├── alembic/
 │   ├── env.py
 │   ├── script.py.mako
@@ -242,6 +246,73 @@ Stage 1 / Task 4.1 的 Pydantic Schema 测试在 `tests/test_journal_schemas.py`
 - JSON 序列化：`journal_date` 表达为 `YYYY-MM-DD`，时间可解析回带时区原值；
 - 未持久化 `Journal` 对象经 `model_validate()` 转换为 `JournalResponse`，字段值一致。
 
+## 运行 API 测试
+
+Stage 1 / Task 4.2 的创建 API 测试在 `tests/test_journal_api.py`。
+在 `backend/` 目录下执行：
+
+```powershell
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_journal_api.py
+```
+
+与 Schema 测试不同，**这套测试需要一个正在运行的本地 PostgreSQL**
+（先完成「启动数据库」一节）。
+
+测试用的 HTTP 客户端由 `httpx2` 提供：FastAPI 的 `TestClient` 通过它发出请求，
+所以 `httpx2` 已记入 `requirements.txt`。
+
+### 它验证了什么
+
+用 FastAPI `TestClient` 打真实数据库，完整走一遍：
+
+```text
+HTTP → Pydantic → Router → Service → SQLAlchemy → psycopg → PostgreSQL
+```
+
+覆盖：
+
+- 正常请求返回 `201`，响应包含六个字段；
+- 响应与事务内实际数据库记录逐字段一致；
+- `title` 省略与显式 `null` 都能创建，数据库不写入默认标题；
+- 同一天创建两篇，`id` 不同；
+- 缺必填项 / 必填为 `null` / 非法日历日期（2026-02-30、无效闰日）/ 无法解析的字符串
+  返回 `422`，且不产生任何记录；
+- 客户端提交的 `id` / `created_at` / `updated_at` 不会控制生成结果；
+- 创建时间带时区；
+- 写入失败（受控故障）触发 `rollback`：HTTP 返回 `500`，数据库无半截记录，
+  Session 仍可继续使用；
+- `/api/health` 行为不变。
+
+### 测试数据为什么不会留在数据库里
+
+每个测试用「外层事务 + savepoint」把 Service 的 `commit()` 关在里面：
+
+```python
+connection = engine.connect()
+outer_transaction = connection.begin()
+session = Session(bind=connection, join_transaction_mode="create_savepoint")
+app.dependency_overrides[get_db] = override_get_db   # override 里 yield 上面这个 session
+```
+
+`join_transaction_mode="create_savepoint"` 让这个测试 Session 加入外层事务：
+Session 自己的事务在连接上表现为一个 SAVEPOINT，因此 Service 里的 `db.commit()`
+实际是 **RELEASE SAVEPOINT** —— 数据在测试连接内可见，但外层事务没有被提交。
+
+测试结束时按顺序做三件事：
+
+1. `app.dependency_overrides.clear()`：撤掉注入的测试 Session；
+2. `session.close()`：归还连接（不提交任何东西）；
+3. `outer_transaction.rollback()` 与 `connection.close()`：回滚外层事务。
+
+测试期间插入的行随之全部消失。fixture 还会在结束时再查一次 `journals` 总行数，
+确认与测试开始时一致。
+
+两点说明：
+
+- **`id` 会跳号。** PostgreSQL 的 sequence 取值不随事务回滚，因此跑完测试后
+  `journals_id_seq` 的当前值会前进。这不代表数据残留。
+- 测试只插入，不删除、不清空任何既有数据；每次运行前后 `journals` 的行数不变。
+
 ## 启动应用
 
 ```powershell
@@ -291,21 +362,27 @@ docker compose --env-file backend/.env stop
 
 已实现：
 
-- `GET /api/health`
+- `GET /api/health`（不检查数据库）
+- `POST /api/journals`：创建 Journal，成功返回 `201` 与完整六字段记录
+- 请求级 Session 依赖 `get_db()`（`app/database.py`）
+- 创建 Service `create_journal()`：成功 commit、失败 rollback（`app/journal/service.py`）
+- Journal Router（`app/journal/router.py`），已在 `app/main.py` 注册
 - 本地 PostgreSQL 开发数据库的 Compose 配置
 - SQLAlchemy 2.x 数据库基础：Engine、Session 工厂、共享 Declarative Base（`app/database.py`）
 - Journal Model：`journals` 表六个字段（`app/journal/models.py`）
 - Alembic 首次迁移，`journals` 表已在本地数据库建立
 - Journal Pydantic Schema：`JournalCreate` / `JournalResponse`（`app/journal/schemas.py`）
-- Schema 测试（`tests/test_journal_schemas.py`，pytest，全部使用内存数据）
+- 两套 pytest 测试：`tests/test_journal_schemas.py`（只用内存数据）、
+  `tests/test_journal_api.py`（TestClient + 真实 PostgreSQL）
 - 只读的历史连接验证脚本（`scripts/check_db.py`）
 
-尚未实现（Task 4.2 及以后）：
+尚未实现：
 
-- `POST /api/journals` 的 Service、Router、Session 注入与 `main.py` 注册；
-- `JournalUpdate` 与其他 CRUD Schema（`GET` / `PATCH` / `DELETE`）；
-- API 测试（TestClient）；
+- `GET /api/journals`、`GET /api/journals?journal_date=YYYY-MM-DD`、`GET /api/journals/{id}`；
+- `PATCH /api/journals/{id}`、`DELETE /api/journals/{id}`；
+- `JournalUpdate` 与其他后续 Schema；
 - CORS、认证；
 - 前端调用。
 
-`journals` 表已经存在，Schema 也已完成，但还没有任何接口能读写它。
+`journals` 表现在可以写入：`POST /api/journals` 能创建记录，
+但还读不出来 —— 列表、详情、修改、删除接口都还没有。

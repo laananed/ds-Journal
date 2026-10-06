@@ -1,13 +1,15 @@
 """SQLAlchemy 数据库基础配置。
 
-Stage 1 / Task 3 第二步。
+Stage 1 / Task 3 第二步建立 Engine / Session 工厂 / Base；
+Task 4.2 增加了请求级的 Session 依赖函数 `get_db`。
 
-本模块只做四件事：
+本模块只做五件事：
 
 1. 显式定位并加载 `backend/.env`；
 2. 从环境变量读取 `DATABASE_URL`；
 3. 创建 Engine 与 Session 工厂；
-4. 定义全项目共享的 Declarative Base。
+4. 定义全项目共享的 Declarative Base；
+5. 提供一个请求级的 Session 依赖函数。
 
 不包含 Settings 类、独立配置层、Repository 或连接池调优。
 """
@@ -15,12 +17,13 @@ Stage 1 / Task 3 第二步。
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 from dotenv import load_dotenv
 from sqlalchemy import URL, create_engine, make_url
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 # 显式定位 backend/.env，不依赖当前工作目录
 # （与 scripts/check_db.py 保持同一种做法）。
@@ -63,7 +66,7 @@ DATABASE_URL = build_database_url()
 # 同步 Engine。使用 SQLAlchemy 默认连接池配置，当前不做调优。
 engine: Engine = create_engine(DATABASE_URL)
 
-# Session 工厂。当前没有 Router，因此不提前加 FastAPI 依赖注入函数。
+# Session 工厂。每次请求从这里取一个独立的 Session。
 SessionLocal = sessionmaker(bind=engine)
 
 
@@ -73,3 +76,23 @@ class Base(DeclarativeBase):
     Journal Model 与 Alembic 的 env.py 引用的是同一个 Base，
     因此 `Base.metadata` 始终与实际 Model 一致。
     """
+
+
+def get_db() -> Iterator[Session]:
+    """FastAPI 依赖：提供请求级的 Session 生命周期。
+
+    每个请求取一个 Session，请求结束后关闭，把连接归还连接池。
+
+    这里只负责「取」和「关」：
+
+    - 提交与回滚由 Service 负责（成功 commit，失败 rollback）；
+    - 不做自动重试、不做异常包装、不加嵌套事务。
+
+    测试可以用 `app.dependency_overrides[get_db]` 换成测试 Session，
+    不需要改动 Router 与 Service。
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
