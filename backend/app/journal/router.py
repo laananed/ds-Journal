@@ -2,24 +2,25 @@
 
 Stage 1 / Task 4.2：`POST /api/journals`。
 Stage 1 / Task 5.1：`GET /api/journals`（可选 `journal_date` 精确筛选）。
+Stage 1 / Task 5.2：`GET /api/journals/{id}` 单篇详情。
 
 Router 只负责：
 
-- 接收请求体与查询参数（Pydantic 负责校验）；
+- 接收请求体、查询参数与路径参数（Pydantic 负责校验）；
 - 通过依赖拿到请求级 Session；
 - 调用 Service；
 - 返回 HTTP 响应。
 
 Router 不写业务规则，也不直接使用 SQLAlchemy。
 
-单篇详情（`GET /api/journals/{id}`）与 PATCH / DELETE 属于后续 Task，本文件暂不实现。
+PATCH / DELETE 属于后续 Task，本文件暂不实现。
 """
 
 from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -57,3 +58,27 @@ def list_journals(
     日期格式不合法时由 FastAPI / Pydantic 返回标准 422。
     """
     return service.list_journals(db, journal_date)
+
+
+@router.get("/{id}", response_model=JournalResponse, status_code=status.HTTP_200_OK)
+def get_journal(
+    id: int,
+    db: Session = Depends(get_db),
+) -> Journal:
+    """获取单篇 Journal，返回 200 与完整六字段。
+
+    - 路径参数 `id` 由 FastAPI / Pydantic 解析为整数，
+      非整数（例如 `/api/journals/abc`）返回标准 422；
+    - 合法整数但记录不存在时返回 404；
+    - 读取不修改任何数据。
+
+    这里使用 FastAPI 自带的 `HTTPException` 与标准 404 状态码，
+    不自定义错误包装、错误码或全局异常体系。
+    """
+    journal = service.get_journal(db, id)
+    if journal is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Journal not found",
+        )
+    return journal

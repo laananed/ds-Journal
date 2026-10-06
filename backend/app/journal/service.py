@@ -2,13 +2,18 @@
 
 Stage 1 / Task 4.2：Create。
 Stage 1 / Task 5.1：List（含可选 journal_date 精确筛选）。
+Stage 1 / Task 5.2：Get（按主键取单篇）。
 
 调用关系：Router → Service → SQLAlchemy → psycopg → PostgreSQL。
 
 Service 负责业务行为与事务边界：
 
 - 写入（create）：成功 commit，失败 rollback 并把异常继续抛给上层；
-- 读取（list）：只查，不 add / flush / commit，也不修改任何字段。
+- 读取（list / get）：只查，不 add / flush / commit，也不修改任何字段。
+
+读取函数不感知 HTTP：找不到记录时返回 None，
+由 Router 决定对外的状态码（当前是 404），
+因此这里不导入 FastAPI 的 HTTPException。
 
 不包含 Repository、不引入额外抽象层。
 """
@@ -81,3 +86,18 @@ def list_journals(db: Session, journal_date: date | None = None) -> list[Journal
     )
 
     return list(db.scalars(statement).all())
+
+
+def get_journal(db: Session, journal_id: int) -> Journal | None:
+    """按主键取一篇 Journal；不存在时返回 None。
+
+    用 `Session.get()` 按主键查询，让 SQLAlchemy 走最简单的主键路径：
+    不需要自己拼 where 条件，也不需要把整表取回来再在 Python 里查找。
+
+    这是只读函数：不 add、不 flush、不 commit，也不修改任何字段；
+    Session 的关闭继续由 `get_db` 负责。
+
+    命中时会先看 Session 的 identity map，因此返回的可能是当前
+    Session 里已有的同一个对象；这对调用方没有影响，因为本函数不写入。
+    """
+    return db.get(Journal, journal_id)
