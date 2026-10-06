@@ -332,6 +332,52 @@ API Contract、Journal 数据模型与数据库结构保持不变。
 
 ---
 
+### Task 6
+
+实现并验证 `PATCH /api/journals/{id}` 修改链路。
+
+Task 6 分两阶段实施，不扩展到删除、Frontend 或 Stage 2 功能。
+以下定义记录已确定的开发范围，不代表当前已经实现。
+
+#### Task 6.1：JournalUpdate 请求 Schema 与最小 Schema 测试
+
+包含：
+
+- `backend/app/journal/schemas.py` 中的 `JournalUpdate`；
+- 最小 Schema 测试；
+- Backend README 更新。
+
+部分更新语义遵守 `docs/stage1-api.md` 第 8 节：
+
+- 只声明 `title` / `content` / `journal_date` 三个可更新字段，三者都允许省略；
+- 省略表示「不更新该字段」，而不是把字段赋成 `null`；
+- `title` 允许显式 `null`（清空标题）；`content` 与 `journal_date` 不允许显式 `null`；
+- 本次提交了哪些字段用 Pydantic 的 `model_fields_set` /
+  `model_dump(exclude_unset=True)` 表达，不使用 `exclude_none=True`；
+- 不声明 `id` / `created_at` / `updated_at`，额外字段沿用 `extra="ignore"`；
+- 不新增正则、strict、日期范围或默认日期等业务限制，
+  日期解析边界与 `JournalCreate` 保持一致。
+
+验收只使用内存数据：不导入 Model / Engine / Session，不连接或修改数据库。
+
+本阶段不包含：
+
+- `PATCH` Router、更新 Service、Session 注入或 `main.py` 改动；
+- 数据库写入、`updated_at` / `created_at` 行为验证、`404` 与失败回滚测试；
+- `DELETE`、Frontend、额外依赖或架构层；
+- Model、Migration、API Contract 或产品需求修改。
+
+#### Task 6.2：Journal 修改 API
+
+在 Task 6.1 验收通过后实现并验证：
+
+- 更新 Service；
+- `PATCH /api/journals/{id}` Router 与 Session 注入；
+- 真实数据库 API 测试：部分更新、`updated_at` 更新、`created_at` 不变、
+  `id` 不存在时 `404 Not Found`、写入失败回滚。
+
+---
+
 ## 8. Backend Responsibilities
 
 ### main.py

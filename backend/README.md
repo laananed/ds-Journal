@@ -1,6 +1,6 @@
 # SeekJournal Backend
 
-SeekJournal 后端（Stage 1 / Task 5.2 产物）。
+SeekJournal 后端（Stage 1 / Task 6.1 产物）。
 
 当前包含：
 
@@ -10,12 +10,13 @@ SeekJournal 后端（Stage 1 / Task 5.2 产物）。
 - SQLAlchemy 2.x 数据库基础（Engine / Session 工厂 / 请求级 Session 依赖 / Declarative Base）；
 - Journal SQLAlchemy Model；
 - Alembic 首次迁移，已在本地数据库建立 `journals` 表；
-- Journal 的 Pydantic Schema（`JournalCreate` / `JournalResponse`）；
+- Journal 的 Pydantic Schema（`JournalCreate` / `JournalUpdate` / `JournalResponse`）；
 - `POST /api/journals` 创建链路，打通
   HTTP → Pydantic → Router → Service → SQLAlchemy → psycopg → PostgreSQL；
 - `GET /api/journals` 列表，以及可选的 `journal_date` 精确日期筛选；
 - `GET /api/journals/{id}` 单篇详情（不存在返回 `404`）；
-- 四套 pytest 测试：Schema 测试（只用内存数据）、创建 API 测试、列表 / 筛选 API 测试、
+- 五套 pytest 测试：Schema 测试（创建 / 响应）、`JournalUpdate` Schema 测试
+  （两者只用内存数据）、创建 API 测试、列表 / 筛选 API 测试、
   详情 API 测试（后三套使用 TestClient + 真实 PostgreSQL）；
 - 一个只读的历史连接验证脚本。
 
@@ -37,12 +38,13 @@ backend/
 │   └── journal/
 │       ├── __init__.py
 │       ├── models.py           # Journal Model
-│       ├── schemas.py          # JournalCreate / JournalResponse
+│       ├── schemas.py          # JournalCreate / JournalUpdate / JournalResponse
 │       ├── service.py          # create_journal（事务边界）/ list_journals / get_journal（只读查询）
 │       └── router.py           # POST / GET /api/journals、GET /api/journals/{id}
 ├── tests/
 │   ├── conftest.py             # 共享 api fixture（事务隔离 + 无残留检查）
 │   ├── test_journal_schemas.py # Task 4.1 的 Schema 测试（只用内存数据）
+│   ├── test_journal_update_schemas.py # Task 6.1 的 JournalUpdate 测试（只用内存数据）
 │   ├── test_journal_api.py     # Task 4.2 的创建 API 测试（真实 PostgreSQL）
 │   ├── test_journal_read_api.py   # Task 5.1 的列表 / 筛选测试（真实 PostgreSQL）
 │   └── test_journal_detail_api.py # Task 5.2 的详情测试（真实 PostgreSQL）
@@ -252,6 +254,63 @@ Stage 1 / Task 4.1 的 Pydantic Schema 测试在 `tests/test_journal_schemas.py`
 - JSON 序列化：`journal_date` 表达为 `YYYY-MM-DD`，时间可解析回带时区原值；
 - 未持久化 `Journal` 对象经 `model_validate()` 转换为 `JournalResponse`，字段值一致。
 
+## 运行 JournalUpdate Schema 测试
+
+Stage 1 / Task 6.1 的 `JournalUpdate` 测试在 `tests/test_journal_update_schemas.py`。
+在 `backend/` 目录下执行：
+
+```powershell
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_journal_update_schemas.py tests/test_journal_schemas.py
+```
+
+与创建 Schema 测试一样，它**只使用内存数据**：不导入 Model / Engine / Session，
+不创建数据库连接、不 flush / commit、不执行 SQL，因此运行它不需要 Docker 或 PostgreSQL。
+命令里同时带上 `tests/test_journal_schemas.py`，
+是为了确认原有的 `JournalCreate` / `JournalResponse` 测试没有被改坏。
+
+### 部分更新语义
+
+`JournalUpdate` 只声明 `title` / `content` / `journal_date` 三个可更新字段，三者都允许省略。
+区分「字段未提交」和「显式提交值」用的是 Pydantic v2 的提交状态：
+
+```python
+JournalUpdate().model_dump(exclude_unset=True)          # {}          没有字段需要更新
+JournalUpdate(title=None).model_dump(exclude_unset=True)  # {"title": None}  清空标题
+JournalUpdate(content="新正文").model_dump(exclude_unset=True)  # {"content": "新正文"}
+```
+
+- 省略字段 → 不进入更新数据；
+- `title` 显式 `null` → 进入更新数据，表示清空标题；
+- `content` / `journal_date` 显式 `null` → 被拒绝（它们对应的数据库列是 NOT NULL），
+  只有「省略」才表示不更新；
+- **不使用 `exclude_none=True`**：它会把显式提交的 `title=None` 一起丢掉，
+  把「清空标题」误判成「不更新标题」；
+- 也不能拿普通 `model_dump()` 当更新数据：它会把省略字段的默认值一起带出来。
+
+### 覆盖范围
+
+- `JournalUpdate` 恰好声明三个可更新字段，不含 `id` / `created_at` / `updated_at`；
+- 三字段都可省略；空请求 `{}` 的更新数据为 `{}`；
+- 只更新单字段、同时更新多字段；
+- `title` 省略与显式 `null` 的区别；`title` 字符串与空字符串原样保留；
+- `content` 空字符串与文本被接受，显式 `null` 被拒绝；
+- `journal_date` 合法日期与有效闰日（2024-02-29）被接受；
+  非法日历日期、无效闰日、格式错误与无法解析的值被拒绝，显式 `null` 被拒绝；
+- 日期解析边界与 `JournalCreate` 一致（带时间后缀的字符串同样被截断，见下面的说明）；
+- 类型错误（三字段传整数）被拒绝；
+- 客户端提交的系统字段与未知字段被 `extra="ignore"` 忽略，
+  既不进入更新数据，也不出现在模型上；
+- `exclude_unset` 不带入未提交字段，且显式 `title=null` 不会被丢弃；
+- `JournalUpdate` 未新增正则、strict、日期范围或默认日期规则。
+
+`JournalUpdate` 内部的 `content` / `journal_date` 写成「非 Optional 注解 + `None` 默认值」：
+默认值不参与验证，所以省略合法；显式提交 `null` 时仍按 `str` / `date` 验证，因此被拒绝。
+这与契约要求一致，并由上面的测试逐条固定。
+
+**日期解析边界说明**：与 `JournalCreate` 相同，Pydantic v2 内置的 `date` 解析会接受
+`"2026-10-02T00:00:00"` 并截断为 `2026-10-02`。契约要求前端发送 `YYYY-MM-DD`，
+但把这条边界收紧需要正则、`strict` 或自定义解析器，属于 Task 6.1 明确不增加的规则。
+
 ## 运行 API 测试
 
 Stage 1 / Task 4.2 的创建 API 测试在 `tests/test_journal_api.py`。
@@ -447,8 +506,11 @@ docker compose --env-file backend/.env stop
 - SQLAlchemy 2.x 数据库基础：Engine、Session 工厂、共享 Declarative Base（`app/database.py`）
 - Journal Model：`journals` 表六个字段（`app/journal/models.py`）
 - Alembic 首次迁移，`journals` 表已在本地数据库建立
-- Journal Pydantic Schema：`JournalCreate` / `JournalResponse`（`app/journal/schemas.py`）
-- 四套 pytest 测试：`tests/test_journal_schemas.py`（只用内存数据）、
+- Journal Pydantic Schema：`JournalCreate` / `JournalUpdate` / `JournalResponse`
+  （`app/journal/schemas.py`）。其中 `JournalUpdate` 只提供部分更新语义，
+  还没有接入 API；
+- 五套 pytest 测试：`tests/test_journal_schemas.py`、
+  `tests/test_journal_update_schemas.py`（两者只用内存数据）、
   `tests/test_journal_api.py`、`tests/test_journal_read_api.py`、
   `tests/test_journal_detail_api.py`（后三套均为 TestClient + 真实 PostgreSQL），
   共享 fixture 在 `tests/conftest.py`
@@ -457,10 +519,11 @@ docker compose --env-file backend/.env stop
 尚未实现：
 
 - `PATCH /api/journals/{id}`、`DELETE /api/journals/{id}`；
+- 更新 Service 与 PATCH Router（Task 6.2）；
 - 分页、搜索与排序查询参数；
-- `JournalUpdate` 与其他后续 Schema；
 - CORS、认证；
 - 前端调用。
 
 `journals` 表现在能创建、能列出、能按日期筛选、也能按 `id` 取单篇；
+`JournalUpdate` 已定义部分更新请求语义但尚未接入路由；
 修改与删除接口尚未实现，前端尚未接入。
