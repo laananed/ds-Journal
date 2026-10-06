@@ -1,6 +1,6 @@
 # SeekJournal Backend
 
-SeekJournal 后端（Stage 1 / Task 6.1 产物）。
+SeekJournal 后端（Stage 1 / Task 6.2 产物）。
 
 当前包含：
 
@@ -15,12 +15,13 @@ SeekJournal 后端（Stage 1 / Task 6.1 产物）。
   HTTP → Pydantic → Router → Service → SQLAlchemy → psycopg → PostgreSQL；
 - `GET /api/journals` 列表，以及可选的 `journal_date` 精确日期筛选；
 - `GET /api/journals/{id}` 单篇详情（不存在返回 `404`）；
-- 五套 pytest 测试：Schema 测试（创建 / 响应）、`JournalUpdate` Schema 测试
+- `PATCH /api/journals/{id}` 部分更新（记录不存在返回 `404`）；
+- 六套 pytest 测试：Schema 测试（创建 / 响应）、`JournalUpdate` Schema 测试
   （两者只用内存数据）、创建 API 测试、列表 / 筛选 API 测试、
-  详情 API 测试（后三套使用 TestClient + 真实 PostgreSQL）；
+  详情 API 测试、修改（PATCH）API 测试（后四套使用 TestClient + 真实 PostgreSQL）；
 - 一个只读的历史连接验证脚本。
 
-`PATCH` / `DELETE` 尚未实现，前端尚未接入。
+`DELETE` 尚未实现，前端尚未接入。
 
 ## 环境要求
 
@@ -39,15 +40,16 @@ backend/
 │       ├── __init__.py
 │       ├── models.py           # Journal Model
 │       ├── schemas.py          # JournalCreate / JournalUpdate / JournalResponse
-│       ├── service.py          # create_journal（事务边界）/ list_journals / get_journal（只读查询）
-│       └── router.py           # POST / GET /api/journals、GET /api/journals/{id}
+│       ├── service.py          # create_journal（事务边界）/ list_journals / get_journal / update_journal
+│       └── router.py           # POST / GET /api/journals、GET / PATCH /api/journals/{id}
 ├── tests/
 │   ├── conftest.py             # 共享 api fixture（事务隔离 + 无残留检查）
 │   ├── test_journal_schemas.py # Task 4.1 的 Schema 测试（只用内存数据）
 │   ├── test_journal_update_schemas.py # Task 6.1 的 JournalUpdate 测试（只用内存数据）
 │   ├── test_journal_api.py     # Task 4.2 的创建 API 测试（真实 PostgreSQL）
 │   ├── test_journal_read_api.py   # Task 5.1 的列表 / 筛选测试（真实 PostgreSQL）
-│   └── test_journal_detail_api.py # Task 5.2 的详情测试（真实 PostgreSQL）
+│   ├── test_journal_detail_api.py # Task 5.2 的详情测试（真实 PostgreSQL）
+│   └── test_journal_update_api.py # Task 6.2 的修改 API 测试（真实 PostgreSQL）
 ├── alembic/
 │   ├── env.py
 │   ├── script.py.mako
@@ -443,6 +445,106 @@ Stage 1 / Task 5.2 的单篇详情测试在 `tests/test_journal_detail_api.py`�
 共享 fixture 与写入隔离方式同样与上面几节一致，因此详情测试也不会留下残留，
 `id` 同样会跳号。
 
+## 运行修改（PATCH）API 测试
+
+Stage 1 / Task 6.2 的部分更新测试在 `tests/test_journal_update_api.py`。
+在 `backend/` 目录下执行：
+
+```powershell
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_journal_update_api.py
+```
+
+同样需要一个正在运行的本地 PostgreSQL，并复用同一个 `api` fixture。
+
+### 部分更新语义
+
+- 只更新请求体里**实际提交**的字段（`JournalUpdate.model_dump(exclude_unset=True)`）；
+  省略的字段保持原值；
+- `title` 显式提交 `null` 表示清空标题，不会被丢弃；
+- `content` 可以更新为空字符串；`content` / `journal_date` 显式 `null` 返回 `422`；
+- `id` / `created_at` / `updated_at` 由系统决定，客户端提交的同名值被忽略。
+
+### 空更新
+
+请求体为 `{}`，或者只提交了被忽略的额外字段 / 系统字段时，验证后的更新数据是空集合：
+
+- 记录存在：返回 `200` 与当前记录，**不产生任何写入**，`updated_at` 不变；
+- 记录不存在：返回 `404`（空更新不会因为「没有内容可改」就跳过存在性判断）。
+
+提交与原值相同的字段时，沿用 SQLAlchemy 的无变化处理：不额外强制刷新 `updated_at`，
+也不额外增加比较层。这与「真的改了字段」是两条不同的路径。
+
+### 覆盖范围
+
+- 分别修改 `title` / `content` / `journal_date`，以及多字段同时修改；
+- 响应恰好六字段，且与数据库实际列值逐字段一致；
+- 未提交字段保持不变；同日另一篇记录完全不受影响；
+- 清空标题后不生成日期标题、不写同日编号；
+- `id` 与 `created_at` 不变；真的发生字段修改后 `updated_at` 更新
+  （测试使用合成的、明显更早的时间，不需要 sleep）；
+- 空更新返回当前记录且整表快照不变；只提交系统字段 / 未知字段按空更新处理；
+- 不存在 id 返回 `404`（普通 PATCH 与空 PATCH 都是）；`0` / 负数同样 `404`；
+- 非整数路径参数、`content` / `journal_date` 显式 `null`、非法日历日期、
+  类型错误返回标准 `422`，且前后数据快照一致；
+- 失败回滚：受控触发真实 `IntegrityError`（绕过校验构造 `content=None`）
+  与受控 commit 故障，验证字段恢复、无半截更新、Session 仍可用，HTTP 返回 `500`；
+- 联动：PATCH 后详情返回新值；改 `journal_date` 后按日期筛选体现新日期、
+  旧日期不再包含该记录；列表反映新值；
+- 独立连接确认测试期间没有任何提交，既有行快照不变。
+
+### 失败路径为什么用 POST 造数据
+
+`Session.rollback()` 会回滚到 Session 自己的 savepoint，
+连测试刚 `flush()` 但还没 release 的行一起撤销。
+所以回滚用例先用一次 `POST` 建记录（会 RELEASE SAVEPOINT，把该行留在外层事务里），
+这样失败后的 rollback 只撤销那次 `UPDATE`，「字段是否恢复」才真的可验证。
+
+### 关于 `journal_date`
+
+修改 `journal_date` 后同一天仍允许存在多篇记录（该列不是 UNIQUE），
+测试只在返回结果里定位自己创建的 id，不假设整个列表的内容。
+
+## 独立测试数据库与完整回归
+
+API 测试现在使用同一 PostgreSQL 服务中的独立数据库 `seekjournal_test`，
+开发库 `seekjournal` 中的记录不会参与测试，也不会被删除或修改。
+连接凭据沿用本机 `.env`，仅在 pytest 进程内替换库名；无需修改 `.env`。
+
+在 `backend/` 目录准备测试库（首次运行及新增 Migration 后执行）：
+
+```powershell
+.\.venv\Scripts\python.exe -B -m scripts.prepare_test_db
+```
+
+该命令仅创建不存在的 `seekjournal_test`，并对它执行已有的 Alembic
+`upgrade head`。需要当前数据库用户有创建数据库权限。
+可以重复执行；若测试库已存在日记记录，会失败并保留数据，不会清空。
+
+完整回归：
+
+```powershell
+$env:PYTHONDONTWRITEBYTECODE = '1'
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests
+```
+
+所有上述 API 测试命令都自动使用测试库。
+Schema 测试仍只使用内存，不建立数据库连接。
+现有外层事务与 savepoint 隔离保持不变，测试结束后测试库无日记残留。
+测试可能增加测试库的 sequence 取值，但不影响开发库的 sequence。
+
+## 测试库需要空白业务数据基线
+
+`tests/test_journal_read_api.py` 里有三个用例要求**运行前 `journals` 表为空**
+（它们自己带断言与提示信息）：
+
+- `test_empty_database_returns_200_and_empty_array`
+- `test_list_returns_200_with_items_carrying_exactly_six_fields`
+- `test_title_null_is_returned_as_null`
+
+`seekjournal_test.journals` 表已有记录时，这三个用例会失败。
+**这是前置条件不满足，不是功能缺陷，也不要为了通过测试去删除数据。**
+其余测试都在「外层事务 + savepoint」里运行，不要求空库。
+
 ## 启动应用
 
 ```powershell
@@ -497,33 +599,35 @@ docker compose --env-file backend/.env stop
 - `GET /api/journals`：返回 Journal 列表，成功返回 `200` 与完整数组
 - `GET /api/journals?journal_date=YYYY-MM-DD`：按日期精确筛选
 - `GET /api/journals/{id}`：返回单篇 Journal，不存在时返回 `404`
+- `PATCH /api/journals/{id}`：部分更新，成功返回 `200` 与完整六字段记录，
+  不存在时返回 `404`，空更新不产生写入
 - 请求级 Session 依赖 `get_db()`（`app/database.py`）
 - 创建 Service `create_journal()`：成功 commit、失败 rollback；
   查询 Service `list_journals()`（排序与筛选都在 SQL 里完成）与
-  `get_journal()`（按主键取单篇，未命中返回 `None`）（`app/journal/service.py`）
+  `get_journal()`（按主键取单篇，未命中返回 `None`）；
+  更新 Service `update_journal()`（部分更新、空更新直接返回、未命中返回 `None`、
+  失败 rollback）（`app/journal/service.py`）
 - Journal Router（`app/journal/router.py`），已在 `app/main.py` 注册
 - 本地 PostgreSQL 开发数据库的 Compose 配置
 - SQLAlchemy 2.x 数据库基础：Engine、Session 工厂、共享 Declarative Base（`app/database.py`）
 - Journal Model：`journals` 表六个字段（`app/journal/models.py`）
 - Alembic 首次迁移，`journals` 表已在本地数据库建立
 - Journal Pydantic Schema：`JournalCreate` / `JournalUpdate` / `JournalResponse`
-  （`app/journal/schemas.py`）。其中 `JournalUpdate` 只提供部分更新语义，
-  还没有接入 API；
-- 五套 pytest 测试：`tests/test_journal_schemas.py`、
+  （`app/journal/schemas.py`）
+- 六套 pytest 测试：`tests/test_journal_schemas.py`、
   `tests/test_journal_update_schemas.py`（两者只用内存数据）、
   `tests/test_journal_api.py`、`tests/test_journal_read_api.py`、
-  `tests/test_journal_detail_api.py`（后三套均为 TestClient + 真实 PostgreSQL），
+  `tests/test_journal_detail_api.py`、`tests/test_journal_update_api.py`
+  （后四套均为 TestClient + 真实 PostgreSQL），
   共享 fixture 在 `tests/conftest.py`
 - 只读的历史连接验证脚本（`scripts/check_db.py`）
 
 尚未实现：
 
-- `PATCH /api/journals/{id}`、`DELETE /api/journals/{id}`；
-- 更新 Service 与 PATCH Router（Task 6.2）；
+- `DELETE /api/journals/{id}`；
 - 分页、搜索与排序查询参数；
 - CORS、认证；
 - 前端调用。
 
-`journals` 表现在能创建、能列出、能按日期筛选、也能按 `id` 取单篇；
-`JournalUpdate` 已定义部分更新请求语义但尚未接入路由；
-修改与删除接口尚未实现，前端尚未接入。
+`journals` 表现在能创建、能列出、能按日期筛选、能按 `id` 取单篇，也能部分更新；
+删除接口尚未实现，前端尚未接入。

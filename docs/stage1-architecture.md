@@ -376,6 +376,28 @@ Task 6 分两阶段实施，不扩展到删除、Frontend 或 Stage 2 功能。
 - 真实数据库 API 测试：部分更新、`updated_at` 更新、`created_at` 不变、
   `id` 不存在时 `404 Not Found`、写入失败回滚。
 
+空更新行为（用户已确认）：
+
+- 验证后没有可更新字段时，记录存在返回 `200` 与当前记录，
+  不执行更新、不改变 `updated_at`；记录不存在返回 `404 Not Found`；
+- 只提交被忽略的额外字段或系统字段，同样按空更新处理；
+- 空更新不产生任何写入。
+
+完整 API 定义在 `docs/stage1-api.md` 第 8 节，这里不重复维护。
+
+更新数据用 `JournalUpdate.model_dump(exclude_unset=True)` 得到，
+只写 `title` / `content` / `journal_date`；
+`updated_at` 由 Model 现有的 `onupdate` 维护，不新增时间维护机制。
+
+Task 6.2 的验收除功能正确外，还包括：
+
+- 响应六字段与数据库实际列值一致；
+- 省略字段不被改动，显式 `title=null` 不被丢失；
+- `id` 与 `created_at` 不变；
+- 失败时回滚，不留半截更新，Session 仍可继续使用；
+- 更新后详情、列表与按日期筛选都能反映新值；
+- 测试结束无新增记录、无持久化修改残留。
+
 ---
 
 ## 8. Backend Responsibilities
@@ -821,6 +843,19 @@ Compose 文件不写入默认密码。
 Backend：
 
 pytest。
+
+### 独立 PostgreSQL 测试库
+
+API 测试使用同一 PostgreSQL 服务中的 `seekjournal_test` 数据库，
+与应用运行使用的开发库分离；这不是产品运行时的多数据库设计。
+连接凭据复用本机配置，测试进程只替换数据库名，不修改 `.env`。
+
+`backend/scripts/prepare_test_db.py` 创建测试库并应用已有 Alembic Migration，
+不使用 `create_all`，不删除或清空任何已有数据库。
+pytest 在导入应用模块之前切换到测试库，
+继续使用外层事务与 savepoint，并在测试结束回滚。
+测试库应保持空白业务数据基线；存在记录时应查明来源，不能自动清空。
+准备和运行命令记录在 `backend/README.md`。
 
 至少测试：
 

@@ -3,6 +3,7 @@
 Stage 1 / Task 4.2：`POST /api/journals`。
 Stage 1 / Task 5.1：`GET /api/journals`（可选 `journal_date` 精确筛选）。
 Stage 1 / Task 5.2：`GET /api/journals/{id}` 单篇详情。
+Stage 1 / Task 6.2：`PATCH /api/journals/{id}` 部分更新。
 
 Router 只负责：
 
@@ -13,7 +14,7 @@ Router 只负责：
 
 Router 不写业务规则，也不直接使用 SQLAlchemy。
 
-PATCH / DELETE 属于后续 Task，本文件暂不实现。
+DELETE 属于后续 Task，本文件暂不实现。
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.journal import service
 from app.journal.models import Journal
-from app.journal.schemas import JournalCreate, JournalResponse
+from app.journal.schemas import JournalCreate, JournalResponse, JournalUpdate
 
 router = APIRouter(prefix="/api/journals", tags=["journals"])
 
@@ -76,6 +77,37 @@ def get_journal(
     不自定义错误包装、错误码或全局异常体系。
     """
     journal = service.get_journal(db, id)
+    if journal is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Journal not found",
+        )
+    return journal
+
+
+@router.patch("/{id}", response_model=JournalResponse, status_code=status.HTTP_200_OK)
+def update_journal(
+    id: int,
+    payload: JournalUpdate,
+    db: Session = Depends(get_db),
+) -> Journal:
+    """部分更新一篇 Journal，返回 200 与更新后的完整六字段。
+
+    - 只更新请求体里**实际提交**的字段：省略的字段保持原值，
+      `title` 显式提交 `null` 表示清空标题；
+    - 空更新（`{}`，或只提交了被忽略的额外 / 系统字段）：
+      记录存在时返回 200 与当前记录，不产生写入，也不改变 `updated_at`；
+    - 合法整数但记录不存在时返回 404；
+    - 路径参数非整数、请求体不合法（例如 `content` / `journal_date`
+      显式 `null`、非法日历日期）由 FastAPI / Pydantic 返回标准 422；
+    - `id` / `created_at` / `updated_at` 不允许由客户端决定。
+
+    这里只做「调用 Service + 把 None 转成 404」，
+    业务规则与事务边界都在 Service；
+    使用 FastAPI 自带的 `HTTPException` 与标准状态码，
+    不自定义错误包装、错误码或全局异常体系。
+    """
+    journal = service.update_journal(db, id, payload)
     if journal is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

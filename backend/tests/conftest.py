@@ -47,6 +47,14 @@ fixture 结束时会再查一次总行数，确认与测试开始时一致（无
 
 from __future__ import annotations
 
+import os
+
+from scripts.prepare_test_db import get_test_database_url
+
+# 必须在导入 app.database / app.main 之前切换，确保所有测试模块引用同一测试 Engine。
+# 只修改 pytest 进程环境，不修改 backend/.env 或应用运行时配置。
+os.environ["DATABASE_URL"] = get_test_database_url().render_as_string(hide_password=False)
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
