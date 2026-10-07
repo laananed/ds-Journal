@@ -6,11 +6,18 @@ SeekJournal 是一个以个人认知成长为核心、生活与情感记录为�
 
 当前开发阶段：
 
-Stage 1 - Journal Local Web Demo
+Stage 1.5 - Pre-Stage-2 Bug Fix（进行中）
+
+- Stage 1 已完成并通过整体验收，功能与证据见 `docs/stage1-acceptance.md`；
+- 当前阶段的权威文档是 `docs/stage1.5-bugfix.md`（Bug 修复的需求、契约修订与 Task）；
+- 当前只授权执行其中的 **S1.5-T1**；S1.5-T2 尚未授权；
+- Stage 2 目前只有规划文档，**没有获得实施授权**。
+
+Stage 1 - Journal Local Web Demo（已完成）
 
 Stage 1 的目标不是完成完整 SeekJournal 产品。
 
-当前只完成：
+Stage 1 已完成的能力：
 
 - Journal 创建
 - Journal 查看
@@ -24,11 +31,18 @@ Stage 1 的目标不是完成完整 SeekJournal 产品。
 
 ## 2. Required Reading
 
-执行任何 Stage 1 开发任务前，必须阅读：
+执行任何开发任务前，必须阅读：
 
 1. `docs/stage1.md`
 2. `docs/stage1-api.md`
 3. `docs/stage1-architecture.md`
+
+执行当前阶段（Stage 1.5）任务前，还必须阅读：
+
+1. `docs/stage1.5-bugfix.md` —— Stage 1.5 的权威来源，
+   覆盖 Stage 1 文档中已被修订的输入规则与编号实现要求；
+2. 只执行该文件中被点名授权的 Task（当前为 S1.5-T1）。
+   `docs/stage2*.md` 只用于了解后续规划，**不构成实施授权**。
 
 根据当前角色继续阅读：
 
@@ -51,6 +65,12 @@ DeepSeek Developer：
 同一个项目事实不得在多个 Agent 文件中分别维护多个版本。
 
 当前权威来源：
+
+### 当前阶段（Stage 1.5）
+
+`docs/stage1.5-bugfix.md`
+
+（Stage 1.5 的规则修订以它为准；与下方 Stage 1 条目冲突时，以它为准。）
 
 ### 产品需求
 
@@ -211,15 +231,15 @@ psycopg 负责 SQLAlchemy 与 PostgreSQL 之间的实际连接。
 
 ## 8. Scope Control
 
-如果用户提出的需求不属于 Stage 1：
+如果用户提出的需求不属于当前阶段（现为 Stage 1.5）：
 
 先记录需求。
 
 不得直接实现。
 
-如果需求确实需要进入 Stage 1：
+如果需求确实需要进入当前阶段：
 
-先修改对应的 Stage 1 文档。
+先修改该阶段的权威文档。
 
 原则：
 

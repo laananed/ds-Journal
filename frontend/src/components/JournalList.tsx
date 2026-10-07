@@ -1,19 +1,22 @@
 /**
  * Journal 列表展示组件（Stage 1 / Task 8.1 列表，Task 8.2 同日编号，
- * Task 8.3 增加「打开详情」入口）。
+ * Task 8.3 增加「打开详情」入口；Stage 1.5 / S1.5-T1 修正编号方向）。
  *
  * 纯展示：只接收父组件传入的 `journals`，不自己发请求、不改数据。
  *
- * 显示规则（`docs/stage1-api.md` 第 13 节）：
+ * 显示规则（`docs/stage1-api.md` 第 13 节 + `docs/stage1.5-bugfix.md` 第 5 节）：
  *
- * - `title` 为 `null` 时，用 `journal_date` 作为显示标题；
+ * - `title` 为 `null` 或空字符串时，用 `journal_date` 作为显示标题；
  * - 同一天有多篇无标题记录时依次显示 `2026-10-02`、`2026-10-02 (2)`、`2026-10-02 (3)`；
+ * - **编号按创建时间升序分配**（`created_at ASC`，真正相同时才用 `id ASC` 打破并列），
+ *   因此新增一条较晚的记录只会追加新号，旧记录的编号不会整体 +1；
  * - `(n)` 只存在于 UI：既不进入 API，也不写回数据库，
  *   `Journal` 对象与数据库里的 `title` 始终保持 `null`；
  * - 编号只在**无标题**记录之间累加；有自定义标题的记录不消耗编号；
  * - 有标题时按后端返回的原样显示，不做 `trim` 或其它规范化；
  * - 列表顺序完全沿用后端返回顺序（后端已按
- *   `journal_date DESC`、同时刻 `created_at DESC` 排好），前端不再排序；
+ *   `journal_date DESC`、同时刻 `created_at DESC` 排好），前端不再排序：
+ *   **编号顺序与展示顺序是两件事**，编号只决定显示出来的文字；
  * - 以 `id` 作为 React key；
  * - 正文用普通文本渲染，不使用 `dangerouslySetInnerHTML`。
  *
@@ -21,8 +24,12 @@
  * 由父组件去真实请求详情接口——列表里的这条数据不当作详情使用。
  * 主列表与创建表单的「当天已有记录」复用本组件，
  * 因此两处的标题、编号与打开行为天然一致。
+ *
+ * 编号算法本身放在 `../utils/journalTitles.ts`：它是纯函数，
+ * 可以脱离浏览器直接跑测试。组件只负责查表渲染。
  */
 
+import { buildDisplayTitles } from '../utils/journalTitles'
 import type { Journal } from '../types/journal'
 
 interface JournalListProps {
@@ -39,33 +46,6 @@ interface JournalListProps {
   openDisabled?: boolean
 }
 
-/**
- * 计算每条记录的显示标题。
- *
- * 按传入顺序遍历：无标题记录按 `journal_date` 分别计数，
- * 第 n 篇显示为 `日期` 或 `日期 (n)`。
- */
-function buildDisplayTitles(journals: Journal[]): Map<number, string> {
-  const counters = new Map<string, number>()
-  const displayTitles = new Map<number, string>()
-
-  for (const journal of journals) {
-    if (journal.title !== null) {
-      displayTitles.set(journal.id, journal.title)
-      continue
-    }
-
-    const nextIndex = (counters.get(journal.journal_date) ?? 0) + 1
-    counters.set(journal.journal_date, nextIndex)
-    displayTitles.set(
-      journal.id,
-      nextIndex === 1 ? journal.journal_date : `${journal.journal_date} (${nextIndex})`,
-    )
-  }
-
-  return displayTitles
-}
-
 function JournalList({
   journals,
   onOpen,
@@ -78,7 +58,9 @@ function JournalList({
     <ul className="journal-list">
       {journals.map((journal) => {
         const displayTitle = displayTitles.get(journal.id) ?? journal.journal_date
-        const hasCustomTitle = journal.title !== null
+        // 空字符串标题与 null 一样按「无标题」处理：
+        // 这时显示标题就是日期，不必再把日期单独显示一行。
+        const hasCustomTitle = journal.title !== null && journal.title !== ''
         const isSelected = journal.id === selectedId
 
         return (
@@ -87,7 +69,9 @@ function JournalList({
             className="journal-item"
             aria-current={isSelected ? 'true' : undefined}
           >
-            <h2 className="journal-item-title">{displayTitle}</h2>
+            <h2 className="journal-item-title" title={displayTitle}>
+              {displayTitle}
+            </h2>
             {hasCustomTitle && (
               <p className="journal-item-date">{journal.journal_date}</p>
             )}

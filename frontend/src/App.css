@@ -192,7 +192,12 @@
 .journal-item-title {
   margin: 0;
   font-size: 18px;
-  word-break: break-word;
+  /* 列表标题最多一行：超出部分省略。
+     只影响显示，数据库里的 title 原样保留（详情页仍显示完整标题）。
+     用 `title` 属性让鼠标悬停时能看到被裁掉的完整文字。 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .journal-item-date {
