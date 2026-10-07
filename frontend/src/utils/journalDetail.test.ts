@@ -13,6 +13,7 @@
 
 import {
   buildJournalUpdate,
+  displayJournalTitle,
   draftTitleToValue,
   formatServerTimestamp,
   isJournalUpdateEmpty,
@@ -157,6 +158,34 @@ const updateFromIdChange = buildJournalUpdate(
 check(!('id' in updateFromIdChange), '请求体不含 id')
 check(!('created_at' in updateFromIdChange), '请求体不含 created_at')
 check(!('updated_at' in updateFromIdChange), '请求体不含 updated_at')
+
+// ---- 详情展示标题（Stage 1.5 / S1.5-T2）----
+
+expectEqual(
+  displayJournalTitle(null, '2026-10-02'),
+  '2026-10-02',
+  'title 为 null 时详情显示 journal_date',
+)
+expectEqual(
+  displayJournalTitle('', '2026-10-02'),
+  '2026-10-02',
+  'title 为空字符串时详情显示 journal_date（旧行为会显示空行）',
+)
+expectEqual(
+  displayJournalTitle('广州动物园复盘', '2026-10-02'),
+  '广州动物园复盘',
+  '有标题时原样显示',
+)
+expectEqual(
+  displayJournalTitle('  手工标题  ', '2026-10-02'),
+  '  手工标题  ',
+  '非空标题不做 trim、原样显示',
+)
+expectEqual(
+  displayJournalTitle('   ', '2026-10-02'),
+  '   ',
+  '纯空白手工标题原样显示，不退回日期',
+)
 
 // ---- 时间戳排版 ----
 

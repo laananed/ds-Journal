@@ -314,17 +314,23 @@ def test_title_null_clears_the_title(api):
     assert _row_of(session, journal.id)[1] is None
 
 
-def test_content_empty_string_is_accepted(api):
+@pytest.mark.parametrize(
+    "content",
+    ["", " ", "\t", "\n", "\u3000", "\xa0"],
+)
+def test_blank_content_patch_is_rejected(api, content):
+    """Stage 1.5 / S1.5-T2：纯空白正文不再是合法输入（旧规则曾允许空字符串）。"""
     client, session = api
 
     journal = _seed(
         session, _make_journal(content="原始正文", journal_date=DAY)
     )
+    before = _row_of(session, journal.id)
 
-    body = _patch(client, journal.id, content="").json()
+    response = _patch(client, journal.id, content=content)
 
-    assert body["content"] == ""
-    assert _row_of(session, journal.id)[2] == ""
+    assert response.status_code == 422
+    assert _row_of(session, journal.id) == before
 
 
 def test_patch_does_not_touch_the_sibling_on_the_same_day(api):
@@ -617,6 +623,14 @@ def test_non_integer_id_returns_422(api, raw_id):
         {"journal_date": ""},
         {"content": 123},  # 类型错误
         {"journal_date": 123},  # 类型错误
+        # Stage 1.5 / S1.5-T2：长度与空白新规则
+        {"title": "标" * 81},
+        {"title": "🧭" * 81},
+        {"content": ""},
+        {"content": "   "},
+        {"content": "\u3000"},
+        {"content": "a" * 50_001},
+        {"content": " " * 50_000 + "x"},
     ],
 )
 def test_invalid_payload_returns_422_without_writing(api, payload):
@@ -798,6 +812,91 @@ def test_patch_does_not_commit_anything_to_the_database(api):
     assert len(after) == len(snapshot_before) + 1
     assert [row for row in after if row[0] != created_id] == snapshot_before
     assert [row for row in after if row[0] == created_id][0][0] == created_id
+
+
+# ==========================================================================
+# F. 旧数据兼容（Stage 1.5 / S1.5-T2）
+#
+# 收紧后的 POST 已经无法伪造「旧非法数据」，因此这里一律用 ORM 直接写入：
+# Schema 校验只作用于请求，不作用于数据库里已经存在的行。
+# ==========================================================================
+
+
+def _seed_legacy(session: Session, **kwargs) -> Journal:
+    """用 ORM 直接造一条「历史遗留」记录（绕过请求 Schema 校验）。"""
+    return _seed(session, _make_journal(**kwargs))
+
+
+def test_legacy_blank_and_oversized_records_are_still_readable(api):
+    """旧的空白正文 / 超长标题 / 超长正文记录，列表与详情都必须能正常读。"""
+    client, session = api
+
+    blank = _seed_legacy(session, content="   ", journal_date=DAY)
+    oversized_title = _seed_legacy(
+        session, title="旧" * 200, content="正文", journal_date=DAY
+    )
+    oversized_content = _seed_legacy(
+        session, content="旧" * 60_000, journal_date=DAY
+    )
+
+    by_id = {item["id"]: item for item in client.get(LIST_URL).json()}
+    assert by_id[blank.id]["content"] == "   "
+    assert by_id[oversized_title.id]["title"] == "旧" * 200
+    assert len(by_id[oversized_content.id]["content"]) == 60_000
+
+    for journal in (blank, oversized_title, oversized_content):
+        detail = client.get(_patch_url(journal.id))
+        assert detail.status_code == 200
+        _assert_matches_row(detail.json(), _row_of(session, journal.id))
+
+
+def test_legacy_blank_content_can_be_left_untouched_while_editing_title(api):
+    """旧正文空白，但本次只提交合法标题：请求体里没有 content，必须放行且不清洗旧正文。"""
+    client, session = api
+
+    legacy = _seed_legacy(session, title="旧标题", content="   ", journal_date=DAY)
+    before = _row_of(session, legacy.id)
+
+    response = _patch(client, legacy.id, title="只改标题")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["title"] == "只改标题"
+    assert body["content"] == "   "  # 旧空白正文原样保留，没有被「顺手清洗」
+
+    after = _row_of(session, legacy.id)
+    assert after[1] == "只改标题"
+    assert after[2] == "   "
+    assert after[4] == before[4]  # created_at 不变
+
+
+def test_legacy_oversized_title_can_be_left_untouched_while_editing_content(api):
+    """旧标题超长，但本次只提交合法正文：未提交的超长标题保持原样。"""
+    client, session = api
+
+    legacy = _seed_legacy(
+        session, title="旧" * 200, content="旧正文", journal_date=DAY
+    )
+
+    response = _patch(client, legacy.id, content="新的合法正文")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["content"] == "新的合法正文"
+    assert body["title"] == "旧" * 200
+
+
+def test_resubmitting_a_legacy_illegal_field_is_rejected(api):
+    """真的把旧非法值重新提交时，仍按新规则拒绝，且不改动目标任何字段。"""
+    client, session = api
+
+    legacy = _seed_legacy(session, title="旧" * 200, content="   ", journal_date=DAY)
+    before = _row_of(session, legacy.id)
+
+    assert _patch(client, legacy.id, title="旧" * 200).status_code == 422
+    assert _patch(client, legacy.id, content="   ").status_code == 422
+
+    assert _row_of(session, legacy.id) == before
 
 
 def test_health_endpoint_is_unchanged(api):

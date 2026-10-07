@@ -77,6 +77,25 @@ export function isJournalUpdateEmpty(update: JournalUpdate): boolean {
 }
 
 /**
+ * 详情面板的展示标题（Stage 1.5 / S1.5-T2）。
+ *
+ * 规则：`title` 为 `null` **或空字符串**时显示 `journal_date`；
+ * 非空标题（含纯空白的「手工标题」）原样显示，**不做 trim**。
+ *
+ * 与列表的「无标题」判定保持一致（`null` 与 `''` 都算无标题），
+ * 但**不引入**列表里的同日编号——编号是列表上下文的产物，
+ * 详情只需要「标题，没有标题就用日期」这一条规则。
+ *
+ * 这里只影响**显示**：数据库里的空字符串不会被改写或归一化。
+ */
+export function displayJournalTitle(
+  title: string | null,
+  journalDate: string,
+): string {
+  return title === null || title === '' ? journalDate : title
+}
+
+/**
  * 排版后端返回的时间戳字符串，只做**字符串层面**的整理：
  *
  * ```text

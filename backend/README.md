@@ -1,7 +1,7 @@
 # SeekJournal Backend
 
-SeekJournal 后端（Stage 1 / Task 8.1 列表接入、Task 8.2 创建接入、
-Task 8.3 详情 / 修改 / 删除接入与 Task 8.4 整体验收的后端产物）。
+SeekJournal 后端（Stage 1 / Task 8.1–8.4 列表、创建、详情 / 修改 / 删除与整体验收的后端产物；
+Stage 1.5 / S1.5-T2 增加请求输入校验：`title` ≤80 码点、`content` 非空白且 ≤50,000 码点）。
 
 当前包含：
 
@@ -262,7 +262,7 @@ Stage 1 / Task 4.1 的 Pydantic Schema 测试在 `tests/test_journal_schemas.py`
 - `JournalCreate`：`title` 省略默认 `None`、显式 `null`、普通字符串；
   缺少 `content` / `journal_date`；必填字段为 `null`；
   合法日期（含有效闰日 2024-02-29）；非法日期（2026-02-30、无效闰日 2026-02-29 等）；
-  `content` 空字符串被接受；
+  `title` 超过 80 码点、`content` 为空白或超过 50,000 码点被拒绝（Stage 1.5 / T2）；
 - 额外字段策略：`id` / `created_at` / `updated_at` 等未知字段被忽略，
   不会出现在 `model_dump()` 中；
 - `JournalResponse`：恰好六个字段、要求六字段齐全、`title` 可为 `null`；
@@ -308,7 +308,8 @@ JournalUpdate(content="新正文").model_dump(exclude_unset=True)  # {"content":
 - 三字段都可省略；空请求 `{}` 的更新数据为 `{}`；
 - 只更新单字段、同时更新多字段；
 - `title` 省略与显式 `null` 的区别；`title` 字符串与空字符串原样保留；
-- `content` 空字符串与文本被接受，显式 `null` 被拒绝；
+- `content` 非空文本被接受；空白正文（含空字符串）与显式 `null` 被拒绝；
+  标题超过 80 码点、正文超过 50,000 码点被拒绝（Stage 1.5 / T2）；
 - `journal_date` 合法日期与有效闰日（2024-02-29）被接受；
   非法日历日期、无效闰日、格式错误与无法解析的值被拒绝，显式 `null` 被拒绝；
 - 日期解析边界与 `JournalCreate` 一致（带时间后缀的字符串同样被截断，见下面的说明）；
@@ -593,6 +594,37 @@ Stage 1 / Task 7.1 的硬删除测试与 Task 7.2 的失败回滚 / 影响范围
 测试结束由 fixture 回滚外层事务，记录随之恢复，测试库回到运行前的行数；
 `id` 同样会跳号（sequence 不随事务回滚）。
 
+## 请求输入校验（Stage 1.5 / S1.5-T2）
+
+`POST /api/journals` 与 `PATCH /api/journals/{id}` 对**实际提交**的字段执行同一套规则
+（`app/journal/schemas.py`）：
+
+| 字段 | 规则 |
+|---|---|
+| `title` | 可省略 / `null` / 空字符串；最多 **80 个 Unicode 码点**；非空标题原样保存（不 `trim`） |
+| `content` | 必须含**至少一个非空白字符**，且原始字符串最多 **50,000 个 Unicode 码点** |
+
+要点：
+
+- **按 Unicode 码点计数**：Python 的 `len(str)` 本身就是码点数，非 BMP 字符（emoji）算 1 个，
+  不会被当成 UTF-16 的 2 个 code unit；
+- **空白判定与前端同一份集合**（`frontend/src/utils/contentValidation.ts`），
+  至少覆盖普通空格、Tab、换行、全角空格（U+3000）与 NBSP（U+00A0）；
+- **trim 只用于判断**，不会把 `trim` 结果写回数据库：Markdown 缩进、空行与首尾空格原样保存；
+- 校验失败抛 `ValidationError`，由 FastAPI 统一转成标准 **422**，
+  发生在 Router / Service 之前，因此**不会产生任何写入**；
+- **PATCH 只校验本次提交的字段**：字段省略时默认值不参与验证，
+  因此「旧记录正文超长 / 空白，本次只改标题」依然成功；真的重新提交非法值才会 422。
+
+### 为什么 `JournalResponse` 不加这些约束
+
+历史数据里可能存在超长标题 / 超长或空白正文。如果把这些校验也加到响应 Schema 上，
+读取这些旧记录时会在序列化阶段报错，记录直接读不出来。
+因此约束**只加在请求 Schema**（`JournalCreate` / `JournalUpdate`）上，
+响应保持宽松，旧值始终可读。测试里用 ORM 直接合成「旧非法记录」来固定这一点
+（`test_journal_update_api.py` 的 F 节：列表 / 详情可读、只改其它字段不被连带清洗、
+重新提交非法值才 422）。
+
 ## 独立测试数据库与完整回归
 
 API 测试现在使用同一 PostgreSQL 服务中的独立数据库 `seekjournal_test`，
@@ -624,16 +656,16 @@ Schema 测试仍只使用内存，不建立数据库连接。
 `tests/test_test_database.py` 是一道隔离守卫：它断言测试进程内的 Engine
 指向 `seekjournal_test`（而不是开发库），本身不建立数据库连接。
 
-当前用例数（`pytest --collect-only`，合计 **232**）：
+当前用例数（`pytest --collect-only`，合计 **305**；Stage 1.5 / T2 增加了输入校验与旧数据用例）：
 
 | 文件 | 用例数 | 是否连库 |
 |---|---|---|
-| `test_journal_schemas.py` | 37 | 否（纯内存） |
-| `test_journal_update_schemas.py` | 41 | 否（纯内存） |
-| `test_journal_api.py` | 21 | 是（测试库） |
+| `test_journal_schemas.py` | 62 | 否（纯内存） |
+| `test_journal_update_schemas.py` | 63 | 否（纯内存） |
+| `test_journal_api.py` | 31 | 是（测试库） |
 | `test_journal_read_api.py` | 18 | 是（测试库） |
 | `test_journal_detail_api.py` | 21 | 是（测试库） |
-| `test_journal_update_api.py` | 51 | 是（测试库） |
+| `test_journal_update_api.py` | 67 | 是（测试库） |
 | `test_journal_delete_api.py` | 25 | 是（测试库） |
 | `test_cors.py` | 17 | 否（只读 health / 预检） |
 | `test_test_database.py` | 1 | 否（只读 Engine 元数据） |
@@ -791,8 +823,11 @@ Alembic / Compose / 表结构核对，并在**指向测试库**的临时后端�
 后端侧的可复现命令：
 
 ```powershell
-.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests   # 232 passed
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests   # 验收当时 232 passed
 .\.venv\Scripts\python.exe -m pip check                               # No broken requirements found.
 .\.venv\Scripts\python.exe -m alembic current                          # 3a70890ddb10 (head)
 .\.venv\Scripts\python.exe -m alembic check                            # No new upgrade operations detected.
 ```
+
+> 上面 `232 passed` 是 Stage 1 验收当时的快照。Stage 1.5 / T2 之后用例数变为 **305**，
+> 当前准确数量见上文「独立测试数据库与完整回归」里的用例表。

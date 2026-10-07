@@ -10,7 +10,7 @@ Stage 1.5 - Pre-Stage-2 Bug Fix（进行中）
 
 - Stage 1 已完成并通过整体验收，功能与证据见 `docs/stage1-acceptance.md`；
 - 当前阶段的权威文档是 `docs/stage1.5-bugfix.md`（Bug 修复的需求、契约修订与 Task）；
-- 当前只授权执行其中的 **S1.5-T1**；S1.5-T2 尚未授权；
+- 当前授权执行到 **S1.5-T2**（含 Stage 1.5 整体验收）；S1.5-T1 已完成并提交；
 - Stage 2 目前只有规划文档，**没有获得实施授权**。
 
 Stage 1 - Journal Local Web Demo（已完成）
@@ -41,7 +41,7 @@ Stage 1 已完成的能力：
 
 1. `docs/stage1.5-bugfix.md` —— Stage 1.5 的权威来源，
    覆盖 Stage 1 文档中已被修订的输入规则与编号实现要求；
-2. 只执行该文件中被点名授权的 Task（当前为 S1.5-T1）。
+2. 只执行该文件中被点名授权的 Task（当前为 S1.5-T2，含 Stage 1.5 整体验收）。
    `docs/stage2*.md` 只用于了解后续规划，**不构成实施授权**。
 
 根据当前角色继续阅读：

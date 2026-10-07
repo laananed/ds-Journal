@@ -224,6 +224,15 @@ def test_two_journals_on_the_same_day_get_different_ids(api):
         {"content": "正文", "journal_date": "2026/10/02"},
         {"content": "正文", "journal_date": "not-a-date"},  # 无法解析
         {"content": "正文", "journal_date": ""},
+        # Stage 1.5 / S1.5-T2：title 超过 80 码点、content 空白或超过 50,000 码点
+        {"title": "标" * 81, "content": "正文", "journal_date": DAY},
+        {"title": "🧭" * 81, "content": "正文", "journal_date": DAY},
+        {"content": "", "journal_date": DAY},
+        {"content": " ", "journal_date": DAY},
+        {"content": "\t\n", "journal_date": DAY},
+        {"content": "\u3000", "journal_date": DAY},
+        {"content": "a" * 50_001, "journal_date": DAY},
+        {"content": " " * 50_000 + "x", "journal_date": DAY},  # trim 后只剩 1 个字符
     ],
 )
 def test_invalid_request_returns_422_and_creates_nothing(api, payload):
@@ -235,6 +244,43 @@ def test_invalid_request_returns_422_and_creates_nothing(api, payload):
 
     assert response.status_code == 422
     assert _count_rows_in(session) == before
+
+
+def test_create_accepts_title_and_content_at_the_limits(api):
+    """边界合法值真的写进数据库：80 码点标题 + 50,000 码点正文。"""
+    client, session = api
+
+    before = _count_rows_in(session)
+    title = "🧭" * 80
+    content = "中" * 50_000
+
+    response = _post(client, title=title, content=content, journal_date=DAY)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["title"] == title
+    assert body["content"] == content
+    assert _count_rows_in(session) == before + 1
+
+    row = session.execute(select(Journal).where(Journal.id == body["id"])).scalar_one()
+    assert row.title == title
+    assert row.content == content
+
+
+def test_create_preserves_markdown_spacing_verbatim(api):
+    """校验只用于判断，不会把 trim 后的结果写进数据库。"""
+    client, session = api
+
+    content = "  缩进\n\n结尾还有空格  "
+
+    response = _post(client, content=content, journal_date=DAY)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["content"] == content
+
+    row = session.execute(select(Journal).where(Journal.id == body["id"])).scalar_one()
+    assert row.content == content
 
 
 # --------------------------------------------------------------------------

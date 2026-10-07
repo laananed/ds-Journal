@@ -54,6 +54,17 @@ POST 与 PATCH 实际提交字段使用同一规则：title 可空、最多 80�
 保留数据库 Text 完整存储；不用 substring 截短保存值。
 先验证既有三行 CSS 在长行、多换行、窄屏的实际结果，再修改必要样式；不做整体 UI 重构。
 
+### Bug 2 附带：详情标题显示（T2 补充规则）
+
+Stage 1 验收记录指出：当 `title` 是**空字符串**（历史数据或直接 API 写入）时，
+详情面板按旧规则 `title ?? journal_date` 会显示成一个空行。
+Stage 1.5 明确这一显示行为：详情标题对 `null` **和**空字符串都回退显示 `journal_date`，
+与列表的「无标题」判定保持一致。
+
+- 只改**显示**，不改数据：数据库里的空字符串标题保持空字符串，不批量归一化成 `NULL`；
+- 非空标题（含纯空白的手工标题）原样显示，不做 `trim`；
+- 不增加详情编号（编号仍然只是列表上下文的产物）。
+
 ### 旧数据策略
 
 不改旧记录、不删空正文、不截断超长字段、不为旧内容追加新数据库 CHECK。
@@ -76,7 +87,9 @@ POST 与 PATCH 实际提交字段使用同一规则：title 可空、最多 80�
 - 只读记录 branch、HEAD、工作区、两库 revision 与测试库基线；已有改动/数据先辨明来源，不覆盖、不清库。
 - 在测试环境复现“旧三条→新增一条”编号变化，验证现有正文 clamp，记录浏览器与窗口尺寸。
 - 明确开发库保护与测试写入隔离；本阶段不生成 Migration、不安装依赖、不清洗旧 Journal。
-- 根 `AGENTS.md` 仍为 Stage 1 导航，阶段/必读入口同步需纳入明确授权；未同步时不能由 Developer 自行解除限制。本轮仍未修改根文件。
+- 根 `AGENTS.md` 的阶段导航同步已由用户明确授权：T1 完成「Stage 1 已完成 / 当前 Stage 1.5 /
+  Stage 1.5 必读入口」的最小同步，T2 把授权文字从 T1 更新为 T2。
+  未获授权时，Developer 不能自行解除其中的模型 / API / Stage 2 批准限制。
 
 执行顺序：检查清单 → S1.5-T1 → S1.5-T2（包含阶段整体验收）。两项可分别 Review、Commit。
 
@@ -133,3 +146,40 @@ node --experimental-strip-types src/utils/contentValidation.test.ts
 ```
 
 新测试文件到对应 Task 才创建。期望各命令退出 0；测试数量按实际结果记录，不要求沿用 232。浏览器验收指向连接 `seekjournal_test` 的临时后端，不覆盖真实 `.env`。
+
+## 8. 执行记录（Stage 1.5 实际结果）
+
+> 本节是**执行之后**补记的实际结果，供 Review / 验收对照，不是事前计划。
+> 历史验收记录（`docs/stage1-acceptance.md`）不重写。
+
+### S1.5-T1（已完成并提交）
+
+- 交付：抽出 `frontend/src/utils/journalTitles.ts`（编号纯函数）与对应纯逻辑测试；
+  `JournalList.tsx` 改为查表渲染；`App.css` 标题单行省略。
+- 结果：编号按同日无标题记录的 `created_at ASC`、`created_at` 真正相同时 `id ASC`；
+  新增较晚记录不改动旧编号（浏览器按记录逐条核对，旧记录 `changed` 全为 `false`）。
+  正文三行 clamp 复现为**本就生效**，则未改 CSS。
+- 测试：`npm run build` / `npm run lint` / 三个既有纯逻辑测试全部退出 0。
+- 提交：`c08db51 fix: stabilize journal numbering and clamp list previews`。
+
+### S1.5-T2（已实现，待独立验收）
+
+- 交付：
+  - 后端 `backend/app/journal/schemas.py`：`JournalCreate` / `JournalUpdate` 增加
+    `title` ≤80 码点、`content` 非空白且 ≤50,000 码点校验；
+    校验只作用于**实际提交**的字段（省略字段不参与），`JournalResponse` **不加**校验，
+    保证数据库里的历史超长 / 空白记录仍能正常读取。
+  - 后端测试：`test_journal_schemas.py`、`test_journal_update_schemas.py`、
+    `test_journal_api.py`、`test_journal_update_api.py` 补边界、无写入与旧数据用例
+    （旧数据一律用 ORM 直接在测试库里合成，不修改开发库）。
+  - 前端新增 `frontend/src/utils/contentValidation.ts` 与测试；`JournalEditor` 提交前校验
+    全部待创建字段、`JournalDetail` 只校验本次 PATCH 实际提交的字段；
+    `journalDetail.ts` 增加详情标题显示修复（`null` 或空字符串 → `journal_date`）与测试。
+- 关键结论：前后端空白判定与码点计数使用**同一份字符集合、同一套口径**；
+  PATCH 只校验本次提交字段，因此旧超长 / 空白记录仍能改其它字段，
+  只有真的重新提交非法值才返回 422。
+- 无 Migration、无 Model 变更、无 API 路由或六字段响应变更；未安装依赖、未引入测试框架。
+
+> 仍未验证 / 未授权（留给独立验收与后续）：删除、改日期、改标题后的编号**永久**稳定性
+> 仍未获得确认（登记在 `stage2.md` P3），本阶段不新增永久编号字段；
+> `journalTitles.buildDisplayTitles()` 依赖完整数据，**不能**直接用于 Stage 2 的当前页计数。

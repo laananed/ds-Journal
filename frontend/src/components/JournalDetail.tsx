@@ -13,6 +13,9 @@
  * 2. **修改**：用真实详情初始化表单；`buildJournalUpdate()` 只把
  *    **真正改过的字段**放进 PATCH；空标题按创建表单的同一约定发送 `null`；
  *    没有改动时发送 `{}`，沿用后端已确认的空更新语义（不改变 `updated_at`）。
+ *    Stage 1.5 / S1.5-T2 起，提交前**只校验这次 PATCH 里实际提交的字段**
+ *    （`validateUpdateInput()`）：旧记录正文超长 / 空白但本次没改正文时，
+ *    仍能正常修改标题或日期；真的提交非法值（例如清空正文）才会被拦下。
  * 3. **删除**：先给出明确的不可恢复确认，取消不发任何请求；
  *    成功是 `204`（不解析响应体），随后关闭详情并刷新列表；
  *    `404` 只说明「记录本来就不存在」，不冒充「本次删除成功」。
@@ -20,8 +23,9 @@
  *    不会被误报成写入失败，也不会诱导用户重复提交。
  *
  * 编号（同日无标题记录的「(2)」）属于列表上下文，
- * 因此这里只用「标题，没有标题就用 journal_date」这一个展示规则，
- * 不额外造一套详情编号。
+ * 因此这里只用 `displayJournalTitle()` 这一个展示规则：
+ * 标题为 `null` **或空字符串**时显示 `journal_date`，否则原样显示明确的手工标题，
+ * 不额外造一套详情编号，也不 trim 非空标题。
  */
 
 import { useEffect, useState, type FormEvent } from 'react'
@@ -33,9 +37,15 @@ import {
 } from '../api/journals'
 import {
   buildJournalUpdate,
+  displayJournalTitle,
   formatServerTimestamp,
   isJournalUpdateEmpty,
 } from '../utils/journalDetail'
+import {
+  formatContentValidationErrors,
+  hasContentValidationErrors,
+  validateUpdateInput,
+} from '../utils/contentValidation'
 import type { Journal } from '../types/journal'
 
 interface JournalDetailProps {
@@ -58,7 +68,7 @@ interface JournalDetailProps {
 }
 
 type DetailStatus = 'loading' | 'success' | 'error'
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'invalid' | 'error'
 type DeleteStage = 'idle' | 'confirming' | 'deleting'
 
 function JournalDetail({
@@ -186,6 +196,17 @@ function JournalDetail({
       return
     }
 
+    // Stage 1.5 / S1.5-T2：先构造实际 PATCH（`pendingUpdate` 只含真正改过的字段），
+    // 再**只校验其中实际提交的字段**。
+    // 因此旧记录正文超长 / 空白、但本次只改标题或日期时，依然可以保存；
+    // 而用户真的把非法值提交进来（例如把正文清空）仍会被拒绝。
+    const validationErrors = validateUpdateInput(pendingUpdate)
+    if (hasContentValidationErrors(validationErrors)) {
+      setSaveStatus('invalid')
+      setSaveError(formatContentValidationErrors(validationErrors))
+      return
+    }
+
     setSaveStatus('saving')
     setSaveError('')
     onBusyChange(true)
@@ -280,7 +301,7 @@ function JournalDetail({
       {status === 'success' && detail !== null && mode === 'view' && (
         <>
           <h3 className="detail-title">
-            {detail.title ?? detail.journal_date}
+            {displayJournalTitle(detail.title, detail.journal_date)}
           </h3>
 
           <dl className="detail-meta">
@@ -439,6 +460,12 @@ function JournalDetail({
           {saveStatus === 'error' && (
             <p className="detail-error" role="alert">
               保存失败：{saveError}（输入已保留，可修改后再次保存。）
+            </p>
+          )}
+
+          {saveStatus === 'invalid' && (
+            <p className="detail-error" role="alert">
+              输入不合法：{saveError}（未发送保存请求，输入已保留，可修改后再次保存。）
             </p>
           )}
         </form>

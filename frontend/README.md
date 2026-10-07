@@ -1,6 +1,7 @@
 # SeekJournal Frontend
 
-SeekJournal 前端项目（Stage 1 / Task 8.1 列表 + Task 8.2 创建 + Task 8.3 详情 / 修改 / 删除 + Task 8.4 整体验收）。
+SeekJournal 前端项目（Stage 1 / Task 8.1–8.4：列表、创建、详情 / 修改 / 删除与整体验收；
+Stage 1.5 / T1：编号与预览修复；Stage 1.5 / T2：输入校验与详情标题显示）。
 
 ## 技术栈
 
@@ -94,7 +95,30 @@ Task 8.3 里唯一值得单测的纯逻辑（PATCH 请求体构造 + 时间戳�
 node --experimental-strip-types src/utils/journalDetail.test.ts
 ```
 
-成功时输出 `journalDetail: 25 assertions passed`。
+成功时输出 `journalDetail: 30 assertions passed`
+（Stage 1.5 / T2 增加了详情标题显示 `displayJournalTitle()` 的断言）。
+
+## 同一天编号纯逻辑测试（Stage 1.5 / T1）
+
+同日无标题记录的显示编号放在 `src/utils/journalTitles.ts`：
+
+```bash
+node --experimental-strip-types src/utils/journalTitles.test.ts
+```
+
+成功时输出 `journalTitles: 20 assertions passed`。
+它依赖**同一天的全部记录**都在传入数组里，因此**不能**直接套在 Stage 2 的分页结果上。
+
+## 输入校验纯逻辑测试（Stage 1.5 / T2）
+
+请求体的 `title` / `content` 校验放在 `src/utils/contentValidation.ts`，
+与后端 `backend/app/journal/schemas.py` 使用**同一份空白字符集合与同一套码点计数口径**：
+
+```bash
+node --experimental-strip-types src/utils/contentValidation.test.ts
+```
+
+成功时输出 `contentValidation: 63 assertions passed`。
 
 ## 预览构建产物
 
@@ -122,7 +146,9 @@ npm run preview
   00:00～03:59 默认前一天，04:00～23:59 默认当天；
   表单打开时计算一次，之后只由用户修改，不会被任何 effect 或列表筛选覆盖；
 - 标题留空时按契约发送 `null`（不是空字符串）；其它字符串原样发送，不做 `trim`；
-- 正文允许空字符串，不擅自增加非空限制；
+- 正文校验（Stage 1.5 / T2）：必须包含至少一个非空白字符，且不超过 50,000 个 Unicode 码点；
+  标题不超过 80 个码点。提交前先在本地校验，不合法就**不发 POST**、保留输入并给出明确错误；
+  长度按**码点**计数（不是 `length` 的 UTF-16 计数），因此合法的 emoji 内容不会被误拒；
 - 所选日期变化时真实查询该日期已有记录，显示数量与摘要，**允许同日多篇**；
 - 保存中禁用提交按钮并显示状态，避免重复提交；
 - 保存失败保留输入、显示错误，由用户决定是否重试（不自动重试）；
@@ -134,7 +160,11 @@ npm run preview
   不会把已经成功的 POST 报成保存失败；
 - 同一日期多篇无标题记录时，显示标题依次为 `2026-05-02`、`2026-05-02 (2)`、`2026-05-02 (3)`；
   编号只计无标题记录，有自定义标题的记录不消耗编号，且**只存在于 UI**，
-  不写回数据库（数据库里的 `title` 仍是 `null`）。
+  不写回数据库（数据库里的 `title` 仍是 `null`）；
+- **编号方向（Stage 1.5 / T1）**：按同一天无标题记录的 `created_at ASC` 编号
+  （只有 `created_at` 精确相同时才用 `id ASC` 打破并列），
+  因此新增一条较晚的记录只追加新号，**旧记录的编号不变**；
+  编号顺序与列表展示顺序（后端倒序）是两件事。
 
 ### Task 8.3：详情、修改与删除（已实现）
 
@@ -146,7 +176,7 @@ npm run preview
 - 主列表和创建表单的「当天已有记录」每条都有「打开」入口，两处入口行为一致；
 - 打开时真实调用 `GET /api/journals/{id}`，**不把列表里那条数据当详情用**——
   列表可能已经过期；
-- 详情展示：显示标题（无标题时用 `journal_date`）、完整正文、`journal_date`、
+- 详情展示：显示标题（`title` 为 `null` **或空字符串**时回退显示 `journal_date`）、完整正文、`journal_date`、
   `created_at`、`updated_at`，另外显示 `id` 便于和数据库对照；
 - 正文用普通文本渲染并保留换行，**不使用 `dangerouslySetInnerHTML`**；
 - 状态齐全：加载中、读取失败（带「重新读取」重试）、记录不存在（明确说明）、返回列表；
@@ -161,7 +191,9 @@ npm run preview
 - 编辑表单用真实详情初始化标题、正文、日期；原 `title` 为 `null` 时输入框显示空字符串；
 - 只把**真正改过的字段**放进 `PATCH`（`buildJournalUpdate()`）：
   - 空标题按创建表单的同一约定发送 `null`，其它字符串原样发送、不做 `trim`；
-  - 正文允许空字符串，不额外加非空或长度限制；
+  - 正文校验（Stage 1.5 / T2）：**只校验这次 PATCH 里实际提交的字段**。
+    旧记录正文超长 / 空白但本次没改正文时，仍能修改标题或日期；
+    真的把非法值提交进来（例如把正文清空）才被拒绝；
   - 日期必须提供合法值，**不套用新建时的 04:00 默认日期规则**；
   - `id` / `created_at` / `updated_at` 永远不放进请求体；
   - 一个字段都没改时发送 `{}`，沿用后端已确认的空更新语义
@@ -227,6 +259,8 @@ npm run build
 npm run lint
 node --experimental-strip-types src/utils/journalDate.test.ts
 node --experimental-strip-types src/utils/journalDetail.test.ts
+node --experimental-strip-types src/utils/journalTitles.test.ts
+node --experimental-strip-types src/utils/contentValidation.test.ts
 ```
 
 浏览器验收的做法：在 5173 上运行真实前端，用 Playwright 把 API 的 **端口 8000 换成指向

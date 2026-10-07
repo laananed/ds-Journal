@@ -2,8 +2,9 @@
 
 SeekJournal 是一个以个人认知成长为核心、生活与情感记录为辅的个人记录与复盘软件。
 
-**Stage 1：Journal 本地 Web Demo 已完成；当前准备 Stage 1.5 Bug Fix，并规划 Stage 2。**
-当前代码仍是 Stage 1，Stage 1.5 与 Stage 2 功能尚未实现。已跑通的开发链路：
+**Stage 1：Journal 本地 Web Demo 已完成；当前正在执行 Stage 1.5 Bug Fix（T1 已提交，T2 待独立验收）；Stage 2 只有规划、未获实施授权。**
+Stage 1.5 不新增产品功能，只修复 Stage 1 的实际体验问题（编号方向、预览截断、输入校验），
+数据模型、API 路由与六字段响应都不变。已跑通的开发链路：
 
 ```text
 React → REST API / JSON → FastAPI → Pydantic → Service → SQLAlchemy → psycopg → PostgreSQL
@@ -35,8 +36,14 @@ Stage 1 不是完整产品。范围、验收标准与架构见：
 - 同一日期允许多篇；无标题记录在 UI 上用 `journal_date` 与 `(2)`、`(3)` 区分；
 - 本地开发用最小 CORS（只放开本机两个前端来源）。
 
-Stage 1.5 待修复：新增导致旧 Journal 编号变化、title 80 / content 50,000 与非空白规则、
-标题一行预览及既有正文三行截断的实际验证。旧 Journal 数据必须完整保留。
+Stage 1.5（进行中，只修复 Stage 1 体验问题、不新增功能）：
+
+- **T1（已实现，待独立验收）**：同日无标题记录按 `created_at ASC` 编号——新增较晚的记录
+  不再改动旧记录编号；列表标题一行省略、正文三行省略，详情保持完整正文。
+- **T2（已实现，待独立验收）**：`title` 最多 80 个 Unicode 码点，`content` 必须含至少一个
+  非空白字符且最多 50,000 个 Unicode 码点；前后端同一套口径，非法 POST/PATCH 返回 422 且不写库。
+  **旧 Journal 数据完整保留**：数据库里的超长 / 空白历史记录仍可正常读取，
+  只改其它合法字段时也不会被连带清洗或截断。
 
 Stage 2 已规划、未实现：Inbox、手动 Insight、一级 Folder、Markdown 阅读、普通搜索、
 回收箱、简单内部链接、20 条/页、基础卡片与统一离开提醒。
@@ -230,7 +237,8 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 .\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests
 ```
 
-- 当前共 **232** 个用例；
+- 当前共 **305** 个用例（Stage 1.5 / T2 新增 title 长度、content 非空白与长度、
+  旧数据可读可改等边界用例）；
 - 连库测试用「外层事务 + savepoint」，结束后回滚，测试库不留日记数据；
 - 隔离守卫 `tests/test_test_database.py` 断言测试进程连的是 `seekjournal_test`；
 - **测试库必须保持空白业务数据基线**：`test_journal_read_api.py` 里有 3 个用例
@@ -240,10 +248,12 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 
 ```powershell
 cd frontend
-npm run build                                                  # tsc -b && vite build
-npm run lint                                                   # Oxlint
-node --experimental-strip-types src/utils/journalDate.test.ts   # 默认日期规则 10 例
-node --experimental-strip-types src/utils/journalDetail.test.ts # 详情纯逻辑 25 断言
+npm run build                                                      # tsc -b && vite build
+npm run lint                                                       # Oxlint
+node --experimental-strip-types src/utils/journalDate.test.ts       # 默认日期规则 10 例
+node --experimental-strip-types src/utils/journalDetail.test.ts     # 详情 / 编辑纯逻辑 30 断言
+node --experimental-strip-types src/utils/journalTitles.test.ts     # 同一天编号纯逻辑 20 断言
+node --experimental-strip-types src/utils/contentValidation.test.ts # 输入校验纯逻辑 63 断言
 ```
 
 前端**不引入测试框架**，`src/utils/` 下的纯逻辑用 Node 内置类型剥离直接跑。
@@ -278,7 +288,10 @@ docker compose --env-file backend/.env stop
 4. 前端没有自动化测试框架，前端行为主要靠人工 / 浏览器验收；
 5. `journal_date` 由前端计算与发送，后端不推断用户想写哪一天；
 6. 详情面板额外显示 `id`（方便与数据库对照），不属于 API 契约要求；
-7. 通过 API 直接 `POST {"title": ""}` 可以写入空字符串标题；经 UI 只会产生 `NULL`。
+7. 通过 API 直接 `POST {"title": ""}` 仍可写入空字符串标题（空字符串是合法输入，不是错误）；
+   列表与详情显示时把 `null` 与空字符串同样当作「无标题」并回退显示 `journal_date`，
+   但**不会**改写数据库里已存的空字符串；
+   正文则必须包含至少一个非空白字符，且不超过 50,000 个 Unicode 码点。
 
 ## 11. 数据与隐私
 

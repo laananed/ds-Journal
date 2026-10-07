@@ -68,6 +68,55 @@ def test_title_accepts_null_and_plain_string(title):
     assert created.title == title
 
 
+# Stage 1.5 / S1.5-T2 收紧 title：可省略 / null / 空字符串，最多 80 个 Unicode 码点，
+# 非空标题原样保存（不 trim，也不拒绝纯空白手工标题）。
+
+
+@pytest.mark.parametrize("title", [None, ""])
+def test_title_null_and_empty_string_are_accepted(title):
+    created = JournalCreate(title=title, content="正文", journal_date=DAY)
+
+    assert created.title == title
+
+
+def test_title_of_exactly_eighty_code_points_is_accepted():
+    title = "标" * 80
+
+    created = JournalCreate(title=title, content="正文", journal_date=DAY)
+
+    assert created.title == title
+
+
+def test_title_of_eighty_one_code_points_is_rejected():
+    with pytest.raises(ValidationError):
+        JournalCreate(title="标" * 81, content="正文", journal_date=DAY)
+
+
+def test_title_length_counts_non_bmp_emoji_by_code_point():
+    """非 BMP emoji 在 UTF-16 里占 2 个 code unit，但按 Unicode 码点只算 1 个。
+
+    契约按码点计数：80 个 emoji 合法，81 个非法。
+    如果误用 UTF-16 计数，这里会在 41 个 emoji 就被拒绝。
+    """
+    title = "🧭" * 80
+    assert len(title) == 80
+
+    created = JournalCreate(title=title, content="正文", journal_date=DAY)
+    assert created.title == title
+
+    with pytest.raises(ValidationError):
+        JournalCreate(title="🧭" * 81, content="正文", journal_date=DAY)
+
+
+@pytest.mark.parametrize("title", ["  标题  ", "\t标题\t", "   ", "\u3000"])
+def test_title_is_kept_verbatim_without_trim_or_cleaning(title):
+    """非空标题（含纯空白字符串）原样保存：不 trim，也不因为「只是空白」被拒绝。"""
+    created = JournalCreate(title=title, content="正文", journal_date=DAY)
+
+    assert created.title == title
+    assert created.model_dump()["title"] == title
+
+
 # --------------------------------------------------------------------------
 # JournalCreate：必填与 null
 # --------------------------------------------------------------------------
@@ -148,14 +197,72 @@ def test_datetime_like_string_is_truncated_to_date_by_builtin_parser():
 
 # --------------------------------------------------------------------------
 # JournalCreate：content
+#
+# Stage 1.5 / S1.5-T2 收紧 content：原始字符串最多 50,000 个 Unicode 码点，
+# 且必须至少包含一个非空白字符。旧契约「空字符串合法」已被新规则替代。
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("content", ["", "正文", "多行\n正文"])
-def test_content_accepts_empty_string_and_text(content):
+@pytest.mark.parametrize("content", ["正文", "多行\n正文", "  缩进\n\n结尾  "])
+def test_content_accepts_non_blank_text(content):
     created = JournalCreate(content=content, journal_date=DAY)
 
     assert created.content == content
+
+
+@pytest.mark.parametrize(
+    "content",
+    ["", " ", "\t", "\n", "\r\n", " \t\n", "\u3000", "\xa0", "\u3000\xa0 \t\n"],
+)
+def test_blank_content_is_rejected(content):
+    """空字符串、普通空格、Tab、换行、全角空格、NBSP 及其组合都非法。"""
+    with pytest.raises(ValidationError):
+        JournalCreate(content=content, journal_date=DAY)
+
+
+@pytest.mark.parametrize("length", [1, 49_999, 50_000])
+def test_content_within_code_point_limit_is_accepted(length):
+    content = "a" * length
+
+    created = JournalCreate(content=content, journal_date=DAY)
+
+    assert len(created.content) == length
+
+
+def test_content_over_code_point_limit_is_rejected():
+    with pytest.raises(ValidationError):
+        JournalCreate(content="a" * 50_001, journal_date=DAY)
+
+
+def test_content_length_counts_the_raw_string_before_trimming():
+    """原始长度 50,001：即使两端空白被 trim 掉后只剩 1 个字符，也必须按原始长度拒绝。"""
+    content = " " * 50_000 + "x"
+    assert len(content) == 50_001
+    assert content.strip() == "x"
+
+    with pytest.raises(ValidationError):
+        JournalCreate(content=content, journal_date=DAY)
+
+
+def test_content_counts_cjk_and_non_bmp_emoji_by_code_point():
+    accept = "中" * 49_999 + "🧭"
+    assert len(accept) == 50_000
+
+    created = JournalCreate(content=accept, journal_date=DAY)
+    assert created.content == accept
+
+    with pytest.raises(ValidationError):
+        JournalCreate(content="中" * 50_000 + "🧭", journal_date=DAY)
+
+
+def test_content_round_trips_markdown_indentation_and_trailing_spaces():
+    """Markdown 缩进、空行与首尾空格原样往返：校验用的 trim 不会写回数据库。"""
+    content = "# 标题\n\n  - 缩进列表\n\n结尾有空行\n\n"
+
+    created = JournalCreate(content=content, journal_date=DAY)
+
+    assert created.content == content
+    assert created.model_dump()["content"] == content
 
 
 # --------------------------------------------------------------------------

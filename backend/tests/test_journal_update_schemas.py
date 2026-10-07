@@ -173,6 +173,40 @@ def test_title_string_is_kept_as_is(title):
     assert _update(title=title) == {"title": title}
 
 
+# Stage 1.5 / S1.5-T2：PATCH 只校验**本次提交**的字段。
+# title 省略时不触发长度校验；提交时最多 80 个 Unicode 码点。
+
+
+@pytest.mark.parametrize("title", ["", None, "标" * 80])
+def test_title_within_limit_is_accepted(title):
+    assert _update(title=title) == {"title": title}
+
+
+def test_title_over_eighty_code_points_is_rejected():
+    with pytest.raises(ValidationError):
+        JournalUpdate(title="标" * 81)
+
+
+def test_title_length_counts_non_bmp_emoji_by_code_point():
+    assert _update(title="🧭" * 80) == {"title": "🧭" * 80}
+
+    with pytest.raises(ValidationError):
+        JournalUpdate(title="🧭" * 81)
+
+
+@pytest.mark.parametrize("title", ["  手工标题  ", "   ", "\u3000"])
+def test_whitespace_title_is_kept_and_never_trimmed(title):
+    assert _update(title=title) == {"title": title}
+
+
+def test_omitted_title_is_not_validated():
+    """只提交 content 时，title 完全没有进入校验路径。"""
+    update = JournalUpdate(content="只改正文")
+
+    assert update.model_fields_set == {"content"}
+    assert update.model_dump(exclude_unset=True) == {"content": "只改正文"}
+
+
 def test_explicit_title_null_is_not_dropped_by_exclude_unset():
     update = JournalUpdate(title=None)
 
@@ -184,22 +218,56 @@ def test_explicit_title_null_is_not_dropped_by_exclude_unset():
 
 
 # --------------------------------------------------------------------------
-# content：可省略，可空字符串，不可 null
+# content：可省略，非空且不超过 50,000 码点，不可 null
+#
+# Stage 1.5 / S1.5-T2 收紧后，「空字符串合法」不再成立。
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("content", ["", "新的正文", "多行\n正文"])
-def test_content_accepts_empty_string_and_text(content):
+@pytest.mark.parametrize("content", ["新的正文", "多行\n正文", "  缩进\n\n结尾  "])
+def test_content_accepts_non_blank_text(content):
     assert _update(content=content) == {"content": content}
+
+
+@pytest.mark.parametrize(
+    "content",
+    ["", " ", "\t", "\n", "\r\n", " \t\n", "\u3000", "\xa0"],
+)
+def test_blank_content_is_rejected(content):
+    with pytest.raises(ValidationError):
+        JournalUpdate(content=content)
 
 
 def test_content_can_be_omitted():
     assert "content" not in JournalUpdate().model_fields_set
 
 
+def test_omitted_content_is_not_validated():
+    """省略 content 时不触发非空 / 长度校验（PATCH 只校验本次提交的字段）。"""
+    update = JournalUpdate(title="只改标题")
+
+    assert update.model_fields_set == {"title"}
+    assert update.model_dump(exclude_unset=True) == {"title": "只改标题"}
+
+
 def test_content_null_is_rejected():
     with pytest.raises(ValidationError):
         JournalUpdate(content=None)
+
+
+@pytest.mark.parametrize("length", [1, 50_000])
+def test_content_within_code_point_limit_is_accepted(length):
+    assert _update(content="a" * length) == {"content": "a" * length}
+
+
+def test_content_over_code_point_limit_is_rejected():
+    with pytest.raises(ValidationError):
+        JournalUpdate(content="a" * 50_001)
+
+
+def test_content_length_counts_raw_string_not_trimmed():
+    with pytest.raises(ValidationError):
+        JournalUpdate(content=" " * 50_000 + "x")
 
 
 # --------------------------------------------------------------------------

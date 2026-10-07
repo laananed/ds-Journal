@@ -8,6 +8,9 @@
  * 1. **表单本身**：标题（可选）、正文、日期（默认本机 04:00 换日的业务日期，
  *    之后完全由用户决定，不会再被任何 effect 或列表筛选覆盖）；
  *    保存成功 / 失败、保存中禁止重复提交；失败时保留用户输入。
+ *    Stage 1.5 / S1.5-T2 起，提交前会先校验全部待创建字段（标题 ≤80 码点、
+ *    正文非空白且 ≤50,000 码点），不合法就**不发 POST** 并给出明确错误；
+ *    校验用的是 Unicode 码点计数，因此合法的 emoji 标题不会被误拒。
  * 2. **所选日期已有记录**：日期变化时用现有 `listJournals(date)` 真实查询，
  *    并用 `AbortController` 取消过期请求，避免旧日期的迟到响应覆盖新日期结果。
  * 3. **保存后的同步**：POST 成功后清空输入（保留日期，方便同日继续写），
@@ -31,6 +34,11 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { createJournal, listJournals } from '../api/journals'
 import JournalList from './JournalList'
 import type { Journal } from '../types/journal'
+import {
+  formatContentValidationErrors,
+  hasContentValidationErrors,
+  validateCreateInput,
+} from '../utils/contentValidation'
 import { defaultJournalDate } from '../utils/journalDate'
 
 interface JournalEditorProps {
@@ -56,7 +64,7 @@ interface JournalEditorProps {
   openDisabled: boolean
 }
 
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'invalid' | 'error'
 type DayStatus = 'loading' | 'success' | 'error'
 
 function JournalEditor({
@@ -147,16 +155,27 @@ function JournalEditor({
       return
     }
 
+    const payload = {
+      // 标题留空按契约发送 null；其它情况原样发送，不做 trim 或额外限制。
+      title: title === '' ? null : title,
+      content,
+      journal_date: journalDate,
+    }
+
+    // Stage 1.5 / S1.5-T2：提交前先校验本次待创建的全部字段。
+    // 不合法就**不发 POST**、保留用户输入，只给出明确错误。
+    const validationErrors = validateCreateInput(payload)
+    if (hasContentValidationErrors(validationErrors)) {
+      setSaveStatus('invalid')
+      setSaveError(formatContentValidationErrors(validationErrors))
+      return
+    }
+
     setSaveStatus('saving')
     setSaveError('')
 
     try {
-      const created = await createJournal({
-        // 标题留空按契约发送 null；其它情况原样发送，不做 trim 或额外限制。
-        title: title === '' ? null : title,
-        content,
-        journal_date: journalDate,
-      })
+      const created = await createJournal(payload)
 
       setLastSaved(created)
       setSaveStatus('saved')
@@ -237,6 +256,12 @@ function JournalEditor({
       {saveStatus === 'error' && (
         <p className="editor-error" role="alert">
           保存失败：{saveError}（输入内容已保留，可修改后再次保存。）
+        </p>
+      )}
+
+      {saveStatus === 'invalid' && (
+        <p className="editor-error" role="alert">
+          输入不合法：{saveError}（未发送保存请求，输入内容已保留，可修改后再次保存。）
         </p>
       )}
 
