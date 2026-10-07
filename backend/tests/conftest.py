@@ -11,6 +11,11 @@ Stage 1 / Task 5.1：把原先写在 `tests/test_journal_api.py` 里的 `api` fi
 fixture 名称 `api` 与返回值 `(TestClient, Session)` 保持不变，
 事务隔离语义与 Task 4.2 完全一致，因此原有测试的断言不需要任何改动。
 
+Stage 2 / S2-T01：无残留检查从只数 `journals` 扩展到**全部四张业务表**
+（folders / journals / inboxes / insights），并新增新表时同步扩展。
+表名列表复用 `scripts/prepare_test_db.py` 的 `BUSINESS_TABLES`，
+避免准备脚本与守卫各维护一份。
+
 各测试模块自己用的局部 helper（例如 `_count_rows_in`）留在原来的模块里，
 不在这里再包一层通用工具。
 
@@ -39,7 +44,7 @@ session    = Session(bind=connection,
 3. `outer.rollback()` + `connection.close()`：回滚外层事务并归还连接，
    测试期间插入的所有行随之消失。
 
-fixture 结束时会再查一次总行数，确认与测试开始时一致（无残留）。
+fixture 结束时会再查一次每张业务表的行数，确认与测试开始时逐表一致（无残留）。
 
 注意：PostgreSQL 的 sequence 取值**不随事务回滚**，所以 `id` 会跳号。
 测试只要求「同一天两篇 id 不同」，不要求 id 连续。
@@ -49,7 +54,7 @@ from __future__ import annotations
 
 import os
 
-from scripts.prepare_test_db import get_test_database_url
+from scripts.prepare_test_db import BUSINESS_TABLES, get_test_database_url
 
 # 必须在导入 app.database / app.main 之前切换，确保所有测试模块引用同一测试 Engine。
 # 只修改 pytest 进程环境，不修改 backend/.env 或应用运行时配置。
@@ -64,14 +69,22 @@ from app.database import engine, get_db
 from app.main import app
 
 
-def _count_rows_with_engine() -> int:
-    """用一条独立连接数总行数（在外层事务之外）。
+def _count_rows_with_engine(table: str) -> int:
+    """用一条独立连接数某张业务表的行数（在外层事务之外）。
 
     独立连接看不到外层事务里未提交的数据，
     因此它数到的就是「真实留在库里」的记录数。
+
+    `table` 只来自 `BUSINESS_TABLES` 这个固定元组，
+    不是外部输入，所以这里直接拼进 SQL 没有注入风险。
     """
     with engine.connect() as connection:
-        return connection.execute(text("SELECT count(*) FROM journals")).scalar_one()
+        return connection.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()
+
+
+def _table_baselines() -> dict[str, int]:
+    """返回四张业务表各自的行数基线。"""
+    return {table: _count_rows_with_engine(table) for table in BUSINESS_TABLES}
 
 
 @pytest.fixture
@@ -85,7 +98,7 @@ def api():
     测试可以直接用返回的 Session 准备数据（`add` + `flush`），
     这些数据位于外层事务之内，测试结束后随回滚一起消失。
     """
-    baseline = _count_rows_with_engine()
+    baseline = _table_baselines()
 
     connection = engine.connect()
     outer_transaction = connection.begin()
@@ -111,6 +124,6 @@ def api():
         outer_transaction.rollback()
         connection.close()
 
-    # 每个测试结束后都验证一次：数据库回到测试前的状态。
-    assert _count_rows_with_engine() == baseline, "测试数据残留"
+    # 每个测试结束后都验证一次：四张业务表都回到测试前的状态。
+    assert _table_baselines() == baseline, "测试数据残留"
     assert get_db not in app.dependency_overrides

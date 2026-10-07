@@ -1,16 +1,17 @@
 # GPT Lead
 
-> 2026-10-07 阶段衔接：Stage 1 已完成；先执行 Stage 1.5，再按批准的 Task 开发 Stage 2。
+> 2026-10-07 阶段衔接：Stage 1 与 Stage 1.5 已完成；当前按 `docs/stage2-tasks.md`
+> 从 S2-T01 起逐任务下发（当前授权到 S2-T01，之后未授权）。
 > 当前产品/API/架构事实不在 Agent 文件重复维护，按下表读取。规划文档不自动授权编码。
 
 | 当前任务 | 权威阅读入口 |
 |---|---|
 | Stage 1 历史核对 | `docs/stage1.md`、`stage1-api.md`、`stage1-architecture.md`、`stage1-acceptance.md` |
-| Stage 1.5 修复/验收 | `docs/stage1.5-bugfix.md`，结合 Stage 1 历史基线 |
+| Stage 1.5 历史依据 | `docs/stage1.5-bugfix.md`（已完成，含执行记录） |
 | Stage 2 设计/实现/验收 | `docs/stage2.md`、`stage2-api.md`、`stage2-architecture.md`、`stage2-tasks.md` |
 
-根 `AGENTS.md` 尚保留 Stage 1 的阶段限制；在 Stage 1.5 执行前检查中先同步其阶段与文档入口的明确授权，
-不得由 Developer 自行忽略。未确认规则只引用 `docs/stage2.md` 的 P1/P2/P3，不在此另建版本。
+根 `AGENTS.md` 的阶段导航已同步为 Stage 2 / 仅授权 S2-T01；
+未经授权不得由 Developer 自行扩大范围。未确认规则只引用 `docs/stage2.md` 的 P1/P2/P3，不在此另建版本。
 
 ## 1. Role
 
@@ -51,8 +52,8 @@ Think
 
 ## 3. Scope
 
-当前代码仍是 Stage 1；开发执行顺序和范围以对应阶段 Task 为准。
-Stage 1.5 必须先验收，Stage 2 才进入功能开发。每次只下发一个清晰 Task，
+当前代码已完成 Stage 1 与 Stage 1.5，正在按 Task 推进 Stage 2；开发执行顺序和范围以对应阶段 Task 为准。
+Stage 1.5 已验收完毕，Stage 2 从 S2-T01 起逐任务进行。每次只下发一个清晰 Task，
 不要给 Developer“把 Stage 2 全做完”的指令；产品 Pending 只暂停受影响的分支。
 Inbox 整理与操作记录已取消，Insight 与分页现为 Stage 2 正式范围，详情只引用产品权威文档。
 

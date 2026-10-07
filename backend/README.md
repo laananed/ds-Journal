@@ -1,7 +1,9 @@
 # SeekJournal Backend
 
 SeekJournal 后端（Stage 1 / Task 8.1–8.4 列表、创建、详情 / 修改 / 删除与整体验收的后端产物；
-Stage 1.5 / S1.5-T2 增加请求输入校验：`title` ≤80 码点、`content` 非空白且 ≤50,000 码点）。
+Stage 1.5 / S1.5-T2 增加请求输入校验：`title` ≤80 码点、`content` 非空白且 ≤50,000 码点；
+Stage 2 / S2-T01 建立数据基础：新增 `folders` / `inboxes` / `insights` 三张表，
+`journals` 增加可空 `folder_id` 与 `deleted_at` 两列，全部由 Alembic Migration 建立）。
 
 当前包含：
 
@@ -9,8 +11,9 @@ Stage 1.5 / S1.5-T2 增加请求输入校验：`title` ≤80 码点、`content` 
 - 一个存活检查接口；
 - 一份本地 PostgreSQL 开发数据库的 Compose 配置；
 - SQLAlchemy 2.x 数据库基础（Engine / Session 工厂 / 请求级 Session 依赖 / Declarative Base）；
-- Journal SQLAlchemy Model；
-- Alembic 首次迁移，已在本地数据库建立 `journals` 表；
+- Journal SQLAlchemy Model（Stage 2 / S2-T01 增加可空 `folder_id`、`deleted_at`）；
+- Folder / Inbox / Insight SQLAlchemy Model（Stage 2 / S2-T01，只有表结构，尚无 API）；
+- Alembic 迁移：初始 `journals` 表，以及 S2-T01 的 M1（folders + journals 两列）与 M2（inboxes / insights）；
 - Journal 的 Pydantic Schema（`JournalCreate` / `JournalUpdate` / `JournalResponse`）；
 - `POST /api/journals` 创建链路，打通
   HTTP → Pydantic → Router → Service → SQLAlchemy → psycopg → PostgreSQL；
@@ -26,6 +29,7 @@ Stage 1.5 / S1.5-T2 增加请求输入校验：`title` ≤80 码点、`content` 
   （后五套使用 TestClient + 真实 PostgreSQL）；
 - 一套 CORS 测试（`test_cors.py`，只读 `GET /api/health` 与 `OPTIONS`，不写数据库）；
 - 一个测试库隔离守卫（`test_test_database.py`，断言测试进程连的是 `seekjournal_test`）；
+- 一套迁移验证测试（`test_stage2_migrations.py`，在一次性隔离验证库上验证 M1 / M2 逐行保留旧 Journal）；
 - 一个只读的历史连接验证脚本。
 
 前端（React）通过真实 HTTP `GET`（列表、筛选、详情）、`POST`（创建）、
@@ -45,14 +49,23 @@ backend/
 │   ├── __init__.py
 │   ├── main.py
 │   ├── database.py             # Engine / SessionLocal / Base
-│   └── journal/
+│   ├── journal/
+│   │   ├── __init__.py
+│   │   ├── models.py           # Journal Model（含 folder_id / deleted_at）
+│   │   ├── schemas.py          # JournalCreate / JournalUpdate / JournalResponse
+│   │   ├── service.py          # create_journal（事务边界）/ list_journals / get_journal / update_journal / delete_journal
+│   │   └── router.py           # POST / GET /api/journals、GET / PATCH / DELETE /api/journals/{id}
+│   ├── folder/
+│   │   ├── __init__.py
+│   │   └── models.py           # Folder Model（S2-T01 / M1）
+│   ├── inbox/
+│   │   ├── __init__.py
+│   │   └── models.py           # Inbox Model（S2-T01 / M2）
+│   └── insight/
 │       ├── __init__.py
-│       ├── models.py           # Journal Model
-│       ├── schemas.py          # JournalCreate / JournalUpdate / JournalResponse
-│       ├── service.py          # create_journal（事务边界）/ list_journals / get_journal / update_journal / delete_journal
-│       └── router.py           # POST / GET /api/journals、GET / PATCH / DELETE /api/journals/{id}
+│       └── models.py           # Insight Model（S2-T01 / M2）
 ├── tests/
-│   ├── conftest.py             # 共享 api fixture（事务隔离 + 无残留检查）
+│   ├── conftest.py             # 共享 api fixture（事务隔离 + 四张业务表无残留检查）
 │   ├── test_journal_schemas.py # Task 4.1 的 Schema 测试（只用内存数据）
 │   ├── test_journal_update_schemas.py # Task 6.1 的 JournalUpdate 测试（只用内存数据）
 │   ├── test_journal_api.py     # Task 4.2 的创建 API 测试（真实 PostgreSQL）
@@ -60,6 +73,7 @@ backend/
 │   ├── test_journal_detail_api.py # Task 5.2 的详情测试（真实 PostgreSQL）
 │   ├── test_journal_update_api.py # Task 6.2 的修改 API 测试（真实 PostgreSQL）
 │   ├── test_journal_delete_api.py # Task 7.1 / 7.2 的删除 API 测试（真实 PostgreSQL）
+│   ├── test_stage2_migrations.py  # S2-T01 的 M1 / M2 迁移与旧数据保留验证（一次性隔离库）
 │   ├── test_cors.py            # 最小 CORS 测试（只读 health / 四种方法预检，不写数据库）
 │   └── test_test_database.py   # 隔离守卫：断言测试进程连的是 seekjournal_test（不建连接）
 ├── alembic/
@@ -67,7 +81,9 @@ backend/
 │   ├── script.py.mako
 │   ├── README
 │   └── versions/
-│       └── 3a70890ddb10_create_journals_table.py
+│       ├── 3a70890ddb10_create_journals_table.py            # Stage 1 初始迁移
+│       ├── 52c8e94a365c_create_folders_add_journal_folder_id_deleted_at.py  # S2-T01 / M1
+│       └── a8d98342e603_create_inboxes_and_insights.py      # S2-T01 / M2
 ├── alembic.ini
 ├── scripts/
 │   ├── check_db.py             # Task 3 第一步的历史脚本
@@ -639,7 +655,10 @@ API 测试现在使用同一 PostgreSQL 服务中的独立数据库 `seekjournal
 
 该命令仅创建不存在的 `seekjournal_test`，并对它执行已有的 Alembic
 `upgrade head`。需要当前数据库用户有创建数据库权限。
-可以重复执行；若测试库已存在日记记录，会失败并保留数据，不会清空。
+可以重复执行；**只要四张业务表（`folders` / `journals` / `inboxes` / `insights`）
+中任意一张已有记录，命令就会失败并保留数据，不会清空**。
+升级前部分新表还不存在时，脚本会用 `to_regclass` 判断后跳过，不会报错，
+也不会用 `create_all` / `drop_all` / `stamp` 代替 Alembic。
 
 完整回归：
 
@@ -650,13 +669,15 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 
 所有上述 API 测试命令都自动使用测试库。
 Schema 测试仍只使用内存，不建立数据库连接。
-现有外层事务与 savepoint 隔离保持不变，测试结束后测试库无日记残留。
+现有外层事务与 savepoint 隔离保持不变；无残留检查已从只数 `journals`
+扩展为逐表核对 `folders` / `journals` / `inboxes` / `insights`，
+测试结束后四张业务表都回到运行前的行数。
 测试可能增加测试库的 sequence 取值，但不影响开发库的 sequence。
 
 `tests/test_test_database.py` 是一道隔离守卫：它断言测试进程内的 Engine
 指向 `seekjournal_test`（而不是开发库），本身不建立数据库连接。
 
-当前用例数（`pytest --collect-only`，合计 **305**；Stage 1.5 / T2 增加了输入校验与旧数据用例）：
+当前用例数（`pytest --collect-only`，合计 **314**；Stage 1.5 / T2 增加了输入校验与旧数据用例，Stage 2 / S2-T01 增加了迁移验证用例）：
 
 | 文件 | 用例数 | 是否连库 |
 |---|---|---|
@@ -667,6 +688,7 @@ Schema 测试仍只使用内存，不建立数据库连接。
 | `test_journal_detail_api.py` | 21 | 是（测试库） |
 | `test_journal_update_api.py` | 67 | 是（测试库） |
 | `test_journal_delete_api.py` | 25 | 是（测试库） |
+| `test_stage2_migrations.py` | 9 | 是（**一次性隔离迁移验证库**，不碰测试库与开发库） |
 | `test_cors.py` | 17 | 否（只读 health / 预检） |
 | `test_test_database.py` | 1 | 否（只读 Engine 元数据） |
 
@@ -682,6 +704,10 @@ Schema 测试仍只使用内存，不建立数据库连接。
 `seekjournal_test.journals` 表已有记录时，这三个用例会失败。
 **这是前置条件不满足，不是功能缺陷，也不要为了通过测试去删除数据。**
 其余测试都在「外层事务 + savepoint」里运行，不要求空库。
+
+`tests/test_stage2_migrations.py` 不依赖测试库基线：它在运行时创建自己的
+一次性隔离迁移验证库，跑完即删。但 `folders` / `inboxes` / `insights`
+三张新表必须已经存在，所以这个测试同样要求先跑一次 `prepare_test_db`。
 
 ## 本地开发 CORS
 
@@ -829,5 +855,87 @@ Alembic / Compose / 表结构核对，并在**指向测试库**的临时后端�
 .\.venv\Scripts\python.exe -m alembic check                            # No new upgrade operations detected.
 ```
 
-> 上面 `232 passed` 是 Stage 1 验收当时的快照。Stage 1.5 / T2 之后用例数变为 **305**，
-> 当前准确数量见上文「独立测试数据库与完整回归」里的用例表。
+> 上面 `232 passed` 是 Stage 1 验收当时的快照。Stage 1.5 / T2 之后变为 **305**，
+> Stage 2 / S2-T01 之后为 **314**；当前准确数量见上文「独立测试数据库与完整回归」里的用例表。
+
+## Stage 2 / S2-T01 — 数据基础与旧 Journal 升级
+
+S2-T01 只做数据结构，**不做任何 API / Service / Router 变更**：
+Stage 1.5 的六个字段、数组列表响应与硬删除行为原样保留。
+`deleted_at` 只是列占位，软删除行为属于 S2-T02。
+
+### 两份新 Migration
+
+| 代号 | Revision | down_revision | 内容 |
+|---|---|---|---|
+| M1 | `52c8e94a365c` | `3a70890ddb10` | 建 `folders`（id、name Text Not Null）；`journals` 增加可空 `folder_id`（FK → `folders.id`）与可空 `deleted_at` |
+| M2 | `a8d98342e603` | `52c8e94a365c` | 建 `inboxes`（含 `inbox_date`、`is_daily` Not Null 默认 false）与 `insights` |
+
+- 三步是一条线性链、只有一个 head：`3a70890ddb10 → 52c8e94a365c → a8d98342e603`；
+- 初始迁移 `3a70890ddb10` **未做任何修改**；
+- 只 `ADD COLUMN` + `CREATE TABLE`，没有 drop / 重建 / 数据清洗，也没有额外表；
+- 旧 Journal 的两列升级后都是 `NULL`，原六字段、主键、sequence 与
+  `ix_journals_journal_date` 索引全部保留；
+- 外键保持 PostgreSQL 默认的 `NO ACTION`，不 cascade、不 SET NULL；
+- `is_daily` 同时有 Python 默认值与数据库 `server_default = false`；
+- 本任务**没有 M3**：Daily 唯一部分索引等 P2 确认后在 S2-T04 建。
+
+新增 Model 在两处显式注册：`alembic/env.py`（autogenerate 用）与
+`app/main.py`（运行时用）。后者只导入 Model，**不注册任何新 Router**。
+
+### Model 结构
+
+| 表 | 字段 |
+|---|---|
+| `folders` | id、name（Text Not Null） |
+| `journals` | 原六字段 + folder_id（Nullable FK）、deleted_at（Nullable timestamptz） |
+| `inboxes` | id、title（Nullable）、content（Not Null）、inbox_date（Not Null）、is_daily（Not Null，默认 false）、folder_id（Nullable FK）、created_at、updated_at、deleted_at |
+| `insights` | id、title（Nullable）、content（Not Null）、folder_id（Nullable FK）、created_at、updated_at、deleted_at |
+
+### 迁移验证方式
+
+`tests/test_stage2_migrations.py` 在**一次性隔离验证库**（名字带进程号，跑完即删）上：
+
+1. 升到 `3a70890ddb10`，用**旧六字段 SQL** 合成 8 条历史数据
+   （NULL / 空字符串 / 纯空白标题、同日多篇、空字符串与纯空白正文、
+   超长标题与超长正文、不同日期、2020 年的历史时间戳）；
+2. 逐行记录原六字段（id + 每行 digest，不打印正文）；
+3. 升到 M1 比对一次，再升到 M2 比对一次，要求完全一致；
+4. 校验新列为 NULL、列顺序、FK 与 `ondelete`、`is_daily` 默认值、索引，
+   以及实际结构与 `Base.metadata` 一致；
+5. 在隔离事务里通过 ORM 读写三张新表，并确认回滚后无残留。
+
+迁移子进程通过独立 `DATABASE_URL` 环境变量启动，因此使用的是新 Engine，
+不会复用测试进程里已经创建的 Engine。
+
+### 命令与结果
+
+```powershell
+.\.venv\Scripts\python.exe -B -m scripts.prepare_test_db
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_stage2_migrations.py tests/test_test_database.py
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests
+.\.venv\Scripts\python.exe -B -m alembic heads
+```
+
+| 命令 | 实际结果 |
+|---|---|
+| `scripts.prepare_test_db` | `PASS: seekjournal_test 已准备，开发库未执行迁移或数据操作` |
+| 迁移 + 隔离守卫 | `10 passed` |
+| 全量回归 | `314 passed` |
+| `alembic heads` | `a8d98342e603 (head)`（单 head） |
+
+对 `seekjournal_test` 用进程级 `DATABASE_URL` 执行 `alembic current` → `a8d98342e603 (head)`，
+`alembic check` → `No new upgrade operations detected.`
+
+### 开发库 `seekjournal` 的状态
+
+本次实施**没有升级开发库**。开发库仍是 `3a70890ddb10`，
+对它有数据变化的 `alembic check` 只会显示 `FAILED: Target database is not up to date.` ——
+**这是预期的阶段状态：代码里的 Model 已经前进，开发库等用户单独授权的升级轮**。
+
+用户授权后，升级命令为（在 `backend/` 下执行）：
+
+```powershell
+.\.venv\Scripts\python.exe -B -m alembic upgrade head   # 3a70890ddb10 -> 52c8e94a365c -> a8d98342e603
+.\.venv\Scripts\python.exe -B -m alembic current
+```

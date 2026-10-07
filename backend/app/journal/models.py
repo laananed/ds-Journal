@@ -1,9 +1,15 @@
 """Journal SQLAlchemy Model。
 
-Stage 1 / Task 3 第二步。
+Stage 1 / Task 3 第二步建立原有六字段。
 
-字段定义以 `docs/stage1.md` 与 `docs/stage1-architecture.md` 为准：
+Stage 2 / S2-T01（M1）新增两个可空列：
+
+- `folder_id`：可空外键，指向 `folders.id`；
+- `deleted_at`：可空的带时区时间（软删除占位）。
+
+原有六字段定义仍以 `docs/stage1.md` 与 `docs/stage1-architecture.md` 为准：
 id / title / content / journal_date / created_at / updated_at。
+新增两列以 `docs/stage2-architecture.md` 第 3 节为准，旧记录默认 NULL。
 
 本模块只描述表结构映射，不创建表。
 实际的表由 Alembic Migration 建立。
@@ -13,7 +19,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, Integer, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -61,4 +67,28 @@ class Journal(Base):
         nullable=False,
         default=_utcnow,
         onupdate=_utcnow,
+    )
+
+    # ---- Stage 2 / S2-T01（M1）新增的两个可空列 ----
+    #
+    # 两个列都加在原有六字段之后（对应的 Migration 也只会 ADD COLUMN），
+    # 所有旧记录升级后这两列都是 NULL。
+
+    # 可空外键，指向 folders.id。
+    #
+    # 不写 ondelete：PostgreSQL 默认就是 NO ACTION，
+    # 与 `docs/stage2-architecture.md` 的「RESTRICT / NO ACTION、
+    # 不 cascade、不 SET NULL」一致。
+    # 也刻意不加 index=True：本轮没有查询需要，保持迁移最小。
+    folder_id: Mapped[int | None] = mapped_column(
+        ForeignKey("folders.id"),
+        nullable=True,
+    )
+
+    # 软删除时间。本轮只建立列，**不实现软删除行为**：
+    # API 仍然是 Stage 1.5 的硬删除（见 router.py / service.py），
+    # 普通 GET / 列表在 S2-T02 才会开始过滤这一列。
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
     )

@@ -2,9 +2,10 @@
 
 SeekJournal 是一个以个人认知成长为核心、生活与情感记录为辅的个人记录与复盘软件。
 
-**Stage 1：Journal 本地 Web Demo 已完成；当前正在执行 Stage 1.5 Bug Fix（T1 已提交，T2 待独立验收）；Stage 2 只有规划、未获实施授权。**
-Stage 1.5 不新增产品功能，只修复 Stage 1 的实际体验问题（编号方向、预览截断、输入校验），
-数据模型、API 路由与六字段响应都不变。已跑通的开发链路：
+**Stage 1 与 Stage 1.5 已完成；Stage 2（本地 Web 完整基础记录版）正在进行，当前只授权到 S2-T01（数据基础与旧 Journal 升级），S2-T02 及之后未获实施授权。**
+Stage 1.5 只修复 Stage 1 的体验问题（编号方向、预览截断、输入校验），未新增产品功能。
+Stage 2 / S2-T01 只在数据层增加 `folders` / `inboxes` / `insights` 三张表与 Journal 的两个可空列，
+Stage 1.5 的六个字段、API 路由与数组响应都不变；旧 Journal 数据迁移后逐行保留。已跑通的开发链路：
 
 ```text
 React → REST API / JSON → FastAPI → Pydantic → Service → SQLAlchemy → psycopg → PostgreSQL
@@ -18,7 +19,7 @@ Stage 1 不是完整产品。范围、验收标准与架构见：
 | `docs/stage1-api.md` | Stage 1 历史 API 契约 |
 | `docs/stage1-architecture.md` | Stage 1 历史技术架构 |
 | `docs/stage1-acceptance.md` | Stage 1 整体验收记录（一次带时间点的快照） |
-| `docs/stage1.5-bugfix.md` | 当前 Bug Fix 需求、契约修订与 2 个 Task；先于 Stage 2 |
+| `docs/stage1.5-bugfix.md` | Stage 1.5 的 Bug Fix 需求、契约修订与 2 个 Task（已完成，含执行记录） |
 | `docs/stage2.md` | Stage 2 产品需求、未来阶段路线、Pending Product Decisions（权威） |
 | `docs/stage2-api.md` | Stage 2 API 契约设计（尚未实现） |
 | `docs/stage2-architecture.md` | Stage 2 对象关系、模块、事务、迁移与测试设计 |
@@ -36,18 +37,24 @@ Stage 1 不是完整产品。范围、验收标准与架构见：
 - 同一日期允许多篇；无标题记录在 UI 上用 `journal_date` 与 `(2)`、`(3)` 区分；
 - 本地开发用最小 CORS（只放开本机两个前端来源）。
 
-Stage 1.5（进行中，只修复 Stage 1 体验问题、不新增功能）：
+Stage 1.5（已完成，只修复 Stage 1 体验问题、未新增功能）：
 
-- **T1（已实现，待独立验收）**：同日无标题记录按 `created_at ASC` 编号——新增较晚的记录
+- **T1（已完成并提交）**：同日无标题记录按 `created_at ASC` 编号——新增较晚的记录
   不再改动旧记录编号；列表标题一行省略、正文三行省略，详情保持完整正文。
-- **T2（已实现，待独立验收）**：`title` 最多 80 个 Unicode 码点，`content` 必须含至少一个
+- **T2（已完成）**：`title` 最多 80 个 Unicode 码点，`content` 必须含至少一个
   非空白字符且最多 50,000 个 Unicode 码点；前后端同一套口径，非法 POST/PATCH 返回 422 且不写库。
   **旧 Journal 数据完整保留**：数据库里的超长 / 空白历史记录仍可正常读取，
   只改其它合法字段时也不会被连带清洗或截断。
 
-Stage 2 已规划、未实现：Inbox、手动 Insight、一级 Folder、Markdown 阅读、普通搜索、
-回收箱、简单内部链接、20 条/页、基础卡片与统一离开提醒。
-**Inbox → Journal 整理、操作记录与内容版本历史已取消，不在 Stage 2。**
+Stage 2（进行中，当前只实现到 S2-T01）：
+
+- **S2-T01（已实现，待独立验收）**：新增 `folders` / `inboxes` / `insights` 三张表，
+  `journals` 增加可空 `folder_id`、`deleted_at`；两份 Migration `52c8e94a365c` → `a8d98342e603`，
+  旧 Journal 原六字段逐行保留。**只建立表结构，未新增任何 API**；
+  软删除、Inbox、Insight、Folder 等行为属于后续 Task。
+- 其余 Stage 2 能力（Inbox、手动 Insight、一级 Folder、Markdown 阅读、普通搜索、
+  回收箱、简单内部链接、20 条/页、基础卡片与统一离开提醒）**尚未实现**。
+  **Inbox → Journal 整理、操作记录与内容版本历史已取消，不在 Stage 2。**
 
 未来功能尚未实现：注册 / 登录 / 多用户 / 权限、图片、标签、AI、同步、云部署等。
 阶段路线与 Non-goals 以 `docs/stage2.md` 为准。
@@ -67,7 +74,7 @@ Stage 2 已规划、未实现：Inbox、手动 Insight、一级 Folder、Markdow
 SeekJournal/
 ├── AGENTS.md
 ├── agents/                 # 协作规则
-├── docs/                   # Stage 1 历史、Stage 1.5 修复计划、Stage 2 权威规划
+├── docs/                   # Stage 1 历史、Stage 1.5 修复记录、Stage 2 权威规划
 ├── compose.yaml            # 只定义 postgres 单服务
 ├── backend/                # FastAPI + SQLAlchemy + Alembic
 │   ├── app/
@@ -227,7 +234,8 @@ cd backend
 ```
 
 只创建不存在的 `seekjournal_test` 并执行已有 Migration；
-可以重复执行；**若测试库已有日记记录会失败并保留数据，不会清空**。
+可以重复执行；**若四张业务表（`folders` / `journals` / `inboxes` / `insights`）
+中任意一张已有记录就会失败并保留数据，不会清空**。
 
 ### 8.2 后端完整回归
 
@@ -237,9 +245,12 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 .\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests
 ```
 
-- 当前共 **305** 个用例（Stage 1.5 / T2 新增 title 长度、content 非空白与长度、
-  旧数据可读可改等边界用例）；
-- 连库测试用「外层事务 + savepoint」，结束后回滚，测试库不留日记数据；
+- 当前共 **314** 个用例（Stage 1.5 / T2 新增 title 长度、content 非空白与长度、
+  旧数据可读可改等边界用例；Stage 2 / S2-T01 新增 9 个迁移与旧数据保留用例）；
+- 连库测试用「外层事务 + savepoint」，结束后回滚，测试库不留数据；
+  无残留检查已扩展到四张业务表；
+- `tests/test_stage2_migrations.py` 使用**自己的一次性隔离验证库**（跑完即删），
+  不碰测试库与开发库，但要求先跑过一次 `prepare_test_db`；
 - 隔离守卫 `tests/test_test_database.py` 断言测试进程连的是 `seekjournal_test`；
 - **测试库必须保持空白业务数据基线**：`test_journal_read_api.py` 里有 3 个用例
   要求运行前 `journals` 表为空；若失败，那是前置条件不满足，**不要为了过测试去删数据**。

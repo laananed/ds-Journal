@@ -6,12 +6,18 @@ SeekJournal 是一个以个人认知成长为核心、生活与情感记录为�
 
 当前开发阶段：
 
-Stage 1.5 - Pre-Stage-2 Bug Fix（进行中）
+Stage 2 - 本地 Web 完整基础记录版（进行中）
 
 - Stage 1 已完成并通过整体验收，功能与证据见 `docs/stage1-acceptance.md`；
-- 当前阶段的权威文档是 `docs/stage1.5-bugfix.md`（Bug 修复的需求、契约修订与 Task）；
-- 当前授权执行到 **S1.5-T2**（含 Stage 1.5 整体验收）；S1.5-T1 已完成并提交；
-- Stage 2 目前只有规划文档，**没有获得实施授权**。
+- Stage 1.5（Pre-Stage-2 Bug Fix）已完成，需求、契约修订与执行记录见 `docs/stage1.5-bugfix.md`；
+- 当前阶段（Stage 2）的权威文档：
+  - 产品需求 `docs/stage2.md`
+  - API 契约 `docs/stage2-api.md`
+  - 技术架构 `docs/stage2-architecture.md`
+  - 任务计划 `docs/stage2-tasks.md`
+- 当前只授权执行 **S2-T01（数据基础与旧 Journal 升级）**；
+  S2-T02 及之后的任务**尚未获得实施授权**；
+- 实施轮只在独立测试库上迁移；**真实开发库 `seekjournal` 的升级由用户单独授权后进行**。
 
 Stage 1 - Journal Local Web Demo（已完成）
 
@@ -37,12 +43,13 @@ Stage 1 已完成的能力：
 2. `docs/stage1-api.md`
 3. `docs/stage1-architecture.md`
 
-执行当前阶段（Stage 1.5）任务前，还必须阅读：
+执行当前阶段（Stage 2）任务前，还必须阅读：
 
-1. `docs/stage1.5-bugfix.md` —— Stage 1.5 的权威来源，
-   覆盖 Stage 1 文档中已被修订的输入规则与编号实现要求；
-2. 只执行该文件中被点名授权的 Task（当前为 S1.5-T2，含 Stage 1.5 整体验收）。
-   `docs/stage2*.md` 只用于了解后续规划，**不构成实施授权**。
+1. `docs/stage2.md`（产品需求）、`docs/stage2-api.md`（API 契约）、
+   `docs/stage2-architecture.md`（技术架构）、`docs/stage2-tasks.md`（任务计划）；
+2. 只执行 `docs/stage2-tasks.md` 中被点名授权的 Task（当前为 **S2-T01**）。
+   未被授权的 Task 及其中的规划内容**不构成实施授权**。
+3. Stage 1.5 的输入规则修订以 `docs/stage1.5-bugfix.md` 为准（历史依据，已完成）。
 
 根据当前角色继续阅读：
 
@@ -66,11 +73,15 @@ DeepSeek Developer：
 
 当前权威来源：
 
-### 当前阶段（Stage 1.5）
+### 当前阶段（Stage 2）
 
-`docs/stage1.5-bugfix.md`
+- 产品需求：`docs/stage2.md`
+- API：`docs/stage2-api.md`
+- 技术架构：`docs/stage2-architecture.md`
+- 任务计划：`docs/stage2-tasks.md`
 
-（Stage 1.5 的规则修订以它为准；与下方 Stage 1 条目冲突时，以它为准。）
+（Stage 2 的规则以上面四份文档为准；与下方 Stage 1 条目冲突时，以它们为准。
+ Stage 1.5 的输入规则修订与执行记录保留在 `docs/stage1.5-bugfix.md`。）
 
 ### 产品需求
 
@@ -231,7 +242,7 @@ psycopg 负责 SQLAlchemy 与 PostgreSQL 之间的实际连接。
 
 ## 8. Scope Control
 
-如果用户提出的需求不属于当前阶段（现为 Stage 1.5）：
+如果用户提出的需求不属于当前阶段（现为 Stage 2）：
 
 先记录需求。
 

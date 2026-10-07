@@ -1,4 +1,9 @@
-"""准备独立测试库：只创建 seekjournal_test，并运行已有 Alembic 迁移。"""
+"""准备独立测试库：只创建 seekjournal_test，并运行已有 Alembic 迁移。
+
+Stage 2 / S2-T01 起，本脚本的「非空拒绝」检查覆盖**所有已存在的业务表**，
+不再只看 journals。升级前部分新表可能还不存在，因此逐一用 `to_regclass`
+判断，表不存在就跳过，不会因此报错，也**不会**创建表（建表只由 Alembic 负责）。
+"""
 
 from __future__ import annotations
 
@@ -14,6 +19,9 @@ from sqlalchemy import URL, make_url
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 TEST_DATABASE_NAME = "seekjournal_test"
+
+# 当前阶段的全部业务表。新增业务表时同步这个元组。
+BUSINESS_TABLES = ("folders", "journals", "inboxes", "insights")
 
 
 def get_test_database_url() -> URL:
@@ -51,13 +59,26 @@ def main() -> int:
     with psycopg.connect(
         _connection_url(test_url, TEST_DATABASE_NAME), connect_timeout=5
     ) as connection:
-        has_journals = connection.execute(
-            "SELECT to_regclass('public.journals')"
-        ).fetchone()[0]
-        if has_journals and connection.execute(
-            "SELECT count(*) FROM journals"
-        ).fetchone()[0]:
-            raise RuntimeError("测试库已有记录；不会清空，请先确认其来源")
+        # 只检查「已经存在的业务表」是否有数据。
+        # 升级前的新表还不存在时 to_regclass 返回 NULL，直接跳过；
+        # 这里绝不 create_all / drop_all / 清空任何表。
+        non_empty: list[tuple[str, int]] = []
+        for table in BUSINESS_TABLES:
+            exists = connection.execute(
+                "SELECT to_regclass(%s)", (f"public.{table}",)
+            ).fetchone()[0]
+            if exists is None:
+                continue
+            count = connection.execute(
+                sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier(table))
+            ).fetchone()[0]
+            if count:
+                non_empty.append((table, count))
+        if non_empty:
+            summary = ", ".join(f"{table}={count}" for table, count in non_empty)
+            raise RuntimeError(
+                f"测试库已有业务记录（{summary}）；不会清空，请先确认其来源"
+            )
 
     migration_env = os.environ.copy()
     migration_env["DATABASE_URL"] = test_url.render_as_string(hide_password=False)

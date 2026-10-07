@@ -1,7 +1,7 @@
 # SeekJournal Multi-Agent Workflow
 
-> 2026-10-07：阶段权威入口为 `docs/stage1.5-bugfix.md` 与四份 `docs/stage2*.md`。
-> 当前源码仍是 Stage 1，Stage 1.5 必须先验收；本轮文档更新不派发功能实现。
+> 2026-10-07：Stage 1 与 Stage 1.5 已完成；当前阶段权威入口为四份 `docs/stage2*.md`。
+> 当前按 `docs/stage2-tasks.md` 逐任务执行，授权到 **S2-T01**，S2-T02 及之后未授权。
 > 保留 User → Lead → DeepSeek → Lead Review → User 验收的单任务循环，不自动启用并行 Agent。
 
 ## 1. Purpose
@@ -654,8 +654,9 @@ Stage 1 完成后：
 
 不要删除 Stage 1 历史设计。
 
-当前 Stage 1 已完成。先执行 `docs/stage1.5-bugfix.md` 的执行前检查及 T1～T2，再执行
-`docs/stage2-tasks.md` 的 T01～T14。路线与取消项只在 `docs/stage2.md` 维护。
+当前 Stage 1 与 Stage 1.5 都已完成（Stage 1.5 见 `docs/stage1.5-bugfix.md` 的执行记录）。
+现按 `docs/stage2-tasks.md` 从 **S2-T01** 起逐任务执行 T01～T14，一次只下发一个已授权 Task。
+路线与取消项只在 `docs/stage2.md` 维护。
 原操作记录和 Inbox → Journal 规划已取消，不执行旧讨论里的八任务提案。
 
 建议保留：
@@ -677,8 +678,8 @@ docs/stage2-tasks.md
 
 这样可以保留项目演进历史。
 
-根 `AGENTS.md` 仍为 Stage 1 导航，Stage 1.5 执行前检查中在明确授权后同步当前阶段/必读文档，
-保留技术栈、API/Model/架构变更的范围批准规则。本轮未修改根文件。
+根 `AGENTS.md` 的阶段导航已在 S1.5-T1/T2 与 S2-T01 中同步为 Stage 2 / 仅授权当前 Task，
+技术栈、API/Model/架构变更的范围批准规则与禁止项保留不变。
 产品 Pending 唯一登记在 `docs/stage2.md`，Lead 下发任务时注明具体 gate；Developer 不代产品经理决定。
 
 ---

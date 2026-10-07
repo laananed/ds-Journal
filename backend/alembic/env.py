@@ -13,6 +13,13 @@ from app.database import Base, engine
 
 # 必须显式导入 Model 模块，让 Model 完成注册，
 # 否则 Base.metadata 里不会有 journals 表，autogenerate 会认为“没有变化”。
+#
+# Stage 2 / S2-T01：新增的 Model 也要在这里注册。
+# Journal / Inbox / Insight 的 folder_id 外键都指向 folders，
+# metadata 里必须同时有 folders，外键才能解析。
+from app.folder import models  # noqa: F401
+from app.inbox import models  # noqa: F401
+from app.insight import models  # noqa: F401
 from app.journal import models  # noqa: F401
 
 # Alembic Config 对象，对应正在使用的 alembic.ini。

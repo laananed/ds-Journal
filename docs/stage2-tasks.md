@@ -54,6 +54,34 @@ Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5
 11. **执行步骤**：只读基线 → Model/M1/M2 → 合成旧数据升级测试 → 扩展隔离 → 核对 → 受授权的开发库升级/比对。
 12. **Definition of Done**：M1/M2 可 Review，旧数据不变，所有业务表测试无残留；输出真实 migration IDs 与命令，不只说“生成成功”。
 
+### S2-T01 执行记录（2026-10-07）
+
+> 本节是**执行之后**补记的实际结果，供 Review / 验收对照，不是事前计划。
+
+- 分支 `task/s02-t01-data-foundation`，起始 HEAD `aa19d65`（已含 T1 `c08db51`、T2 `7349a44`）。
+- Model：新增 `app/folder`、`app/inbox`、`app/insight` 三个 Model 模块；
+  `app/journal/models.py` 追加可空 `folder_id`（FK → `folders.id`，NO ACTION）与可空 `deleted_at`。
+  在 `alembic/env.py` 与 `app/main.py` 两处显式注册；`main.py` 只导入 Model，**未注册任何新 Router**。
+- Migration（实际 revision）：
+  - M1 = `52c8e94a365c`，`down_revision = 3a70890ddb10`：建 `folders`，`journals` 加两列 + 外键；
+  - M2 = `a8d98342e603`，`down_revision = 52c8e94a365c`：建 `inboxes`、`insights`。
+  初始迁移未改；单 head；无 drop / 重建 / 数据清洗 / 额外表；本阶段**没有 M3**。
+- 隔离：`prepare_test_db.py` 的「非空拒绝」检查从 `journals` 扩展到四张业务表，
+  对尚不存在的表用 `to_regclass` 跳过；`tests/conftest.py` 的无残留检查同样改为逐表比对。
+- 验证：`tests/test_stage2_migrations.py` 在一次性隔离验证库上，
+  从 `3a70890ddb10` 用**旧六字段 SQL** 合成 8 条旧数据（NULL / 空字符串 / 纯空白标题、
+  同日多篇、空字符串与纯空白正文、超长标题与超长正文、不同日期、2020 年历史时间戳），
+  逐步升级到 M1、M2 并逐行比对原六字段（每行 digest 完全一致），
+  同时校验新列为 NULL、列顺序、FK 与 ondelete、`is_daily` 默认值、索引与 metadata 一致，
+  并在隔离事务里通过 ORM 读写三张新表。临时验证库跑完即删。
+- 命令与结果：`prepare_test_db` `PASS`；
+  `tests/test_stage2_migrations.py tests/test_test_database.py` → `10 passed`；
+  全量 `314 passed`；`alembic heads` = `a8d98342e603 (head)`；
+  对 `seekjournal_test` 的 `alembic current` = head、`alembic check` = No new upgrade operations detected.
+- 开发库 `seekjournal` **未升级**，仍是 `3a70890ddb10`：行数、六字段 digest 与 sequence 与实施前一致。
+  对开发库执行 `alembic check` 会显示 `FAILED: Target database is not up to date.`，属预期阶段状态。
+- 结论：**S2-T01 实现与测试环境验证完成，开发库待升级 / 独立验收**；未进入 T02，未提交。
+
 ## 4. S2-T02 — Journal 新契约
 
 1. **Goal**：把 Journal 读取/修改/删除升级为分页、统一标题投影与软删除。
@@ -350,6 +378,7 @@ node --experimental-strip-types src/utils/dirtyState.test.ts
 
 ## 20. 验收记录区
 
-当前状态：**Stage 2 未实现、未执行功能测试、未生成Migration；本轮仅完成文档。**
+当前状态：**Stage 2 尚未整体验收；S2-T01 已实现并通过测试环境验证（见 §3 的 S2-T01 执行记录），
+开发库尚未升级。**
 T14实际执行后在此追加日期、branch/HEAD、命令/退出码/实际数量、A01～A13证据、迁移与开发库保护结果、真实/合成区分、未验证项、用户学习/最终验收情况。
 不得提前填“全部通过”。
