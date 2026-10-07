@@ -1,5 +1,9 @@
 # SeekJournal - Stage 1 API Contract
 
+> 本文为 Stage 1 历史契约。Stage 1.5 沿用端点、六字段与数组，只按
+> `stage1.5-bugfix.md` 修订 title/content 请求验证与完整列表编号。
+> Stage 2 的分页 envelope、display_title、Folder 与软删除契约以 `stage2-api.md` 为准；尚未实现。
+
 ## 1. Purpose
 
 本文档定义 Stage 1：

@@ -1,5 +1,9 @@
 # SeekJournal Multi-Agent Workflow
 
+> 2026-10-07：阶段权威入口为 `docs/stage1.5-bugfix.md` 与四份 `docs/stage2*.md`。
+> 当前源码仍是 Stage 1，Stage 1.5 必须先验收；本轮文档更新不派发功能实现。
+> 保留 User → Lead → DeepSeek → Lead Review → User 验收的单任务循环，不自动启用并行 Agent。
+
 ## 1. Purpose
 
 本文档规定 SeekJournal 开发过程中：
@@ -238,6 +242,10 @@ GPT Lead 应确认：
 
 GPT Lead 给 Developer 的任务至少应该包含：
 
+当前完整 Task 格式见 `docs/stage1.5-bugfix.md` / `docs/stage2-tasks.md`：
+Goal、Scope、Out of Scope、前置 Task、模块/路径、DB/Migration、后端/前端行为、
+测试、人工步骤、DoD。下方旧 Stage 1 示例仅说明写法，不是当前待执行任务。
+
 ### Goal
 
 这次完成什么？
@@ -352,13 +360,13 @@ GPT Lead Review 时重点检查六个方面。
 
 有没有违反：
 
-`stage1-architecture.md`？
+当前 Task 所属阶段的权威 architecture 文档？
 
 ### D. API
 
 有没有违反：
 
-`stage1-api.md`？
+当前 Task 所属阶段的权威 API 文档？
 
 ### E. Simplicity
 
@@ -458,7 +466,7 @@ User 新指令
 
 冲突：
 
-Agent 应明确指出：
+Agent 应明确指出（没有批准对应修订时）：
 
 ### Current Documentation
 
@@ -472,7 +480,8 @@ Agent 应明确指出：
 
 二者冲突在哪里。
 
-然后等待用户确认。
+然后等待用户决定未确认的部分；已明确批准的变更直接先更新权威文档，
+不重复请求同一授权，不让无依赖工作一起停下。
 
 不得：
 
@@ -645,6 +654,10 @@ Stage 1 完成后：
 
 不要删除 Stage 1 历史设计。
 
+当前 Stage 1 已完成。先执行 `docs/stage1.5-bugfix.md` 的执行前检查及 T1～T2，再执行
+`docs/stage2-tasks.md` 的 T01～T14。路线与取消项只在 `docs/stage2.md` 维护。
+原操作记录和 Inbox → Journal 规划已取消，不执行旧讨论里的八任务提案。
+
 建议保留：
 
 ```text
@@ -653,15 +666,20 @@ docs/stage1-api.md
 docs/stage1-architecture.md
 ```
 
-Stage 2 新建：
+Stage 2 已建立（规划完成不代表实现完成）：
 
 ```text
 docs/stage2.md
 docs/stage2-api.md
 docs/stage2-architecture.md
+docs/stage2-tasks.md
 ```
 
 这样可以保留项目演进历史。
+
+根 `AGENTS.md` 仍为 Stage 1 导航，Stage 1.5 执行前检查中在明确授权后同步当前阶段/必读文档，
+保留技术栈、API/Model/架构变更的范围批准规则。本轮未修改根文件。
+产品 Pending 唯一登记在 `docs/stage2.md`，Lead 下发任务时注明具体 gate；Developer 不代产品经理决定。
 
 ---
 

@@ -1,5 +1,9 @@
 # DeepSeek Developer
 
+> 2026-10-07：当前实现是 Stage 1；先完成 Stage 1.5，再逐任务执行 Stage 2。
+> 本轮只生成文档，不是实现指令。Developer 收到点名的 Task 与明确范围后才动代码。
+> 产品 Pending 仅在 `docs/stage2.md` §15 维护，不能自行把建议变成规则。
+
 ## 1. Role
 
 你是 SeekJournal 当前阶段的主要代码实现 Agent。
@@ -31,7 +35,7 @@ Implement
 
 ## 3. Required Reading
 
-执行 Stage 1 开发任务之前必须阅读：
+执行任何已授权任务前必须阅读：
 
 - `AGENTS.md`
 - `docs/stage1.md`
@@ -40,29 +44,30 @@ Implement
 - `agents/ds-developer.md`
 - `agents/multi-agent-workflow.md`
 
+按当前 Task 继续阅读：
+
+- Stage 1.5：`docs/stage1.5-bugfix.md`，只执行其中被点名的任务。
+- Stage 2：`docs/stage2.md`、`docs/stage2-api.md`、`docs/stage2-architecture.md`、
+  `docs/stage2-tasks.md`；Stage 1 文档用于历史/旧数据基线，不沿用已取消的旧提案。
+- Stage 1.5 执行前检查必须处理根 `AGENTS.md` 仍写 Stage 1 的阶段导航；未经授权不得自己解除其限制。
+
 ---
 
 ## 4. Source of Truth
 
-需求：
+Stage 1 历史以三份 stage1 文档为准；Stage 1.5 的规则修订以 stage1.5-bugfix 为准；
+Stage 2 的产品/API/架构/任务以对应四份 stage2 文档为准，不在本文件另维护字段与功能规则。
 
-`docs/stage1.md`
-
-API：
-
-`docs/stage1-api.md`
-
-架构：
-
-`docs/stage1-architecture.md`
-
-如果用户任务与文档冲突：
+如果新的指令没有明确批准修订，却与权威文档冲突：
 
 不要自行判断。
 
 指出冲突。
 
-等待更新文档。
+提交冲突位置与影响，等待更新权威文档。已明确批准的修订按文档先行流程处理，不反复索要同一批准。
+
+每次只执行当前 Task；确认前置验收、读取真实代码，再输出实现结果。
+P1/P2/P3 未定时暂停对应分支，报告影响，继续能独立完成的工作；不声称有未完成分支的整个 Task 已验收。
 
 ---
 
@@ -128,6 +133,10 @@ Repository Layer。
 - 使用 Alembic 管理 Schema Migration；
 - 不删除数据库重新创建来替代正式 Migration；
 - 不提前添加未来字段。
+
+迁移任务必须先验证从 Stage 1 数据升级、逐行保留旧字段，再对明确授权的开发库应用；
+测试库准备与无残留检查覆盖全部当前业务表。不能清空来源不明的数据来让测试通过。
+开发库私人 Journal 不用于写测试；新增的非法历史值不得自动截断/清洗。
 
 ---
 
@@ -207,6 +216,9 @@ Repository Layer。
 - 执行了什么测试；
 - 是否通过。
 
+给出命令、退出码、实际数量和证据路径；标明真实链路与合成错误。
+Migration 任务附实际 revision 顺序及旧数据比对；新依赖附批准依据；不能只复制 README 期望输出。
+
 ### Problems
 
 实现过程中发现什么问题。
@@ -214,6 +226,11 @@ Repository Layer。
 没有则：
 
 None。
+
+### Learning
+
+用 1～3 个知识点说明新增内容、数据经过哪些模块、核心文件在哪里。
+每个 Task 可独立 Review/Commit；是否 commit/merge/push 依当前授权，不把“任务完成”当自动发布许可。
 
 ### Decisions Needed
 

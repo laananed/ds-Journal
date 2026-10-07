@@ -2,8 +2,8 @@
 
 SeekJournal 是一个以个人认知成长为核心、生活与情感记录为辅的个人记录与复盘软件。
 
-当前处于 **Stage 1：Journal 本地 Web Demo**。
-目标是跑通第一次完整开发闭环：
+**Stage 1：Journal 本地 Web Demo 已完成；当前准备 Stage 1.5 Bug Fix，并规划 Stage 2。**
+当前代码仍是 Stage 1，Stage 1.5 与 Stage 2 功能尚未实现。已跑通的开发链路：
 
 ```text
 React → REST API / JSON → FastAPI → Pydantic → Service → SQLAlchemy → psycopg → PostgreSQL
@@ -13,10 +13,15 @@ Stage 1 不是完整产品。范围、验收标准与架构见：
 
 | 文档 | 内容 |
 |---|---|
-| `docs/stage1.md` | 产品需求与验收标准（权威） |
-| `docs/stage1-api.md` | API 契约（权威） |
-| `docs/stage1-architecture.md` | 技术架构（权威） |
+| `docs/stage1.md` | Stage 1 历史产品需求与验收标准 |
+| `docs/stage1-api.md` | Stage 1 历史 API 契约 |
+| `docs/stage1-architecture.md` | Stage 1 历史技术架构 |
 | `docs/stage1-acceptance.md` | Stage 1 整体验收记录（一次带时间点的快照） |
+| `docs/stage1.5-bugfix.md` | 当前 Bug Fix 需求、契约修订与 2 个 Task；先于 Stage 2 |
+| `docs/stage2.md` | Stage 2 产品需求、未来阶段路线、Pending Product Decisions（权威） |
+| `docs/stage2-api.md` | Stage 2 API 契约设计（尚未实现） |
+| `docs/stage2-architecture.md` | Stage 2 对象关系、模块、事务、迁移与测试设计 |
+| `docs/stage2-tasks.md` | Stage 2 的 14 个开发 Task、依赖、验证顺序 |
 | `AGENTS.md` / `agents/*.md` | Agent 协作规则 |
 | `frontend/README.md` / `backend/README.md` | 前 / 后端各自的详细说明 |
 
@@ -30,8 +35,15 @@ Stage 1 不是完整产品。范围、验收标准与架构见：
 - 同一日期允许多篇；无标题记录在 UI 上用 `journal_date` 与 `(2)`、`(3)` 区分；
 - 本地开发用最小 CORS（只放开本机两个前端来源）。
 
-尚未实现（不属于 Stage 1）：注册 / 登录 / 多用户 / 权限、分页、搜索、回收箱（软删除）、
-图片、标签、AI、多端同步、云部署等。详见 `docs/stage1.md` §15。
+Stage 1.5 待修复：新增导致旧 Journal 编号变化、title 80 / content 50,000 与非空白规则、
+标题一行预览及既有正文三行截断的实际验证。旧 Journal 数据必须完整保留。
+
+Stage 2 已规划、未实现：Inbox、手动 Insight、一级 Folder、Markdown 阅读、普通搜索、
+回收箱、简单内部链接、20 条/页、基础卡片与统一离开提醒。
+**Inbox → Journal 整理、操作记录与内容版本历史已取消，不在 Stage 2。**
+
+未来功能尚未实现：注册 / 登录 / 多用户 / 权限、图片、标签、AI、同步、云部署等。
+阶段路线与 Non-goals 以 `docs/stage2.md` 为准。
 
 ## 2. 环境要求
 
@@ -48,7 +60,7 @@ Stage 1 不是完整产品。范围、验收标准与架构见：
 SeekJournal/
 ├── AGENTS.md
 ├── agents/                 # 协作规则
-├── docs/                   # Stage 1 需求 / API / 架构 / 验收记录
+├── docs/                   # Stage 1 历史、Stage 1.5 修复计划、Stage 2 权威规划
 ├── compose.yaml            # 只定义 postgres 单服务
 ├── backend/                # FastAPI + SQLAlchemy + Alembic
 │   ├── app/

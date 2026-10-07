@@ -1,5 +1,9 @@
 # SeekJournal - Stage 1
 
+> Stage 1 已完成，本文保留 Demo 的历史需求。2026-10-07 批准的编号/输入/预览修订以
+> `stage1.5-bugfix.md` 为准，先完成 Stage 1.5；Stage 2 产品规则另见 `stage2.md`。
+> 后续规划不是当前实现，不改写 `stage1-acceptance.md` 的历史证据。
+
 ## 1. Stage 1 定位
 
 Stage 1 是 SeekJournal 的第一个可运行 Demo。

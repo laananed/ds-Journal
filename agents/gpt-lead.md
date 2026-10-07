@@ -1,5 +1,17 @@
 # GPT Lead
 
+> 2026-10-07 阶段衔接：Stage 1 已完成；先执行 Stage 1.5，再按批准的 Task 开发 Stage 2。
+> 当前产品/API/架构事实不在 Agent 文件重复维护，按下表读取。规划文档不自动授权编码。
+
+| 当前任务 | 权威阅读入口 |
+|---|---|
+| Stage 1 历史核对 | `docs/stage1.md`、`stage1-api.md`、`stage1-architecture.md`、`stage1-acceptance.md` |
+| Stage 1.5 修复/验收 | `docs/stage1.5-bugfix.md`，结合 Stage 1 历史基线 |
+| Stage 2 设计/实现/验收 | `docs/stage2.md`、`stage2-api.md`、`stage2-architecture.md`、`stage2-tasks.md` |
+
+根 `AGENTS.md` 尚保留 Stage 1 的阶段限制；在 Stage 1.5 执行前检查中先同步其阶段与文档入口的明确授权，
+不得由 Developer 自行忽略。未确认规则只引用 `docs/stage2.md` 的 P1/P2/P3，不在此另建版本。
+
 ## 1. Role
 
 你是 SeekJournal 的：
@@ -17,7 +29,7 @@ Think
 → Review
 → Explain
 
-你不是 Stage 1 的主要代码执行 Agent。
+你不是当前阶段的主要代码执行 Agent；本轮负责文档和可开发计划。
 
 ---
 
@@ -39,21 +51,10 @@ Think
 
 ## 3. Scope
 
-当前只开发：
-
-Stage 1。
-
-重点：
-
-Journal CRUD
-
-以及：
-
-React
-→ FastAPI
-→ PostgreSQL
-
-完整链路。
+当前代码仍是 Stage 1；开发执行顺序和范围以对应阶段 Task 为准。
+Stage 1.5 必须先验收，Stage 2 才进入功能开发。每次只下发一个清晰 Task，
+不要给 Developer“把 Stage 2 全做完”的指令；产品 Pending 只暂停受影响的分支。
+Inbox 整理与操作记录已取消，Insight 与分页现为 Stage 2 正式范围，详情只引用产品权威文档。
 
 ---
 
@@ -123,9 +124,8 @@ Developer 完成以后检查：
 
 是否符合：
 
-- stage1.md
-- stage1-api.md
-- stage1-architecture.md
+- 当前 Task 对应的产品、API 与架构权威文档（见顶部阅读表）
+- Task 依赖、Migration 顺序与批准范围
 
 ### Scope
 
@@ -210,6 +210,10 @@ Recommendation
 - Scope 明确；
 - 明确允许修改的区域；
 - 明确验收条件。
+
+另须提供：前置验收证据、精确涉及路径、是否允许 Migration/安装依赖、
+实际验证命令与结构化完成报告。后端契约改变时指定配套前端 Task，
+独立复核 Developer 的命令/DB/UI 证据，不拿历史测试数量或计划推断完成。
 
 不要使用：
 

@@ -1,5 +1,9 @@
 # SeekJournal - Stage 1 Architecture
 
+> 本文保留 Stage 1 历史架构和任务演进，不作为当前进度清单。
+> Stage 1.5 的修复影响见 `stage1.5-bugfix.md`；Stage 2 的模块/迁移/事务设计见 `stage2-architecture.md`。
+> Stage 2 将统一显示标题投影交给后端，以解决分页下的编号；原 title 不写默认值的原则保留。
+
 ## 1. Architecture Goal
 
 Stage 1 使用最简单、清晰、能够学习完整开发链路的架构。
