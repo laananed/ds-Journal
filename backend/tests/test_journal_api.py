@@ -55,6 +55,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.folder.models import Folder
 from app.journal import service
 from app.journal.models import Journal
 from app.journal.schemas import JournalCreate
@@ -64,12 +65,16 @@ from app.journal.schemas import JournalCreate
 # 本模块只保留创建测试自己用到的局部 helper。
 DAY = "2026-10-02"
 RESPONSE_FIELDS = {
+    "type",
     "id",
     "title",
+    "display_title",
     "content",
     "journal_date",
+    "folder_id",
     "created_at",
     "updated_at",
+    "deleted_at",
 }
 
 
@@ -87,7 +92,7 @@ def _post(client: TestClient, **payload):
 # --------------------------------------------------------------------------
 
 
-def test_create_returns_201_with_six_fields(api):
+def test_create_returns_201_with_complete_fields(api):
     client, _session = api
 
     response = _post(
@@ -101,9 +106,15 @@ def test_create_returns_201_with_six_fields(api):
     body = response.json()
     assert set(body) == RESPONSE_FIELDS
     assert isinstance(body["id"], int)
+    assert body["type"] == "journal"
     assert body["title"] == "广州动物园复盘"
+    # 手工标题的显示标题就是标题本身
+    assert body["display_title"] == "广州动物园复盘"
     assert body["content"] == "今天去了广州动物园……"
     assert body["journal_date"] == "2026-10-02"
+    assert body["folder_id"] is None
+    # 普通响应的 deleted_at 必须是 null
+    assert body["deleted_at"] is None
 
 
 def test_response_matches_the_row_inside_the_transaction(api):
@@ -122,6 +133,11 @@ def test_response_matches_the_row_inside_the_transaction(api):
     assert row.title == body["title"] is None
     assert row.content == body["content"]
     assert row.journal_date.isoformat() == body["journal_date"]
+    assert row.folder_id == body["folder_id"] is None
+    assert row.deleted_at == body["deleted_at"] is None
+    # 无标题：显示标题回退为业务日期，且数据库里没有写入这个日期
+    assert body["display_title"] == DAY
+    assert row.title is None
     assert row.created_at == datetime.fromisoformat(body["created_at"])
     assert row.updated_at == datetime.fromisoformat(body["updated_at"])
 
@@ -172,6 +188,61 @@ def test_title_explicit_null_is_accepted(api):
 
     assert response.status_code == 201
     assert response.json()["title"] is None
+
+
+# --------------------------------------------------------------------------
+# 2b. folder_id：可省略 / null / 存在 / 不存在（Stage 2 / S2-T02）
+# --------------------------------------------------------------------------
+
+
+def _add_folder(session: Session, name: str) -> Folder:
+    folder = Folder(name=name)
+    session.add(folder)
+    session.flush()
+    return folder
+
+
+def test_create_with_folder_id_omitted_and_null(api):
+    client, _session = api
+
+    omitted = _post(client, content="没有 Folder", journal_date=DAY)
+    explicit = _post(client, content="显式 null", journal_date=DAY, folder_id=None)
+
+    assert omitted.status_code == explicit.status_code == 201
+    assert omitted.json()["folder_id"] is None
+    assert explicit.json()["folder_id"] is None
+
+
+def test_create_with_existing_folder_returns_the_folder_id(api):
+    client, session = api
+
+    folder = _add_folder(session, "项目思考")
+
+    response = _post(client, content="正文", journal_date=DAY, folder_id=folder.id)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["folder_id"] == folder.id
+
+    row = session.execute(select(Journal).where(Journal.id == body["id"])).scalar_one()
+    assert row.folder_id == folder.id
+
+
+def test_create_with_missing_folder_returns_404_and_creates_nothing(api):
+    client, session = api
+
+    absent_folder = 1
+    existing = {row[0] for row in session.execute(select(Folder.id))}
+    while absent_folder in existing:
+        absent_folder += 1
+
+    before = _count_rows_in(session)
+
+    response = _post(client, content="正文", journal_date=DAY, folder_id=absent_folder)
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Folder not found"
+    assert _count_rows_in(session) == before
 
 
 # --------------------------------------------------------------------------
@@ -233,6 +304,9 @@ def test_two_journals_on_the_same_day_get_different_ids(api):
         {"content": "\u3000", "journal_date": DAY},
         {"content": "a" * 50_001, "journal_date": DAY},
         {"content": " " * 50_000 + "x", "journal_date": DAY},  # trim 后只剩 1 个字符
+        # Stage 2 / S2-T02：folder_id 只接受整数或 null
+        {"content": "正文", "journal_date": DAY, "folder_id": "abc"},
+        {"content": "正文", "journal_date": DAY, "folder_id": 1.5},
     ],
 )
 def test_invalid_request_returns_422_and_creates_nothing(api, payload):
@@ -299,12 +373,17 @@ def test_client_supplied_system_fields_are_ignored(api):
         id=999,
         created_at="2020-01-01T00:00:00Z",
         updated_at="2020-01-01T00:00:00Z",
+        # display_title / deleted_at 同样是系统字段，客户端不能决定它们
+        display_title="客户端伪造的显示标题",
+        deleted_at="2020-01-01T00:00:00Z",
     )
 
     assert response.status_code == 201
     body = response.json()
 
     assert body["id"] != 999
+    assert body["display_title"] == "正文标题"
+    assert body["deleted_at"] is None
     # 时间是系统刚生成的，不是客户端提交的 2020 年。
     created_at = datetime.fromisoformat(body["created_at"])
     assert created_at.year == datetime.now(timezone.utc).year
@@ -313,6 +392,7 @@ def test_client_supplied_system_fields_are_ignored(api):
     row = session.execute(select(Journal).where(Journal.id == body["id"])).scalar_one()
     assert row.id == body["id"]
     assert row.created_at == created_at
+    assert row.deleted_at is None
 
 
 # --------------------------------------------------------------------------

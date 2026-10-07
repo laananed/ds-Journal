@@ -15,8 +15,9 @@ Stage 2 - 本地 Web 完整基础记录版（进行中）
   - API 契约 `docs/stage2-api.md`
   - 技术架构 `docs/stage2-architecture.md`
   - 任务计划 `docs/stage2-tasks.md`
-- 当前只授权执行 **S2-T01（数据基础与旧 Journal 升级）**；
-  S2-T02 及之后的任务**尚未获得实施授权**；
+- 当前只授权执行 **S2-T02（Journal 分页、统一显示标题与软删除 API）**；
+  S2-T03 及之后的任务**尚未获得实施授权**；
+- S2-T02 按已确认的 P3（动态编号）实现，不新增编号字段或 Migration；
 - 实施轮只在独立测试库上迁移；**真实开发库 `seekjournal` 的升级由用户单独授权后进行**。
 
 Stage 1 - Journal Local Web Demo（已完成）
@@ -47,7 +48,7 @@ Stage 1 已完成的能力：
 
 1. `docs/stage2.md`（产品需求）、`docs/stage2-api.md`（API 契约）、
    `docs/stage2-architecture.md`（技术架构）、`docs/stage2-tasks.md`（任务计划）；
-2. 只执行 `docs/stage2-tasks.md` 中被点名授权的 Task（当前为 **S2-T01**）。
+2. 只执行 `docs/stage2-tasks.md` 中被点名授权的 Task（当前为 **S2-T02**）。
    未被授权的 Task 及其中的规划内容**不构成实施授权**。
 3. Stage 1.5 的输入规则修订以 `docs/stage1.5-bugfix.md` 为准（历史依据，已完成）。
 

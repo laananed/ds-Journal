@@ -1,6 +1,6 @@
 """GET /api/journals 列表与日期筛选的最小 API 测试。
 
-Stage 1 / Task 5.1。
+Stage 1 / Task 5.1；Stage 2 / S2-T02 把数组响应迁移为分页 envelope。
 
 与创建测试一样，这里使用 FastAPI TestClient 与**真实 PostgreSQL**，
 完整走一遍：HTTP → Pydantic → Router → Service → SQLAlchemy → psycopg → PostgreSQL。
@@ -9,6 +9,19 @@ Stage 1 / Task 5.1。
 并用「外层事务 + savepoint」把所有写入关在事务里，测试结束即回滚。
 因此本文件可以直接用返回的 Session 造数据（`add` + `flush`），不必担心留下残留。
 
+## 契约迁移说明（Stage 2 / S2-T02）
+
+原来的数组响应已改为分页 envelope：
+
+```text
+{ "items": [...], "page": 1, "page_size": 20, "total": N, "has_next": bool }
+```
+
+因此本文件的断言从「响应体就是数组」改为「取响应体的 `items`」，
+但**保留原有排序 / 日期筛选 / 404 / 字段真实性等意图**：
+判断顺序时仍然只看本用例自己插入的 id 之间的相对次序，
+不假设「全库只有我插入的这些记录」。
+
 ## 这些测试如何保证排序和筛选真的由数据库完成
 
 - 排序测试**手动提供**明确不同的带时区 `created_at`，并以乱序插入记录；
@@ -16,8 +29,8 @@ Stage 1 / Task 5.1。
 - 跨日期测试刻意让「业务日期较新」的记录「实际创建时间更早」，
   用来证明第一排序键是 `journal_date` 而不是 `created_at`。
 - 不使用 `sleep`、不依赖 sequence 大小，也不靠插入顺序推断排序。
-- 排序断言只比较本用例自己插入的 id 的相对顺序，
-  不假设「全库只有我插入的这些记录」。
+- 完整的分页边界（0/1/20/21/41、非法页码、跨页编号）见
+  `tests/test_journal_pagination_api.py`。
 
 ## 关于 sequence
 
@@ -31,6 +44,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -38,21 +52,26 @@ from app.journal.models import Journal
 
 LIST_URL = "/api/journals"
 RESPONSE_FIELDS = {
+    "type",
     "id",
     "title",
+    "display_title",
     "content",
     "journal_date",
+    "folder_id",
     "created_at",
     "updated_at",
+    "deleted_at",
 }
+PAGE_FIELDS = {"items", "page", "page_size", "total", "has_next"}
 
 # 只取固定列、按 id 排序的快照 SQL。
 # 用它而不是 ORM 对象，是为了绕开 Session 的 identity map：
 # 如果某次请求意外改动了字段，identity map 里的旧对象可能看不出变化，
 # 而这条原生查询每次都会从数据库重新读。
 _SNAPSHOT_SQL = text(
-    "SELECT id, title, content, journal_date, created_at, updated_at "
-    "FROM journals ORDER BY id"
+    "SELECT id, title, content, journal_date, created_at, updated_at, "
+    "folder_id, deleted_at FROM journals ORDER BY id"
 )
 
 
@@ -93,12 +112,25 @@ def _make_journal(
 
 
 def _snapshot(session: Session) -> list[tuple]:
-    """返回 journals 六字段的原生 SQL 快照（按 id 排序）。"""
+    """返回 journals 的原生 SQL 快照（按 id 排序，含 folder_id / deleted_at）。"""
     return [tuple(row) for row in session.execute(_SNAPSHOT_SQL)]
 
 
-def _ids_of(body: list[dict]) -> list[int]:
-    return [item["id"] for item in body]
+def _page(client: TestClient, **params) -> dict:
+    """请求列表，断言 envelope 形状并返回响应体。"""
+    response = client.get(LIST_URL, params=params)
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == PAGE_FIELDS
+    return body
+
+
+def _items(client: TestClient, **params) -> list[dict]:
+    return _page(client, **params)["items"]
+
+
+def _ids_of(items: list[dict]) -> list[int]:
+    return [item["id"] for item in items]
 
 
 # --------------------------------------------------------------------------
@@ -106,7 +138,7 @@ def _ids_of(body: list[dict]) -> list[int]:
 # --------------------------------------------------------------------------
 
 
-def test_empty_database_returns_200_and_empty_array(api):
+def test_empty_database_returns_200_and_empty_items(api):
     """空库基线下的默认列表。
 
     该用例要求测试环境基线为空库，因此先显式断言基线。
@@ -121,13 +153,16 @@ def test_empty_database_returns_200_and_empty_array(api):
         "不得删除用户数据，请先确认测试环境。"
     )
 
-    response = client.get(LIST_URL)
+    page = _page(client)
 
-    assert response.status_code == 200
-    assert response.json() == []
+    assert page["items"] == []
+    assert page["page"] == 1
+    assert page["page_size"] == 20
+    assert page["total"] == 0
+    assert page["has_next"] is False
 
 
-def test_list_returns_200_with_items_carrying_exactly_six_fields(api):
+def test_list_returns_200_with_items_carrying_the_complete_field_set(api):
     client, session = api
 
     session.add_all(
@@ -146,36 +181,56 @@ def test_list_returns_200_with_items_carrying_exactly_six_fields(api):
     )
     session.flush()
 
-    response = client.get(LIST_URL)
+    page = _page(client)
 
-    assert response.status_code == 200
-    body = response.json()
-    assert isinstance(body, list)
-    assert len(body) == 2
+    assert page["total"] == 2
+    assert page["has_next"] is False
+    assert len(page["items"]) == 2
 
-    for item in body:
+    for item in page["items"]:
         assert set(item) == RESPONSE_FIELDS
+        assert item["type"] == "journal"
+        assert item["folder_id"] is None
+        assert item["deleted_at"] is None
 
     # 每个字段的值都与数据库里的实际记录一致。
     rows = {row[0]: row for row in _snapshot(session)}
-    for item in body:
+    for item in page["items"]:
         row = rows[item["id"]]
         assert item["title"] == row[1]
         assert item["content"] == row[2]
         assert item["journal_date"] == row[3].isoformat()
         assert datetime.fromisoformat(item["created_at"]) == row[4]
         assert datetime.fromisoformat(item["updated_at"]) == row[5]
+        assert item["folder_id"] == row[6]
+        assert item["deleted_at"] == row[7]
 
 
-def test_title_null_is_returned_as_null(api):
+def test_title_null_falls_back_to_the_date_as_display_title(api):
     client, session = api
 
     session.add(_make_journal(title=None, content="没有标题", journal_date=date(2026, 10, 2)))
     session.flush()
 
-    body = client.get(LIST_URL).json()
+    items = _items(client)
 
-    assert body[0]["title"] is None
+    assert items[0]["title"] is None
+    assert items[0]["display_title"] == "2026-10-02"
+
+
+def test_manual_title_is_shown_verbatim_as_display_title(api):
+    client, session = api
+
+    session.add(
+        _make_journal(title="  手工标题  ", content="正文", journal_date=date(2026, 10, 2))
+    )
+    session.flush()
+
+    items = _items(client)
+
+    assert items[0]["title"] == "  手工标题  "
+    # 手工标题不 trim、不加编号
+    assert items[0]["display_title"] == "  手工标题  "
 
 
 # --------------------------------------------------------------------------
@@ -205,7 +260,7 @@ def test_list_is_ordered_by_journal_date_desc(api):
     session.add_all([older_day, newer_day])
     session.flush()
 
-    body = client.get(LIST_URL).json()
+    body = _items(client)
 
     mine = [item for item in body if item["id"] in {newer_day.id, older_day.id}]
     assert _ids_of(mine) == [newer_day.id, older_day.id]
@@ -231,7 +286,7 @@ def test_list_orders_same_day_by_created_at_desc(api):
     session.flush()
     mine_ids = {early.id, middle.id, late.id}  # flush 之后 id 才生成
 
-    body = client.get(LIST_URL).json()
+    body = _items(client)
 
     mine = [item for item in body if item["id"] in mine_ids]
     assert _ids_of(mine) == [late.id, middle.id, early.id]
@@ -263,13 +318,13 @@ def test_filter_returns_only_the_requested_day(api):
     session.add_all([before_day, on_day_a, on_day_b, after_day])
     session.flush()
 
-    response = client.get(LIST_URL, params={"journal_date": "2026-10-02"})
-
-    assert response.status_code == 200
-    body = response.json()
+    page = _page(client, journal_date="2026-10-02")
+    body = page["items"]
 
     # 返回的所有记录都属于该日期（相邻日期被排除）
     assert {item["journal_date"] for item in body} == {"2026-10-02"}
+    # total 与筛选一致
+    assert page["total"] == 2
 
     returned = set(_ids_of(body))
     assert {on_day_a.id, on_day_b.id} <= returned
@@ -299,14 +354,14 @@ def test_filter_keeps_created_at_desc_within_the_day(api):
     session.flush()
     mine_ids = {first.id, second.id, third.id}  # flush 之后 id 才生成
 
-    body = client.get(LIST_URL, params={"journal_date": "2026-10-02"}).json()
+    body = _items(client, journal_date="2026-10-02")
 
     mine = [item for item in body if item["id"] in mine_ids]
     assert _ids_of(mine) == [third.id, second.id, first.id]
     assert other_day.id not in _ids_of(body)
 
 
-def test_filter_without_match_returns_200_and_empty_array(api):
+def test_filter_without_match_returns_200_and_empty_items(api):
     client, session = api
 
     session.add(
@@ -315,10 +370,11 @@ def test_filter_without_match_returns_200_and_empty_array(api):
     session.flush()
 
     # 1999-01-01 不在测试数据中，基线里也不存在该日期的记录。
-    response = client.get(LIST_URL, params={"journal_date": "1999-01-01"})
+    page = _page(client, journal_date="1999-01-01")
 
-    assert response.status_code == 200
-    assert response.json() == []
+    assert page["items"] == []
+    assert page["total"] == 0
+    assert page["has_next"] is False
 
 
 # --------------------------------------------------------------------------
@@ -371,7 +427,7 @@ def test_datetime_like_query_value_is_truncated_to_date_by_builtin_parser(api):
     response = client.get(LIST_URL, params={"journal_date": "2026-10-02T00:00:00"})
 
     assert response.status_code == 200
-    assert {item["journal_date"] for item in response.json()} == {"2026-10-02"}
+    assert {item["journal_date"] for item in response.json()["items"]} == {"2026-10-02"}
 
 
 # --------------------------------------------------------------------------
@@ -380,7 +436,7 @@ def test_datetime_like_query_value_is_truncated_to_date_by_builtin_parser(api):
 
 
 def test_get_does_not_modify_any_row(api):
-    """发出列表与筛选请求后，六字段的实际列值与请求前完全一致。"""
+    """发出列表与筛选请求后，实际列值与请求前完全一致。"""
     client, session = api
 
     session.add_all(
@@ -404,9 +460,10 @@ def test_get_does_not_modify_any_row(api):
     before = _snapshot(session)
     assert len(before) >= 3
 
-    assert client.get(LIST_URL).status_code == 200
-    assert client.get(LIST_URL, params={"journal_date": "2026-10-02"}).status_code == 200
-    assert client.get(LIST_URL, params={"journal_date": "1999-01-01"}).status_code == 200
+    assert _page(client)["total"] >= 3
+    assert _page(client, journal_date="2026-10-02")["total"] >= 2
+    assert _page(client, journal_date="1999-01-01")["total"] == 0
+    assert _page(client, page=2)["page"] == 2
 
     after = _snapshot(session)
 

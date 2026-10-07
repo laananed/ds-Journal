@@ -1,7 +1,8 @@
 # SeekJournal — Stage 2 API Contract
 
 > 2026-10-07。产品依据 `stage2.md`，架构依据 `stage2-architecture.md`。
-> 这是 Lead 为已确认功能制定的开发契约，尚未实现。P1/P2/P3 分支必须确认并同步文档后才实现；其余契约可独立开发。
+> 这是 Lead 为已确认功能制定的开发契约，尚未实现。P1/P2 分支必须确认并同步文档后才实现；其余契约可独立开发。
+> **P3 已于 2026-10-07 确认（见 `stage2.md` §15）：Journal 采用动态编号，S2-T02 按此实现。**
 > Stage 1.5 仍使用原六字段与数组响应，只修请求验证；Stage 2 明确改变列表响应、添加只读字段和软删除语义，前后端必须配套更新。
 
 ## 1. 通用约定
@@ -39,7 +40,11 @@ Base path `/api`。JSON；日期 `YYYY-MM-DD`，时间为带时区 ISO 8601。
 Journal 另有 `journal_date: date`；Inbox 另有 `inbox_date: date, is_daily: boolean`；Insight 没有所属日期。
 Inbox 日期/Daily 身份在创建时确定，不在 PATCH 可改字段中。Folder 关系变化属于文件修改。
 Stage 1.5 的编号仍不进 API；Stage 2 添加的是 **只读 display_title**，不是将生成编号写入 title。
-生成编号的删除/改名稳定性依 `stage2.md` P3，不能由 API 开发者决定。
+生成编号按 `stage2.md` §15 的 **P3 已确认动态编号**执行：
+在该日期**完整现存集合**（含回收箱中仍存在的记录）上按 `created_at ASC, id ASC` 计算序号，
+再叠加有效状态、日期/Folder 筛选、排序与分页；
+**新增、软删除、恢复不改变其他现存记录的编号**，永久删除/改日期/改标题可能导致重新编号。
+计算必须在数据库完成，不能先过滤后 rank，也不能按当前页位置编号。
 
 通用列表响应（包括按日期、Folder、Search、Trash、链接候选）：
 
@@ -73,6 +78,19 @@ total 是所有筛选条件生效后的总数；has_next 根据全局总数计�
 journal_date 筛选也分页。新建时“当天已有记录”使用 total 展示真实数量，可翻页，不用 items.length 冒充总数。
 无标题 display_title 在该日期完整编号空间计算后再筛选、分页；不能用页内位置编号。
 重复 DELETE 已软删除对象返回 404，不改原 deleted_at。
+
+**S2-T02 实现要点（2026-10-07）**：
+
+- 完整响应字段：`type="journal"`、`id`、`title`、`display_title`、`content`、`journal_date`、`folder_id`、`created_at`、`updated_at`、`deleted_at`（普通响应恒为 `null`）；
+- `title` / `content` 保留数据库原始值；`display_title` 是读取投影，不写入 `title`，不存新字段；响应**不套用**请求的 80/50,000 与空白限制，旧超长/空白记录仍可读；
+- 列表 `page` 固定 `page_size=20`，无 `page_size` / 排序参数；`page` 整数且 ≥1，非法返回标准 422；
+  `total` 为「有效状态 + 全部筛选条件」生效后的总数，`has_next = page*20 < total`；超范围保留请求页码并返回 200 + 空 items；
+- 统一编号在数据库用一个窗口函数（`partition by journal_date`，`order by created_at, id`）在**含已软删除记录**的集合上计算，再 JOIN 到列表/详情查询；不为每条记录单独查库；
+- `folder_id` 在 `POST` 可省略/`null`，在 `PATCH` 中 `null` 表示移出 Folder；指定不存在的 Folder 返回 404，且**不留下其他字段的半截更新**；
+- `DELETE` 软删除：在**同一个 UPDATE** 中写入 `deleted_at` 并显式保留原 `updated_at`（`SET updated_at = journals.updated_at`），避免 `onupdate` 刷新；行保留，204 空体；
+- 普通入口（列表、日期/Folder 筛选、详情、合法 PATCH 含 `{}`、DELETE）一律排除 `deleted_at` 非空的记录；
+  检查在 SQL 的 `WHERE` 里完成，不依赖（可能已缓存软删对象的）Session identity map。
+  恢复 / 永久删除 / Trash 属 S2-T09，本任务不实现。
 
 ## 4. Inbox 与 Daily
 

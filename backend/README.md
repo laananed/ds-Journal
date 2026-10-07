@@ -3,7 +3,9 @@
 SeekJournal 后端（Stage 1 / Task 8.1–8.4 列表、创建、详情 / 修改 / 删除与整体验收的后端产物；
 Stage 1.5 / S1.5-T2 增加请求输入校验：`title` ≤80 码点、`content` 非空白且 ≤50,000 码点；
 Stage 2 / S2-T01 建立数据基础：新增 `folders` / `inboxes` / `insights` 三张表，
-`journals` 增加可空 `folder_id` 与 `deleted_at` 两列，全部由 Alembic Migration 建立）。
+`journals` 增加可空 `folder_id` 与 `deleted_at` 两列，全部由 Alembic Migration 建立；
+Stage 2 / S2-T02 把 Journal 读取 / 修改 / 删除升级为分页 envelope、
+统一显示标题投影与**软删除**，全部响应扩展为完整 Journal，**未新增 Migration**）。
 
 当前包含：
 
@@ -14,19 +16,25 @@ Stage 2 / S2-T01 建立数据基础：新增 `folders` / `inboxes` / `insights` 
 - Journal SQLAlchemy Model（Stage 2 / S2-T01 增加可空 `folder_id`、`deleted_at`）；
 - Folder / Inbox / Insight SQLAlchemy Model（Stage 2 / S2-T01，只有表结构，尚无 API）；
 - Alembic 迁移：初始 `journals` 表，以及 S2-T01 的 M1（folders + journals 两列）与 M2（inboxes / insights）；
-- Journal 的 Pydantic Schema（`JournalCreate` / `JournalUpdate` / `JournalResponse`）；
+- Journal 的 Pydantic Schema（`JournalCreate` / `JournalUpdate` / `JournalResponse` / `JournalPage`）；
+  响应为完整十字段（`type` / `id` / `title` / `display_title` / `content` / `journal_date` /
+  `folder_id` / `created_at` / `updated_at` / `deleted_at`），Stage 2 / S2-T02）；
 - `POST /api/journals` 创建链路，打通
   HTTP → Pydantic → Router → Service → SQLAlchemy → psycopg → PostgreSQL；
-- `GET /api/journals` 列表，以及可选的 `journal_date` 精确日期筛选；
-- `GET /api/journals/{id}` 单篇详情（不存在返回 `404`）；
-- `PATCH /api/journals/{id}` 部分更新（记录不存在返回 `404`）；
-- `DELETE /api/journals/{id}` 硬删除（成功返回 `204` 与空响应体，不存在返回 `404`）；
+- `GET /api/journals` 分页列表（固定 20 条/页，可选 `journal_date` / `folder_id` / `page`
+  精确筛选，返回 `items` / `page` / `page_size` / `total` / `has_next` envelope）；
+- `GET /api/journals/{id}` 单篇详情（不存在或已软删除返回 `404`）；
+- `PATCH /api/journals/{id}` 部分更新（记录不存在或已软删除返回 `404`；
+  指定不存在的 `folder_id` 返回 `404` 且不留下半截更新）；
+- `DELETE /api/journals/{id}` **软删除**（成功返回 `204` 与空响应体；
+  置 `deleted_at`、保留数据库行与 `updated_at`；不存在或已软删除返回 `404`）；
 - 本地开发用的最小 CORS（只允许 `127.0.0.1:5173` 与 `localhost:5173` 的
   `GET` / `POST` / `PATCH` / `DELETE`，并允许 JSON 请求体所需的 `Content-Type` 请求头）；
-- 七套 pytest 测试：Schema 测试（创建 / 响应）、`JournalUpdate` Schema 测试
+- 八套 pytest 测试：Schema 测试（创建 / 响应）、`JournalUpdate` Schema 测试
   （两者只用内存数据）、创建 API 测试、列表 / 筛选 API 测试、
-  详情 API 测试、修改（PATCH）API 测试、删除（DELETE）API 测试
-  （后五套使用 TestClient + 真实 PostgreSQL）；
+  详情 API 测试、修改（PATCH）API 测试、删除（DELETE）API 测试、
+  分页 / 编号 / 软删除 API 测试（`test_journal_pagination_api.py`）
+  （后六套使用 TestClient + 真实 PostgreSQL）；
 - 一套 CORS 测试（`test_cors.py`，只读 `GET /api/health` 与 `OPTIONS`，不写数据库）；
 - 一个测试库隔离守卫（`test_test_database.py`，断言测试进程连的是 `seekjournal_test`）；
 - 一套迁移验证测试（`test_stage2_migrations.py`，在一次性隔离验证库上验证 M1 / M2 逐行保留旧 Journal）；
@@ -52,8 +60,9 @@ backend/
 │   ├── journal/
 │   │   ├── __init__.py
 │   │   ├── models.py           # Journal Model（含 folder_id / deleted_at）
-│   │   ├── schemas.py          # JournalCreate / JournalUpdate / JournalResponse
-│   │   ├── service.py          # create_journal（事务边界）/ list_journals / get_journal / update_journal / delete_journal
+│   │   ├── schemas.py          # JournalCreate / JournalUpdate / JournalResponse / JournalPage
+│   │   ├── service.py          # create / list（分页）/ get / update / delete（软删除）
+│   │   ├── titles.py           # display_title 投影与窗口函数编号（S2-T02）
 │   │   └── router.py           # POST / GET /api/journals、GET / PATCH / DELETE /api/journals/{id}
 │   ├── folder/
 │   │   ├── __init__.py
@@ -72,7 +81,8 @@ backend/
 │   ├── test_journal_read_api.py   # Task 5.1 的列表 / 筛选测试（真实 PostgreSQL）
 │   ├── test_journal_detail_api.py # Task 5.2 的详情测试（真实 PostgreSQL）
 │   ├── test_journal_update_api.py # Task 6.2 的修改 API 测试（真实 PostgreSQL）
-│   ├── test_journal_delete_api.py # Task 7.1 / 7.2 的删除 API 测试（真实 PostgreSQL）
+│   ├── test_journal_delete_api.py # Task 7.1 / 7.2 的删除 API 测试（软删除，真实 PostgreSQL）
+│   ├── test_journal_pagination_api.py # S2-T02 的分页 / 编号 / 软删除测试（真实 PostgreSQL）
 │   ├── test_stage2_migrations.py  # S2-T01 的 M1 / M2 迁移与旧数据保留验证（一次性隔离库）
 │   ├── test_cors.py            # 最小 CORS 测试（只读 health / 四种方法预检，不写数据库）
 │   └── test_test_database.py   # 隔离守卫：断言测试进程连的是 seekjournal_test（不建连接）
@@ -281,9 +291,12 @@ Stage 1 / Task 4.1 的 Pydantic Schema 测试在 `tests/test_journal_schemas.py`
   `title` 超过 80 码点、`content` 为空白或超过 50,000 码点被拒绝（Stage 1.5 / T2）；
 - 额外字段策略：`id` / `created_at` / `updated_at` 等未知字段被忽略，
   不会出现在 `model_dump()` 中；
-- `JournalResponse`：恰好六个字段、要求六字段齐全、`title` 可为 `null`；
+- `JournalResponse`：恰好十个字段（`type` / `id` / `title` / `display_title` / `content` /
+  `journal_date` / `folder_id` / `created_at` / `updated_at` / `deleted_at`），要求齐全、
+  `title` / `folder_id` / `deleted_at` 可为 `null`（Stage 2 / S2-T02）；
 - JSON 序列化：`journal_date` 表达为 `YYYY-MM-DD`，时间可解析回带时区原值；
 - 未持久化 `Journal` 对象经 `model_validate()` 转换为 `JournalResponse`，字段值一致。
+- `JournalPage`：`items` / `page` / `page_size` / `total` / `has_next` 五个字段。
 
 ## 运行 JournalUpdate Schema 测试
 
@@ -368,13 +381,17 @@ HTTP → Pydantic → Router → Service → SQLAlchemy → psycopg → PostgreS
 
 覆盖：
 
-- 正常请求返回 `201`，响应包含六个字段；
+- 正常请求返回 `201`，响应包含完整十字段（`type` / `id` / `title` / `display_title` /
+  `content` / `journal_date` / `folder_id` / `created_at` / `updated_at` / `deleted_at`）；
 - 响应与事务内实际数据库记录逐字段一致；
 - `title` 省略与显式 `null` 都能创建，数据库不写入默认标题；
+- `folder_id` 省略 / `null` 表示不属于任何 Folder；指定不存在的 Folder 返回 `404`
+  且不产生任何记录（`folder_id` 类型非法则返回 `422`）；
 - 同一天创建两篇，`id` 不同；
 - 缺必填项 / 必填为 `null` / 非法日历日期（2026-02-30、无效闰日）/ 无法解析的字符串
   返回 `422`，且不产生任何记录；
-- 客户端提交的 `id` / `created_at` / `updated_at` 不会控制生成结果；
+- 客户端提交的 `id` / `created_at` / `updated_at` / `folder_id` / `display_title` /
+  `deleted_at` 不会控制生成结果（系统字段仍按 `extra="ignore"` 被忽略）；
 - 创建时间带时区；
 - 写入失败（受控故障）触发 `rollback`：HTTP 返回 `500`，数据库无半截记录，
   Session 仍可继续使用；
@@ -423,18 +440,22 @@ Stage 1 / Task 5.1 的读取 API 测试在 `tests/test_journal_read_api.py`。
 
 覆盖：
 
-- `GET /api/journals` 返回 `200` 与完整 Journal 数组，
-  每个元素恰好六个字段，且各字段值与数据库里的实际记录一致；
-- 空库返回 `[]`；无匹配日期返回 `200` 与 `[]`；
-- 默认排序 `journal_date DESC`，同一天内 `created_at DESC`；
+- `GET /api/journals` 返回 `200` 与**分页 envelope**
+  （`items` / `page` / `page_size` / `total` / `has_next`，Stage 2 / S2-T02），
+  每个 `items` 元素是完整十字段且各字段值与数据库里的实际记录一致；
+- 空库返回 `200` 与空 `items`（`[]`）；无匹配日期同样返回空 `items`；
+- 默认排序 `journal_date DESC`，同一天内 `created_at DESC`，再以 `id DESC` 打破并列；
   测试手动指定时间并**乱序插入**，证明确实由数据库查询排序，
   而不是插入顺序或 Python 侧排序；
 - `?journal_date=YYYY-MM-DD` 精确匹配，不含相邻日期；同日多篇全部返回；
 - 非法日历日期（2026-02-30、无效闰日 2026-02-29）、格式错误与无法解析的字符串
-  返回标准 `422`；
-- `title` 为 `null` 时返回 `null`；
-- 发出列表与筛选请求后，六个字段的实际列值与请求前完全一致
-  （`GET` 不修改任何记录）。
+  返回标准 `422`；非法 `page`（`0` / 负数 / 非整数）同样返回标准 `422`；
+- `title` 为 `null` 时返回 `null`，`display_title` 回退为其 `journal_date`；
+- 发出列表与筛选请求后，实际列值与请求前完全一致（`GET` 不修改任何记录）。
+
+分页本身（固定 20 条/页、`total` / `has_next`、0/1/20/21/41 条边界、跨页编号、
+`folder_id` 筛选、软删除隐藏等）由 `tests/test_journal_pagination_api.py` 单独覆盖，
+见下文「运行分页 / 编号 / 软删除 API 测试」。
 
 共享 fixture `api` 位于 `tests/conftest.py`，创建测试与读取测试共用它：
 它返回 `(TestClient, 测试 Session)`，并负责事务隔离与结束时的无残留检查。
@@ -454,13 +475,17 @@ Stage 1 / Task 5.2 的单篇详情测试在 `tests/test_journal_detail_api.py`�
 
 覆盖：
 
-- 已存在的 `id` 返回 `200`，响应恰好六个字段，且与数据库实际列值逐字段一致；
+- 已存在的 `id` 返回 `200`，响应是完整十字段，且与数据库实际列值逐字段一致；
 - `title` 为 `null` 时原样返回 `null`；时间字段带时区；
+  `deleted_at` 在普通详情响应里恒为 `null`；
+- `display_title` 与列表、`POST` / `PATCH` 返回值使用同一套投影：
+  手工标题原样显示，无标题（`null` 或 `""`）显示其 `journal_date` 与同日编号；
 - 同一天多篇时按 `id` 精确命中，不会取回同日的另一篇（乱序插入以证明靠主键而非插入顺序）；
 - 不存在的合法整数 `id` 返回 `404`（`detail` 为标准字符串，不自定义错误包装）；
+  **已软删除的 `id` 同样返回 `404`**；
 - `0` 与负数同样返回 `404` —— 契约没有规定 `gt=0`，因此它们属于「合法整数但不存在」；
 - 非整数路径参数（`abc`、`12abc`、`1.5`、`null`、`2026-10-02`）返回标准 `422`；
-- 成功、`404`、`422` 三种请求之后，六个字段的实际列值与记录数量都不变
+- 成功、`404`、`422` 三种请求之后，实际列值与记录数量都不变
   （详情接口不修改任何记录，也不会顺手创建东西）；
 - `POST` 创建之后用详情接口读回同一条记录，两份响应完全一致；
 - 详情接口与列表接口对同一条记录给出相同的字段值。
@@ -506,10 +531,11 @@ Stage 1 / Task 6.2 的部分更新测试在 `tests/test_journal_update_api.py`�
 
 ### 覆盖范围
 
-- 分别修改 `title` / `content` / `journal_date`，以及多字段同时修改；
-- 响应恰好六字段，且与数据库实际列值逐字段一致；
+- 分别修改 `title` / `content` / `journal_date` / `folder_id`，以及多字段同时修改；
+- 响应是完整十字段，且与数据库实际列值逐字段一致；
 - 未提交字段保持不变；同日另一篇记录完全不受影响；
-- 清空标题后不生成日期标题、不写同日编号；
+- 清空标题后不生成日期标题、不写同日编号（`display_title` 回退为日期）；
+- `folder_id` 显式 `null` 表示移出 Folder；指定不存在的 Folder 返回 `404` 且字段全部不变；
 - `id` 与 `created_at` 不变；真的发生字段修改后 `updated_at` 更新
   （测试使用合成的、明显更早的时间，不需要 sleep）；
 - 空更新返回当前记录且整表快照不变；只提交系统字段 / 未知字段按空更新处理；
@@ -536,8 +562,9 @@ Stage 1 / Task 6.2 的部分更新测试在 `tests/test_journal_update_api.py`�
 
 ## 运行删除（DELETE）API 测试
 
-Stage 1 / Task 7.1 的硬删除测试与 Task 7.2 的失败回滚 / 影响范围 / 查询联动测试
-都在 `tests/test_journal_delete_api.py`。
+Stage 1 / Task 7.1 的删除测试与 Task 7.2 的失败回滚 / 影响范围 / 查询联动测试
+都在 `tests/test_journal_delete_api.py`；Stage 2 / S2-T02 起语义由**硬删除**改为**软删除**
+（进入回收箱，见 `docs/stage2-api.md` §3）。
 在 `backend/` 目录下执行：
 
 ```powershell
@@ -546,60 +573,67 @@ Stage 1 / Task 7.1 的硬删除测试与 Task 7.2 的失败回滚 / 影响范围
 
 同样需要一个正在运行的本地 PostgreSQL，并复用同一个 `api` fixture。
 
-### 行为
+### 行为（Stage 2 软删除）
 
-- 记录存在：硬删除，成功 `commit`，返回 `204 No Content` 与**空响应体**
+- 记录存在：软删除，成功 `commit`，返回 `204 No Content` 与**空响应体**
   （不是 `null`、`{}`、Journal 对象或成功消息）；
-- 记录不存在：返回 `404`；
-- 非整数路径参数返回标准 `422`；
-- Stage 1 使用硬删除：记录直接从 PostgreSQL 移除，不做软删除、不写 `deleted_at`。
+- **数据库行保留**，只把 `deleted_at` 置为当前时间；
+- 原六字段、`folder_id` 与 `updated_at` **逐字段不变**——
+  `updated_at` 的 `onupdate` 必须在同一个 `UPDATE` 里被显式抵消，
+  否则「删除」会被误记成一次内容修改；
+- 记录不存在 / 已软删除：返回 `404`；
+- 非整数路径参数返回标准 `422`。
 
 失败的删除（`delete` / `commit` 报错）在 Service 内 `rollback` 后继续抛出异常，
 不吞异常、不返回伪成功，也不把写入失败改写成 `404`。
 `404` 与 `422` 都发生在写入之前，不会改变任何数据。
+恢复、永久删除与回收箱列表属于 S2-T09，本任务不覆盖。
 
 ### 覆盖范围
 
 - 删除已存在的记录返回 `204`，响应体为 `b""`；
-- 用**原生 SQL** 确认该 `id` 在本次测试事务里已经不存在（不依赖 Session identity map）；
+- 用**原生 SQL** 确认该 `id` 在本次测试事务里**仍然存在**，且 `deleted_at` 由 `NULL` 变为非空；
 - 删除只影响目标行：其余记录逐字段原样保留；
-- 同日其他记录（含 `title=null` 的一篇）与其他日期记录的六个字段完全不变，总行数只少一条；
-- 同一记录删两次，第二次返回 `404`；
+- 同日其他记录（含 `title=null` 的一篇）与其他日期记录的完整列完全不变，物理行数不变；
+- `updated_at` 与删除前**精确相等**（不与 `deleted_at` 一起被刷新）；
+- 同一记录删两次：第二次返回 `404`，且原来的 `deleted_at` 不被改写；
 - 不存在的合法整数 `id` 返回 `404`，且不会顺手创建任何东西；
 - `0` 与负数同样返回 `404` —— 契约没有规定 `gt=0`；
 - 非整数路径参数（`abc`、`12abc`、`1.5`、`null`、`true`、`2026-10-02`）返回标准 `422`；
-- `404` 与 `422` 前后整表六字段快照与记录数量都不变；
-- 独立连接看不到任何变化：删除只存在于被回滚的外层事务里。
+- `404` 与 `422` 前后整表完整列快照与记录数量都不变；
+- 独立连接看不到任何变化：软删除只存在于被回滚的外层事务里。
 
 ### 失败回滚（Task 7.2）
 
-失败路径不使用「commit 前直接抛异常」的假故障，而是**先真实 `flush()` 出 DELETE**，
-再抛出受控异常，因此能证明已经发到 PostgreSQL 的删除被 `rollback` 撤销：
+失败路径不使用「commit 前直接抛异常」的假故障，而是**先真实 `flush()` 出 `UPDATE`**，
+再抛出受控异常，因此能证明已经发到 PostgreSQL 的软删除被 `rollback` 撤销：
 
 - **Service 层**：目标行先用 `POST` 建好（已 RELEASE SAVEPOINT，留在外层事务内），
   再替换 Session 的 `commit` 为「`flush()` + 抛异常」；`delete_journal` 继续抛异常，
-  `rollback` 后目标行恢复原值、整表快照回到失败前，`SELECT 1` 仍可执行；
+  `rollback` 后目标行恢复原值（`deleted_at` 回到 `NULL`）、整表快照回到失败前，
+  `SELECT 1` 仍可执行；
 - **恢复后可用**：撤掉故障注入后，对同一 Session 再删一次能成功返回 `True`；
 - **HTTP 层**：同样注入故障，`DELETE` 返回 `500`（不是 `204` 也不是 `404`），
-  原生 SQL 确认目标记录仍在、Session 仍可查询。
+  原生 SQL 确认目标记录仍有效、Session 仍可查询。
 
 故障注入全部通过 `pytest` 的 `monkeypatch` 局限于单个测试，产品代码不做任何改动。
 
-### 删除后的查询联动（Task 7.2）
+### 删除后的查询联动
 
 在同一个回滚事务里验证：
 
 - `DELETE` 目标返回 `204` 且响应体为空；
-- `GET /api/journals/{id}` 对已删记录返回 `404`；
+- `GET /api/journals/{id}` 对已删记录返回 `404`，`PATCH` 同样返回 `404` 且不写任何字段；
 - `GET /api/journals` 列表不再包含目标 `id`；
 - `GET /api/journals?journal_date=...` 对应日期筛选不再包含目标 `id`；
 - 同日其他记录仍可经详情读取、仍出现在该日期的筛选里；
 - 另一日期的记录仍可正常读取、出现在自己的日期筛选里；
-- 对已删目标二次删除返回 `404`，其余记录快照不变。
+- 对已删目标二次删除返回 `404`，其余记录快照不变；
+- 已删除的记录行仍留在数据库里，只是被标记为已删除。
 
 ### 删除目标只用测试自己创建的数据
 
-删除是一类不可逆操作，因此本文件的删除目标**一律是本测试自己创建的合成记录**，
+删除是一类不易恢复的操作，因此本文件的删除目标**一律是本测试自己创建的合成记录**，
 不存在「删掉既有数据」的路径：
 
 - 数据由 `_seed()`（`session.add` + `flush`）在当前外层事务内创建；
@@ -610,6 +644,38 @@ Stage 1 / Task 7.1 的硬删除测试与 Task 7.2 的失败回滚 / 影响范围
 测试结束由 fixture 回滚外层事务，记录随之恢复，测试库回到运行前的行数；
 `id` 同样会跳号（sequence 不随事务回滚）。
 
+## 运行分页 / 编号 / 软删除 API 测试
+
+Stage 2 / S2-T02 新增的 `tests/test_journal_pagination_api.py` 覆盖新读取契约。
+在 `backend/` 目录下执行：
+
+```powershell
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_journal_pagination_api.py
+```
+
+它同样使用 TestClient + 真实 PostgreSQL，并复用共享的 `api` fixture。
+
+**这批测试按「非空库」设计**：分页总数断言一律带 `journal_date` / `folder_id` 筛选，
+只数本用例自己造的数据，因此测试库之前是否有记录都能通过；
+每个用例还使用与其它测试文件错开的业务日期。
+
+覆盖：
+
+- 边界：0 / 1 / 20 / 21 / 41 条时的 `page` / `page_size` / `total` / `has_next`；
+- 非法页码（`0` / 负数 / 非整数）返回标准 `422`；超出最后页返回 `200` + 空 `items`
+  并**保留请求页码**；
+- `journal_date` 与 `folder_id` 筛选（含 `folder_id` 指向不存在 Folder 时列表为空）；
+- 并列 `created_at` 的稳定排序（第三键 `id DESC`），跨页不重叠、不遗漏；
+- **同日跨页编号**：无标题记录跨两页时编号连续，不按当前页重新计数；
+- 手工标题 / `NULL` / `""` / 纯空白标题混合时的编号规则（纯空白是手工标题，不占号）；
+- 新增较晚记录不改变旧记录编号；软删除仍占原号（编号在含已删除记录的完整集合上计算）；
+- 详情、列表、`POST` 与 `PATCH` 返回值对同一条记录给出**相同的 `display_title`**；
+- 已软删除记录在列表、日期筛选、详情、`PATCH` 与再次 `DELETE` 中全部隐藏（404）；
+- 删除前后的完整列快照，`updated_at` **精确不变**、`deleted_at` 由 `NULL` 变为非空；
+- 重复删除返回 `404` 且不改写原 `deleted_at`；204 响应体为空；
+- 空 `PATCH` / 相同值 `PATCH` 不改变 `updated_at`；Folder 原子更新（`null` 移出、不存在 404）；
+- 写失败 rollback 后 Session 仍可继续使用。
+
 ## 请求输入校验（Stage 1.5 / S1.5-T2）
 
 `POST /api/journals` 与 `PATCH /api/journals/{id}` 对**实际提交**的字段执行同一套规则
@@ -619,6 +685,7 @@ Stage 1 / Task 7.1 的硬删除测试与 Task 7.2 的失败回滚 / 影响范围
 |---|---|
 | `title` | 可省略 / `null` / 空字符串；最多 **80 个 Unicode 码点**；非空标题原样保存（不 `trim`） |
 | `content` | 必须含**至少一个非空白字符**，且原始字符串最多 **50,000 个 Unicode 码点** |
+| `folder_id` | 可省略 / `null` / 正整数（S2-T02）；字符串、小数与 `true` 被拒绝。**是否存在由 Service 查库判断**，不存在返回 `404` |
 
 要点：
 
@@ -631,6 +698,8 @@ Stage 1 / Task 7.1 的硬删除测试与 Task 7.2 的失败回滚 / 影响范围
   发生在 Router / Service 之前，因此**不会产生任何写入**；
 - **PATCH 只校验本次提交的字段**：字段省略时默认值不参与验证，
   因此「旧记录正文超长 / 空白，本次只改标题」依然成功；真的重新提交非法值才会 422。
+- `folder_id` 的**类型**错误由 Schema 返回 422，**指向不存在的 Folder** 由 Service
+  返回 404 —— 两者都不产生任何写入。
 
 ### 为什么 `JournalResponse` 不加这些约束
 
@@ -677,17 +746,18 @@ Schema 测试仍只使用内存，不建立数据库连接。
 `tests/test_test_database.py` 是一道隔离守卫：它断言测试进程内的 Engine
 指向 `seekjournal_test`（而不是开发库），本身不建立数据库连接。
 
-当前用例数（`pytest --collect-only`，合计 **314**；Stage 1.5 / T2 增加了输入校验与旧数据用例，Stage 2 / S2-T01 增加了迁移验证用例）：
+当前用例数（`pytest --collect-only`，合计 **385**；Stage 1.5 / T2 增加了输入校验与旧数据用例，Stage 2 / S2-T01 增加了迁移验证用例，S2-T02 增加了分页 / 编号 / 软删除用例）：
 
 | 文件 | 用例数 | 是否连库 |
 |---|---|---|
-| `test_journal_schemas.py` | 62 | 否（纯内存） |
-| `test_journal_update_schemas.py` | 63 | 否（纯内存） |
-| `test_journal_api.py` | 31 | 是（测试库） |
-| `test_journal_read_api.py` | 18 | 是（测试库） |
-| `test_journal_detail_api.py` | 21 | 是（测试库） |
+| `test_journal_schemas.py` | 78 | 否（纯内存） |
+| `test_journal_update_schemas.py` | 70 | 否（纯内存） |
+| `test_journal_api.py` | 36 | 是（测试库） |
+| `test_journal_read_api.py` | 19 | 是（测试库） |
+| `test_journal_detail_api.py` | 22 | 是（测试库） |
 | `test_journal_update_api.py` | 67 | 是（测试库） |
-| `test_journal_delete_api.py` | 25 | 是（测试库） |
+| `test_journal_delete_api.py` | 27 | 是（测试库） |
+| `test_journal_pagination_api.py` | 39 | 是（测试库） |
 | `test_stage2_migrations.py` | 9 | 是（**一次性隔离迁移验证库**，不碰测试库与开发库） |
 | `test_cors.py` | 17 | 否（只读 health / 预检） |
 | `test_test_database.py` | 1 | 否（只读 Engine 元数据） |
@@ -697,13 +767,16 @@ Schema 测试仍只使用内存，不建立数据库连接。
 `tests/test_journal_read_api.py` 里有三个用例要求**运行前 `journals` 表为空**
 （它们自己带断言与提示信息）：
 
-- `test_empty_database_returns_200_and_empty_array`
-- `test_list_returns_200_with_items_carrying_exactly_six_fields`
-- `test_title_null_is_returned_as_null`
+- `test_empty_database_returns_200_and_empty_items`
+- `test_list_returns_200_with_items_carrying_the_complete_field_set`
+- `test_title_null_falls_back_to_the_date_as_display_title`
 
 `seekjournal_test.journals` 表已有记录时，这三个用例会失败。
 **这是前置条件不满足，不是功能缺陷，也不要为了通过测试去删除数据。**
-其余测试都在「外层事务 + savepoint」里运行，不要求空库。
+其余测试都在「外层事务 + savepoint」里运行，不要求空库；
+`tests/test_journal_pagination_api.py` 特意按「非空库」设计——
+它的总数断言一律带 `journal_date` / `folder_id` 筛选，只数自己造的数据，
+因此无论测试库之前是否有记录都能通过。
 
 `tests/test_stage2_migrations.py` 不依赖测试库基线：它在运行时创建自己的
 一次性隔离迁移验证库，跑完即删。但 `folders` / `inboxes` / `insights`
@@ -790,34 +863,37 @@ docker compose --env-file backend/.env stop
 已实现：
 
 - `GET /api/health`（不检查数据库）
-- `POST /api/journals`：创建 Journal，成功返回 `201` 与完整六字段记录
-- `GET /api/journals`：返回 Journal 列表，成功返回 `200` 与完整数组
-- `GET /api/journals?journal_date=YYYY-MM-DD`：按日期精确筛选
-- `GET /api/journals/{id}`：返回单篇 Journal，不存在时返回 `404`
-- `PATCH /api/journals/{id}`：部分更新，成功返回 `200` 与完整六字段记录，
-  不存在时返回 `404`，空更新不产生写入
-- `DELETE /api/journals/{id}`：硬删除，成功返回 `204` 与空响应体，不存在时返回 `404`
+- `POST /api/journals`：创建 Journal，成功返回 `201` 与完整十字段记录
+- `GET /api/journals`：Journal 分页列表，成功返回 `200` 与分页 envelope
+  （固定 20 条/页，可选 `journal_date` / `folder_id` / `page`）
+- `GET /api/journals?journal_date=YYYY-MM-DD` / `?folder_id=N`：精确筛选（同样分页）
+- `GET /api/journals/{id}`：返回单篇 Journal，不存在或已软删除时返回 `404`
+- `PATCH /api/journals/{id}`：部分更新，成功返回 `200` 与完整十字段记录，
+  不存在或已软删除时返回 `404`，指定的 `folder_id` 不存在时返回 `404`，空更新不产生写入
+- `DELETE /api/journals/{id}`：**软删除**（进入回收箱），成功返回 `204` 与空响应体，
+  不存在或已软删除时返回 `404`
 - 请求级 Session 依赖 `get_db()`（`app/database.py`）
-- 创建 Service `create_journal()`：成功 commit、失败 rollback；
-  查询 Service `list_journals()`（排序与筛选都在 SQL 里完成）与
-  `get_journal()`（按主键取单篇，未命中返回 `None`）；
+- 创建 Service `create_journal()`：成功 commit、失败 rollback（含 Folder 存在性校验）；
+  查询 Service `list_journals()`（分页 + 筛选 + 窗口函数编号都在 SQL 里完成）与
+  `get_journal()`（按主键取单篇且排除已删除，未命中返回 `None`）；
   更新 Service `update_journal()`（部分更新、空更新直接返回、未命中返回 `None`、
-  失败 rollback）；
-  删除 Service `delete_journal()`（按主键硬删除、未命中返回 `False`、失败 rollback）
-  （`app/journal/service.py`）
+  Folder 原子校验、失败 rollback）；
+  删除 Service `delete_journal()`（软删除、显式保留 `updated_at`、未命中或已删返回 `False`、
+  失败 rollback）（`app/journal/service.py`）
+- 显示标题投影 `build_display_title()` / `is_untitled()`（`app/journal/titles.py`）
 - Journal Router（`app/journal/router.py`），已在 `app/main.py` 注册
 - 本地 PostgreSQL 开发数据库的 Compose 配置
 - SQLAlchemy 2.x 数据库基础：Engine、Session 工厂、共享 Declarative Base（`app/database.py`）
-- Journal Model：`journals` 表六个字段（`app/journal/models.py`）
-- Alembic 首次迁移，`journals` 表已在本地数据库建立
-- Journal Pydantic Schema：`JournalCreate` / `JournalUpdate` / `JournalResponse`
+- Journal Model：原六字段 + 可空 `folder_id`、`deleted_at`（`app/journal/models.py`）
+- Alembic 迁移：初始 `journals` 表，以及 S2-T01 的 M1 / M2（S2-T02 无新迁移）
+- Journal Pydantic Schema：`JournalCreate` / `JournalUpdate` / `JournalResponse` / `JournalPage`
   （`app/journal/schemas.py`）
-- 七套 pytest 测试：`tests/test_journal_schemas.py`、
+- 八套 pytest 测试：`tests/test_journal_schemas.py`、
   `tests/test_journal_update_schemas.py`（两者只用内存数据）、
   `tests/test_journal_api.py`、`tests/test_journal_read_api.py`、
   `tests/test_journal_detail_api.py`、`tests/test_journal_update_api.py`、
-  `tests/test_journal_delete_api.py`
-  （后五套均为 TestClient + 真实 PostgreSQL），
+  `tests/test_journal_delete_api.py`、`tests/test_journal_pagination_api.py`
+  （后六套均为 TestClient + 真实 PostgreSQL），
   共享 fixture 在 `tests/conftest.py`
 - 测试库隔离守卫 `tests/test_test_database.py`（断言测试进程连的是 `seekjournal_test`）
 - CORS 测试 `tests/test_cors.py`（只读，不写数据库）
@@ -828,14 +904,16 @@ docker compose --env-file backend/.env stop
 
 尚未实现：
 
-- 分页、搜索与排序查询参数；
+- 可配置的 `page_size` 与自定义排序参数；
+- 恢复 / 永久删除 / 回收箱列表（S2-T09）；
+- Folder、Inbox、Insight 的 API（只有表结构与 Model）；
+- 搜索、内部链接解析；
 - 认证。
 
-`journals` 表现在能创建、能列出、能按日期筛选、能按 `id` 取单篇、
-能部分更新，也能硬删除；前端已能通过 `GET` 读取列表并按日期筛选（Task 8.1）、
-通过表单真实创建记录（Task 8.2）、查看详情 / 修改 / 硬删除（Task 8.3）。
-Task 8.3 只改了 `app/main.py` 的 CORS 与 `tests/test_cors.py`，
-没有改动任何业务 Router、Service、Schema、Model 或 Migration。
+`journals` 表现在能创建、能分页列出、能按日期 / Folder 筛选、能按 `id` 取单篇、
+能部分更新，也能软删除。前端（`frontend/`）仍按 Stage 1.5 的**数组契约**读取列表，
+尚未适配分页 envelope —— 前端对接属于 **S2-T03**，本任务不修改前端，
+也不为了兼容而保留第二套旧 API。
 
 ## Stage 1 整体验收（Task 8.4）
 
@@ -856,13 +934,17 @@ Alembic / Compose / 表结构核对，并在**指向测试库**的临时后端�
 ```
 
 > 上面 `232 passed` 是 Stage 1 验收当时的快照。Stage 1.5 / T2 之后变为 **305**，
-> Stage 2 / S2-T01 之后为 **314**；当前准确数量见上文「独立测试数据库与完整回归」里的用例表。
+> Stage 2 / S2-T01 之后为 **314**，S2-T02 之后为 **385**；
+> 当前准确数量见上文「独立测试数据库与完整回归」里的用例表。
 
 ## Stage 2 / S2-T01 — 数据基础与旧 Journal 升级
 
 S2-T01 只做数据结构，**不做任何 API / Service / Router 变更**：
-Stage 1.5 的六个字段、数组列表响应与硬删除行为原样保留。
-`deleted_at` 只是列占位，软删除行为属于 S2-T02。
+Stage 1.5 的六个字段、数组列表响应与硬删除行为在当时原样保留。
+`deleted_at` 当时只是列占位，软删除行为在下一个任务 S2-T02 落地。
+
+> **已被 S2-T02 取代的部分**：列表数组响应、六字段响应与硬删除均已在本轮升级为
+> 分页 envelope、十字段响应与软删除。本节只作为 S2-T01 当时的数据结构与迁移记录保留。
 
 ### 两份新 Migration
 
@@ -939,3 +1021,89 @@ Stage 1.5 的六个字段、数组列表响应与硬删除行为原样保留。
 .\.venv\Scripts\python.exe -B -m alembic upgrade head   # 3a70890ddb10 -> 52c8e94a365c -> a8d98342e603
 .\.venv\Scripts\python.exe -B -m alembic current
 ```
+
+## Stage 2 / S2-T02 — Journal 分页、统一显示标题与软删除
+
+S2-T02 按 `docs/stage2-api.md` 把 Journal 的读取 / 修改 / 删除升级为新契约，
+**没有新增 Migration**（M1 / M2 保持不变，`alembic heads` 仍是 `a8d98342e603`）。
+
+### 完整响应（十字段）
+
+```json
+{
+  "type": "journal",
+  "id": 1,
+  "title": null,
+  "display_title": "2026-10-02",
+  "content": "正文",
+  "journal_date": "2026-10-02",
+  "folder_id": null,
+  "created_at": "...",
+  "updated_at": "...",
+  "deleted_at": null
+}
+```
+
+- `title` / `content` 保留数据库原始值；
+- `display_title` 是**只读读取投影**，不写入 `title`、不新增数据库字段；
+- 普通响应的 `deleted_at` 恒为 `null`（已删除记录不出现在普通入口）；
+- 响应 Schema **不套用**请求的长度 / 非空限制：旧超长标题、超长或空白正文仍可读取。
+
+### 分页 envelope
+
+`GET /api/journals` 返回 `items` / `page` / `page_size`（固定 20）/ `total` / `has_next`：
+
+- 可选 `journal_date`、`folder_id`、`page`（默认 1，`>= 1`，非法返回标准 422）；
+- `total` 是「有效状态 + 全部筛选条件」生效后的总数；`has_next = page * page_size < total`；
+- 无匹配或超出最后页返回 `200` + 空 `items`，并**保留请求页码**；
+- 排序 `journal_date DESC, created_at DESC, id DESC`，由数据库完成；
+- 不提供可配置 `page_size` 或排序参数；筛选、计数、排序、分页全部在 SQL 里，
+  不拉全量到 Python 再切片。
+
+### 统一显示标题（`app/journal/titles.py`）
+
+- 无标题 = `title` 为 `NULL` 或 `""`（纯空白但非空是手工标题）；
+- 非空手工标题原样显示，不 `trim`、不占编号；
+- 无标题记录按 `created_at ASC, id ASC` 分配序号：第一篇显示 `journal_date`，
+  其后 `日期 (2)`、`日期 (3)` ……；
+- 编号在**该日期完整现存集合**上用窗口函数（`row_number() OVER (PARTITION BY journal_date …)`）
+  计算，**包含已软删除但仍存在的记录**，再叠加有效状态与筛选：
+  因此新增较晚记录、软删除、恢复都不会改动其他现存记录的编号；
+- 永久删除、改日期、手工标题转换可能重新编号 —— 这是已确认的产品选择 **P3（动态编号）**；
+- 列表、详情、`POST` / `PATCH` 返回值共用同一套投影，不为每条列表记录单独查库。
+
+### 软删除（`DELETE /api/journals/{id}`）
+
+- 成功返回 `204` 与空响应体；数据库行保留，只把 `deleted_at` 置为当前时间；
+- 原六字段、`folder_id` 与 **`updated_at` 逐字段不变**：
+  Model 的 `onupdate` 会在 UPDATE 时刷新 `updated_at`，
+  因此删除语句在**同一个 UPDATE** 里显式写回原值（`updated_at = journals.updated_at`）抵消它，
+  不是「只赋值 `deleted_at`」；
+- 已删除 / 不存在：`404`；重复删除不重写原 `deleted_at`；
+- 列表、日期 / Folder 筛选、详情、`PATCH`（含 `{}`）与再次 `DELETE` 都不访问已删除目标，
+  判定在 SQL 的 `WHERE deleted_at IS NULL` 里，不依赖 Session identity map；
+- 恢复、永久删除与回收箱列表属于 S2-T09，本任务不实现。
+
+### 命令与结果
+
+```powershell
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_journal_pagination_api.py
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests
+.\.venv\Scripts\python.exe -B -m alembic heads
+```
+
+| 命令 | 实际结果 |
+|---|---|
+| 分页 / 编号 / 软删除测试 | `39 passed` |
+| 全量回归 | `385 passed` |
+| `alembic heads` | `a8d98342e603 (head)`（单 head，**无新 Migration**） |
+
+### 开发库 `seekjournal` 的状态
+
+本任务**不对开发库执行任何写操作或迁移**：只做只读查询与 `alembic` 只读检查。
+实施前后观察到的开发库状态一致：13 行、`journals_id_seq` = 1651、
+六字段 digest 不变、已软删除行数为 0。
+
+> 注：S2-T01 记录里开发库停在 `3a70890ddb10`，而本次实施开始时它**已经在 head**
+> （含 `folders` / `inboxes` / `insights` / `journals` 四张业务表）。
+> 这属于本任务之外的状态变化，本任务没有运行过任何 `alembic upgrade`。

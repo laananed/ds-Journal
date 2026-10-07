@@ -87,15 +87,74 @@ Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5
 1. **Goal**：把 Journal 读取/修改/删除升级为分页、统一标题投影与软删除。
 2. **Scope**：`backend/app/journal/{schemas,service,router}.py`、相关 `backend/tests/test_journal_*.py`、拟新增 `test_journal_pagination_api.py`；必要小型标题投影函数。
 3. **Out of Scope**：Trash 恢复/永删、Inbox API、前端、Search、内容历史。
-4. **前置依赖**：T01；P3 在编号实现前确认最低动态编号契约或修订持久化方案。P1/P2 不阻塞本任务。
+4. **前置依赖**：T01；**P3 已于 2026-10-07 确认为动态编号**（见 `stage2.md` §15），本任务按此实现，不新增编号字段或 Migration。P1/P2 不阻塞本任务。
 5. **主要模块**：Journal 读投影、分页、有效状态筛选、PATCH 与 DELETE。
-6. **DB/Migration**：最低动态编号方案无新 Migration；若 P3 改为永久编号，先修改计划并批准新迁移，禁止临时塞字段。
+6. **DB/Migration**：**P3 已确认为动态编号，本任务无新 Migration**；编号不进入表结构，不塞临时字段。若将来改回永久编号，必须先修改计划并批准新迁移。
 7. **后端行为**：列表 envelope、固定 20 条、日期/Folder 条件；完整日期编号先算再过滤；详情 display_title 一致；普通已删除 GET/PATCH/DELETE 404；软删保持 updated_at。
 8. **前端行为**：本 Task 不改 UI，T03 紧接迁移其 API 类型/调用；中间 Web 不按旧数组契约验收。
 9. **测试要求**：0/1/20/21/41 条、页 0/非法/超范围、total、日期筛选；同日跨两页、跨 Folder 与空标题/手工标题混合、新增不改旧号、软删前后号一致（推荐方案）；onupdate 时间、空/相同 PATCH、旧非法字段未提交、404、204 空体、失败回滚与同日兄弟不受影响。
 10. **人工验收**：测试库 API 展示 21 条翻页与同一 id 在列表/详情同标题；DELETE 后数据库行仍在、deleted_at 有值、原 updated_at 不变，普通详情 404。
 11. **执行步骤**：将数组/硬删的原测试意图转换 → 补分页/编号/时间反例 → 实现 → 指定与全量后端回归 → API 演示。
 12. **Definition of Done**：API 与文档一致、旧测试意图保留、没有客户端页内编号；T03 可直接消费此响应。
+
+### S2-T02 执行记录（2026-10-07）
+
+> 本节是**执行之后**补记的实际结果，供 Review / 验收对照，不是事前计划。
+
+- 分支 `task/s02-t02-journal-api`，起始 HEAD `030bec7`（已含 S2-T01），工作区干净。
+- **P3 同步**：`docs/stage2.md` 把 P3 记为**已确认＝动态编号**，与 P1/P2 一起移出「Pending」表；
+  `stage2-api.md` / `stage2-architecture.md` 删除「P3 未定」措辞并冻结动态编号方案；
+  根 `AGENTS.md`、`agents/*.md` 的当前授权从 T01 更新为 **T02**（Stage 2 仍未整体授权）。
+- 代码：
+  - 新增 `app/journal/titles.py`：`is_untitled()` / `untitled_predicate()` /
+    `build_display_title()` / `numbered_subquery()`。
+    编号用 `row_number() OVER (PARTITION BY journal_date ORDER BY created_at, id)`
+    在**该日期完整现存集合**（**不过滤 `deleted_at`**）上计算，再由调用方 LEFT JOIN。
+  - `schemas.py`：`JournalCreate` / `JournalUpdate` 增加可空 `folder_id`；
+    `JournalResponse` 从六字段扩为十字段（`type` / `id` / `title` / `display_title` /
+    `content` / `journal_date` / `folder_id` / `created_at` / `updated_at` / `deleted_at`），
+    **不套用请求的长度/非空限制**；新增分页 envelope `JournalPage`。
+  - `service.py`：列表改为固定 20 条分页（筛选、`count`、排序、`LIMIT/OFFSET` 全在 SQL，
+    编号用窗口函数一次 JOIN 算出，不拉全量到 Python、不逐条查库）；
+    `folder_id` 写入前校验 Folder 存在（`FolderNotFoundError` → Router 404，且在任何赋值之前）；
+    删除改为**软删除**——单个 `UPDATE` 同时写 `deleted_at` 并显式
+    `SET updated_at = journals.updated_at` 抵消 Model 的 `onupdate`；
+    读取有效状态一律用 SQL 的 `WHERE deleted_at IS NULL`，不用 `Session.get()`（避免 identity map 漏检）。
+  - `router.py`：`GET /api/journals` 增加 `folder_id` 与 `page`（`Query(1, ge=1)`，非法值标准 422）、
+    返回 `JournalPage`；`PATCH` 接 `folder_id`；`DELETE` 改为软删除、仍返回 204 空体。
+  - **Journal Model 与 Alembic Migration 未改动**；`alembic heads` 仍为 `a8d98342e603 (head)`。
+- 测试：
+  - 新增 `tests/test_journal_pagination_api.py`（**39** 例）：0/1/20/21/41 条、非法页码、
+    超范围页、`total` / `has_next`、并列时间稳定排序与跨页无重叠、日期/Folder 筛选、
+    同日跨页编号、手工/NULL/空串/纯空白标题混合、新增不改旧号、软删仍占原号、
+    详情与列表/POST/PATCH 标题一致、已删除记录在所有普通入口隐藏、
+    完整字段快照与 `updated_at` 精确不变、重复删除、204 空体、空/相同值 PATCH、
+    Folder 原子更新 404、写失败 rollback。
+  - 旧测试按「保留原意图」迁移，未删除任何用例：
+    `test_journal_read_api.py` 数组断言 → 分页 envelope（19 例）；
+    `test_journal_detail_api.py` 六字段 → 十字段 + 投影断言（22 例）；
+    `test_journal_delete_api.py` 硬删除 → 软删除（行保留、仅 `deleted_at` 变化、
+    `updated_at` 精确不变、普通入口隐藏、重复删除不改写 `deleted_at`）（27 例）；
+    `test_journal_update_api.py` 六字段 → 十字段、列表断言改 envelope（67 例）；
+    `test_journal_schemas.py` / `test_journal_update_schemas.py` 同步新字段集。
+- 命令与结果：全量 `385 passed`；
+  `tests/test_journal_pagination_api.py` 单独 `39 passed`；
+  `alembic heads` = `a8d98342e603 (head)`，`alembic current` = `a8d98342e603 (head)`，
+  `alembic check` = `No new upgrade operations detected.`
+- API 演示（临时后端绑 `127.0.0.1:8100`，`DATABASE_URL` 指向 `seekjournal_test`，跑完即停）：
+  21 条同日无标题记录 → 第 1 页 20 条（编号 21…2）、第 2 页 1 条（编号 1）、
+  `total=21` / `has_next` 正确、两页编号并集覆盖 1..21 且无重复；
+  `page=9` → 200 + 空 `items` 且保留页码，`page=0` → 422；
+  手工标题 `display_title` 原样、清空标题后回退日期，详情与列表一致；
+  `DELETE` → 204 空体、行仍在、原六字段 + `folder_id` 不变、`updated_at` 精确不变、
+  `deleted_at` 由 `None` 变为带时区时间、详情 404、列表不含、重复删除 404 且不改写 `deleted_at`、
+  被删记录仍占原编号。演示创建的 22 行已按本轮自建 id 清理（含软删除行）。
+- 数据保护：开发库 `seekjournal` 本轮**零写入**——行数 **13**、六字段 digest
+  `5e485912211255e0e01ff2f6343c94a7`、`journals_id_seq` **1651** 均在演示前后一致，
+  且 `deleted_at IS NOT NULL` 的行数为 0。
+  注意：开发库**当前 revision 已是 `a8d98342e603`（head）**，与本任务开始时观察到的一致，
+  不是本任务执行步骤所为（本轮未对开发库执行任何 upgrade）；见「Problems / Unverified」。
+- 结论：**S2-T02 实现与测试环境验证完成，待独立验收**；未进入 T03，未提交。
 
 ## 5. S2-T03 — 导航、卡片、分页和 Journal UI
 
@@ -295,7 +354,8 @@ Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5
 
 上图是推荐串行执行次序；每任务的前置依赖栏是最小依赖，不自动派并行 Agent。
 P1/P2未回复时可继续Journal/T03、Insight及已确定的Folder/Trash通用规则；Inbox受影响分支保留未完成状态，不能冒称T04验收通过。
-P3未回复时可完成Stage1.5新增编号修复与T01；不得擅自选永久编号或最终动态编号来完成T02。
+P3 已于 2026-10-07 确认为**动态编号**：S2-T02 按「新增/软删/恢复不改其他现存记录编号」实现，
+永久删除/改日期/改标题允许重新编号，不新增永久编号字段或 Migration。
 
 Migration当前计划只有T01的M1/M2与T04的M3。先建被引用Folder，再扩Journal，再建新文件表；Daily唯一性待P2再落地。P3选择不同方案必须先修此链。
 每一份Migration先人工Review，再在隔离数据上升级与检查，最后在明确授权的开发库执行；不把autogenerate结果直接视为正确。

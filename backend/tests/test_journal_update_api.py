@@ -56,13 +56,18 @@ from app.journal.schemas import JournalUpdate
 
 LIST_URL = "/api/journals"
 
+# Stage 2 / S2-T02：完整响应从六字段扩展为十字段。
 RESPONSE_FIELDS = {
+    "type",
     "id",
     "title",
+    "display_title",
     "content",
     "journal_date",
+    "folder_id",
     "created_at",
     "updated_at",
+    "deleted_at",
 }
 
 # 只取固定列、按 id 排序的快照 SQL：绕开 identity map，直接读数据库列值。
@@ -159,13 +164,19 @@ def _row_of(session: Session, journal_id: int) -> tuple:
 
 
 def _assert_matches_row(item: dict, row: tuple) -> None:
-    """逐字段比较响应与数据库实际列值。"""
+    """逐字段比较响应与数据库实际列值。
+
+    除六个数据库列外，还检查两个投影字段：
+    `type` 恒为 `"journal"`，普通入口的 `deleted_at` 恒为 `null`。
+    """
     assert item["id"] == row[0]
     assert item["title"] == row[1]
     assert item["content"] == row[2]
     assert item["journal_date"] == row[3].isoformat()
     assert datetime.fromisoformat(item["created_at"]) == row[4]
     assert datetime.fromisoformat(item["updated_at"]) == row[5]
+    assert item["type"] == "journal"
+    assert item["deleted_at"] is None
 
 
 def _seed_via_api(client: TestClient, **payload) -> dict:
@@ -190,9 +201,10 @@ def _patch(client: TestClient, journal_id: object, **payload):
 
 
 def _list_ids(client: TestClient, **params) -> list[int]:
+    """通过 GET /api/journals 拿到 id 列表（分页 envelope）。"""
     response = client.get(LIST_URL, params=params)
     assert response.status_code == 200
-    return [item["id"] for item in response.json()]
+    return [item["id"] for item in response.json()["items"]]
 
 
 # ==========================================================================
@@ -200,7 +212,7 @@ def _list_ids(client: TestClient, **params) -> list[int]:
 # ==========================================================================
 
 
-def test_patch_title_returns_200_with_six_fields(api):
+def test_patch_title_returns_200_with_the_full_response(api):
     client, session = api
 
     journal = _seed(session, _make_journal(content="原始正文", journal_date=DAY))
@@ -213,6 +225,8 @@ def test_patch_title_returns_200_with_six_fields(api):
 
     assert body["id"] == journal.id
     assert body["title"] == "新的标题"
+    # 有手工标题：display_title 就是原 title
+    assert body["display_title"] == "新的标题"
     # 未提交的字段保持原值
     assert body["content"] == "原始正文"
     assert body["journal_date"] == DAY.isoformat()
@@ -361,7 +375,10 @@ def test_patch_does_not_touch_the_sibling_on_the_same_day(api):
 
 
 def test_patch_does_not_create_a_default_title_or_numbering(api):
-    """清空标题后不生成日期标题，也不写同日编号，只是 title 为空。"""
+    """清空标题后不生成日期标题，也不写同日编号，只是 title 为空。
+
+    `display_title` 是读取投影：它回退为业务日期，但数据库里的 `title` 仍是 NULL。
+    """
     client, session = api
 
     journal = _seed(
@@ -375,6 +392,10 @@ def test_patch_does_not_create_a_default_title_or_numbering(api):
     assert body["title"] is None
     assert DAY.isoformat() not in (body["title"] or "")
     assert "(" not in (body["title"] or "")
+    # 数据库里的 title 没有被写入日期或编号
+    assert _row_of(session, journal.id)[1] is None
+    # display_title 只是投影：这篇 created_at 更早，是当天的第 1 篇
+    assert body["display_title"] == DAY.isoformat()
 
 
 # ==========================================================================
@@ -782,7 +803,13 @@ def test_list_reflects_the_new_field_values(api):
 
     _patch(client, journal.id, title="列表里应看到新标题", content="新正文")
 
-    listed = [item for item in client.get(LIST_URL).json() if item["id"] == journal.id]
+    listed = [
+        item
+        for item in client.get(
+            LIST_URL, params={"journal_date": DAY.isoformat()}
+        ).json()["items"]
+        if item["id"] == journal.id
+    ]
     assert len(listed) == 1
     assert listed[0]["title"] == "列表里应看到新标题"
     assert listed[0]["content"] == "新正文"
@@ -839,7 +866,12 @@ def test_legacy_blank_and_oversized_records_are_still_readable(api):
         session, content="旧" * 60_000, journal_date=DAY
     )
 
-    by_id = {item["id"]: item for item in client.get(LIST_URL).json()}
+    by_id = {
+        item["id"]: item
+        for item in client.get(
+            LIST_URL, params={"journal_date": DAY.isoformat()}
+        ).json()["items"]
+    }
     assert by_id[blank.id]["content"] == "   "
     assert by_id[oversized_title.id]["title"] == "旧" * 200
     assert len(by_id[oversized_content.id]["content"]) == 60_000

@@ -33,15 +33,20 @@ from pydantic import ValidationError
 from app.journal.schemas import JournalCreate, JournalResponse, JournalUpdate
 
 DAY = date(2026, 10, 2)
-UPDATE_FIELDS = {"title", "content", "journal_date"}
-CREATE_FIELDS = {"title", "content", "journal_date"}
+# Stage 2 / S2-T02：可更新字段增加 folder_id。
+UPDATE_FIELDS = {"title", "content", "journal_date", "folder_id"}
+CREATE_FIELDS = {"title", "content", "journal_date", "folder_id"}
 RESPONSE_FIELDS = {
+    "type",
     "id",
     "title",
+    "display_title",
     "content",
     "journal_date",
+    "folder_id",
     "created_at",
     "updated_at",
+    "deleted_at",
 }
 SYSTEM_FIELDS = {
     "id": 999,
@@ -64,7 +69,7 @@ def _update(**payload) -> dict:
 # --------------------------------------------------------------------------
 
 
-def test_update_declares_exactly_three_fields():
+def test_update_declares_exactly_the_editable_fields():
     assert set(JournalUpdate.model_fields) == UPDATE_FIELDS
 
 
@@ -92,13 +97,14 @@ def test_schemas_module_does_not_hold_database_objects():
 # --------------------------------------------------------------------------
 
 
-def test_all_three_fields_can_be_omitted():
+def test_all_fields_can_be_omitted():
     update = JournalUpdate()
 
     assert update.model_fields_set == set()
     assert update.title is None
     assert update.content is None
     assert update.journal_date is None
+    assert update.folder_id is None
 
 
 def test_empty_request_produces_empty_update_data():
@@ -125,6 +131,7 @@ def test_multiple_fields_submitted_together():
         title="新的标题",
         content="新的内容",
         journal_date="2026-10-01",
+        folder_id=7,
     )
 
     assert update.model_fields_set == UPDATE_FIELDS
@@ -132,6 +139,7 @@ def test_multiple_fields_submitted_together():
         "title": "新的标题",
         "content": "新的内容",
         "journal_date": date(2026, 10, 1),
+        "folder_id": 7,
     }
 
 
@@ -145,11 +153,13 @@ def test_omitted_fields_are_not_carried_by_exclude_unset():
         "title": None,
         "content": "新的正文",
         "journal_date": None,
+        "folder_id": None,
     }
 
     assert data == {"content": "新的正文"}
     assert "title" not in data
     assert "journal_date" not in data
+    assert "folder_id" not in data
 
 
 # --------------------------------------------------------------------------
@@ -332,13 +342,47 @@ def test_datetime_like_string_keeps_journal_create_boundary():
 
 
 # --------------------------------------------------------------------------
+# folder_id：省略 vs 显式 null（Stage 2 / S2-T02 新增）
+#
+# 显式 null 是有意义的：表示「移出 Folder」，因此不能写成
+# 「非 Optional 注解 + None 默认值」，只能靠 model_fields_set 区分。
+# --------------------------------------------------------------------------
+
+
+def test_folder_id_omitted_and_folder_id_null_are_different():
+    omitted = JournalUpdate()
+    explicit_null = JournalUpdate(folder_id=None)
+
+    assert "folder_id" not in omitted.model_fields_set
+    assert "folder_id" in explicit_null.model_fields_set
+
+    assert omitted.model_dump(exclude_unset=True) == {}
+    assert explicit_null.model_dump(exclude_unset=True) == {"folder_id": None}
+
+
+@pytest.mark.parametrize("folder_id", [None, 1, 42])
+def test_folder_id_accepts_null_and_integers(folder_id):
+    assert _update(folder_id=folder_id) == {"folder_id": folder_id}
+
+
+def test_folder_id_can_be_omitted():
+    assert "folder_id" not in JournalUpdate().model_fields_set
+
+
+# --------------------------------------------------------------------------
 # 类型错误
 # --------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
     ("field", "value"),
-    [("title", 123), ("content", 123), ("journal_date", 123)],
+    [
+        ("title", 123),
+        ("content", 123),
+        ("journal_date", 123),
+        ("folder_id", "abc"),
+        ("folder_id", 1.5),
+    ],
 )
 def test_wrong_type_is_rejected(field, value):
     with pytest.raises(ValidationError):

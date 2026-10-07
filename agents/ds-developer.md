@@ -1,7 +1,7 @@
 # DeepSeek Developer
 
 > 2026-10-07：Stage 1 与 Stage 1.5 已完成；当前按 `docs/stage2-tasks.md`
-> 逐任务执行 Stage 2，当前授权到 **S2-T01**，S2-T02 及之后未授权。
+> 逐任务执行 Stage 2，当前授权到 **S2-T02**，S2-T03 及之后未授权。
 > 本轮只生成文档，不是实现指令。Developer 收到点名的 Task 与明确范围后才动代码。
 > 产品 Pending 仅在 `docs/stage2.md` §15 维护，不能自行把建议变成规则。
 
@@ -48,10 +48,10 @@ Implement
 按当前 Task 继续阅读：
 
 - Stage 2（当前阶段）：`docs/stage2.md`、`docs/stage2-api.md`、`docs/stage2-architecture.md`、
-  `docs/stage2-tasks.md`；只执行其中被点名授权的 Task（当前为 S2-T01）；
+  `docs/stage2-tasks.md`；只执行其中被点名授权的 Task（当前为 S2-T02）；
   Stage 1 文档用于历史 / 旧数据基线，不沿用已取消的旧提案。
 - Stage 1.5（已完成）：`docs/stage1.5-bugfix.md` 只作历史依据与执行记录，不再下发新任务。
-- 根 `AGENTS.md` 的阶段导航已同步为 Stage 2 / 仅授权 S2-T01；
+- 根 `AGENTS.md` 的阶段导航已同步为 Stage 2 / 仅授权 S2-T02；
   未经授权仍不得自行解除其中的模型 / API / 架构变更批准限制。
 
 ---

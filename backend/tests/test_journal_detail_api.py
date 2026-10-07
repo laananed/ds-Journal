@@ -40,13 +40,18 @@ from app.journal.models import Journal
 
 LIST_URL = "/api/journals"
 
+# Stage 2 / S2-T02：完整响应从六字段扩展为十字段。
 RESPONSE_FIELDS = {
+    "type",
     "id",
     "title",
+    "display_title",
     "content",
     "journal_date",
+    "folder_id",
     "created_at",
     "updated_at",
+    "deleted_at",
 }
 
 # 只取固定列、按 id 排序的快照 SQL。
@@ -137,21 +142,27 @@ def _row_of(session: Session, journal_id: int) -> tuple:
 
 
 def _assert_matches_row(item: dict, row: tuple) -> None:
-    """逐字段比较响应与数据库实际列值。"""
+    """逐字段比较响应与数据库实际列值。
+
+    除六个数据库列外，还检查两个投影字段：
+    `type` 恒为 `"journal"`，普通入口的 `deleted_at` 恒为 `null`。
+    """
     assert item["id"] == row[0]
     assert item["title"] == row[1]
     assert item["content"] == row[2]
     assert item["journal_date"] == row[3].isoformat()
     assert datetime.fromisoformat(item["created_at"]) == row[4]
     assert datetime.fromisoformat(item["updated_at"]) == row[5]
+    assert item["type"] == "journal"
+    assert item["deleted_at"] is None
 
 
 # --------------------------------------------------------------------------
-# 1. 存在：200 与完整六字段
+# 1. 存在：200 与完整字段（Stage 2 / S2-T02 起为十字段）
 # --------------------------------------------------------------------------
 
 
-def test_existing_id_returns_200_with_exactly_six_fields(api):
+def test_existing_id_returns_200_with_exactly_the_full_fields(api):
     client, session = api
 
     journal = _make_journal(
@@ -166,6 +177,9 @@ def test_existing_id_returns_200_with_exactly_six_fields(api):
     assert response.status_code == 200
     body = response.json()
     assert set(body) == RESPONSE_FIELDS
+    # 有手工标题：display_title 就是原 title，不生成日期编号。
+    assert body["display_title"] == "广州动物园复盘"
+    assert body["folder_id"] is None
 
 
 def test_detail_fields_match_the_actual_database_row(api):
@@ -195,6 +209,21 @@ def test_title_null_is_returned_as_null(api):
 
     assert body["title"] is None
     assert body["id"] == journal.id
+
+
+def test_untitled_detail_display_title_is_the_date(api):
+    """无标题（title 为 null）的详情：display_title 回退为业务日期，title 仍为 null。"""
+    client, session = api
+
+    journal = _make_journal(
+        title=None, content="无标题正文", journal_date=date(2026, 10, 2)
+    )
+    _add_and_flush(session, [journal])
+
+    body = client.get(_detail_url(journal.id)).json()
+
+    assert body["title"] is None
+    assert body["display_title"] == "2026-10-02"
 
 
 def test_created_at_and_updated_at_are_timezone_aware(api):
@@ -456,7 +485,7 @@ def test_detail_matches_the_same_record_in_the_list(api):
     )
     _add_and_flush(session, [journal])
 
-    body = client.get(LIST_URL).json()
+    body = client.get(LIST_URL).json()["items"]
     in_list = [item for item in body if item["id"] == journal.id]
     assert len(in_list) == 1
 
