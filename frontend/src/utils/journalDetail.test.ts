@@ -42,6 +42,10 @@ function expectEqual(actual: unknown, expected: unknown, label: string): void {
 /** 构造一条原始 Journal；只写出本文件关心的字段值。 */
 function journal(overrides: Partial<Journal> = {}): Journal {
   return {
+    type: 'journal',
+    display_title: '2026-10-02',
+    folder_id: null,
+    deleted_at: null,
     id: 42,
     title: '原始标题',
     content: '原始正文',
@@ -125,8 +129,8 @@ expectEqual(
 
 expectEqual(
   buildJournalUpdate(journal({ title: '' }), draft({ title: '' })),
-  { title: null },
-  '原文标题是空字符串时，空表单按约定归一化成 title=null',
+  {},
+  '原文标题是空字符串时，未编辑的空表单不修改原值',
 )
 
 expectEqual(

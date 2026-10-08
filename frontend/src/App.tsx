@@ -1,241 +1,227 @@
-/**
- * SeekJournal 主页。
- *
- * Stage 1 / Task 8.1：通过真实 HTTP `GET` 请求读取 FastAPI 的 Journal 列表，
- * 支持按 `journal_date` 精确筛选与清除筛选，并处理加载中 / 有记录 / 空列表 /
- * 日期无记录 / 请求失败与重试。
- *
- * Stage 1 / Task 8.2：接入创建表单 `JournalEditor`，
- * 保存成功后按**当前筛选语义**刷新列表（全部还是全部，某日期还是该日期），
- * 不偷偷改筛选去让新记录出现。
- *
- * Stage 1 / Task 8.3：接入详情 / 修改 / 删除面板 `JournalDetail`。
- * 主列表与创建表单的「当天已有记录」都能打开某一条记录；
- * 详情面板修改或删除成功后，这里按当前筛选刷新列表，
- * 并用一个自增的 `dataRevision` 让创建表单重读「当天已有记录」。
- *
- * 设计要点：
- *
- * - 只用组件本地 `useState` / `useEffect`，不引入路由、状态管理或请求管理框架；
- * - 「打开的是哪一条」就是这里的 `selectedId`；详情面板通过 `key={selectedId}`
- *   在切换记录时整体重新挂载，旧记录的状态与在飞请求随之作废，
- *   因此迟到的旧响应不可能被应用到新记录上；
- * - `pendingWrite` 表示详情面板里是否有写操作（保存 / 删除）在进行，
- *   为 `true` 时禁用打开其它记录的入口，避免写入过程中换目标；
- * - 筛选由后端执行（把日期作为查询参数发给 API），不在前端拿全量再过滤；
- * - 保留 `main.tsx` 里的 `StrictMode`；
- * - 用 `AbortController` 在筛选变化或组件卸载时取消上一次请求，
- *   既避免「旧日期的迟到响应覆盖新日期结果」，也不会把取消误报成错误；
- * - 「进入加载中」的状态在事件处理器里设置（而不是在 effect 内同步 setState），
- *   effect 只负责发起请求与收尾，避免级联渲染；
- * - 列表刷新与「写入成功」互相独立：写入状态由各自的表单负责，
- *   这里刷新失败只在列表区域提示，不会被当成保存 / 删除失败。
- */
-
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import { listJournals } from './api/journals'
 import JournalDetail from './components/JournalDetail'
 import JournalEditor from './components/JournalEditor'
 import JournalList from './components/JournalList'
-import type { Journal } from './types/journal'
+import Pagination from './components/Pagination'
+import type { FileIdentity } from './types/file'
+import type { JournalPage } from './types/journal'
+import { nearestValidPage } from './utils/pagination'
 
-/** 列表加载状态。 */
-type LoadStatus = 'loading' | 'success' | 'error'
+type Module = 'journal' | 'inbox' | 'insight' | 'search' | 'trash' | 'folder'
+type Panel = { kind: 'list' } | { kind: 'create'; key: number } | { kind: 'detail'; file: FileIdentity; key: number }
+const modules: { id: Module; label: string }[] = [
+  { id: 'inbox', label: 'Inbox' }, { id: 'journal', label: 'Journal' },
+  { id: 'insight', label: 'Insight' }, { id: 'search', label: 'Search' },
+  { id: 'trash', label: 'Trash' }, { id: 'folder', label: 'Folder' },
+]
 
 function App() {
-  // '' 表示「不筛选」，即显示全部记录。
+  const [module, setModule] = useState<Module>('journal')
+  const [panel, setPanel] = useState<Panel>({ kind: 'list' })
+  const [editorKey, setEditorKey] = useState(0)
   const [filterDate, setFilterDate] = useState('')
-  const [journals, setJournals] = useState<Journal[]>([])
-  const [status, setStatus] = useState<LoadStatus>('loading')
+  const [page, setPage] = useState(1)
+  const [result, setResult] = useState<JournalPage | null>(null)
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState('')
-  // 失败后点击「重试」或写入成功后自增，作为 effect 的依赖重新触发列表请求。
-  const [reloadToken, setReloadToken] = useState(0)
-
-  // 当前打开的 Journal id；null 表示没有打开任何详情。
-  const [selectedId, setSelectedId] = useState<number | null>(null)
-  // 详情面板里是否有写操作在进行中。
-  const [pendingWrite, setPendingWrite] = useState(false)
-  // 「外部写入导致数据变了」的版本号：详情面板改过 / 删过之后自增，
-  // 传给创建表单让它重读「当天已有记录」，但不触碰正在填写的表单内容。
   const [dataRevision, setDataRevision] = useState(0)
+  const [busy, setBusy] = useState(false)
+  // ref同步更新，点击连续发生时也不能绕过写入锁或离开检查。
+  const busyRef = useRef(false)
+  const dirtyRef = useRef(false)
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
+  const confirmDialog = useRef<HTMLDialogElement>(null)
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
+    if (module !== 'journal') return
     const controller = new AbortController()
+    listJournals(filterDate || undefined, page, controller.signal).then((data) => {
+      if (controller.signal.aborted) return
+      const validPage = nearestValidPage(data.page, data.total)
+      if (validPage !== data.page) {
+        setPage(validPage)
+        return
+      }
+      setResult(data)
+      setStatus('success')
+    }).catch((error: unknown) => {
+      if (controller.signal.aborted) return
+      setResult(null)
+      setErrorMessage(error instanceof Error ? error.message : '加载失败，请稍后重试')
+      setStatus('error')
+    })
+    return () => controller.abort()
+  }, [module, filterDate, page, dataRevision])
 
-    listJournals(filterDate || undefined, controller.signal)
-      .then((data) => {
-        setJournals(data)
-        setStatus('success')
-      })
-      .catch((error: unknown) => {
-        // 主动取消（切换筛选 / 卸载）不算失败，直接忽略。
-        if (controller.signal.aborted) {
-          return
-        }
-        // 失败时不保留过期列表，避免把旧结果伪装成当前筛选结果。
-        setJournals([])
-        setErrorMessage(
-          error instanceof Error ? error.message : '加载失败，请稍后重试',
-        )
-        setStatus('error')
-      })
+  useEffect(() => {
+    const dialog = confirmDialog.current
+    if (pendingNavigation !== null && dialog && !dialog.open) dialog.showModal()
+    if (pendingNavigation === null && dialog?.open) dialog.close()
+  }, [pendingNavigation])
 
-    return () => {
-      controller.abort()
+  function setWriting(value: boolean) {
+    busyRef.current = value
+    setBusy(value)
+  }
+  function setDirty(value: boolean) {
+    dirtyRef.current = value
+  }
+  /** 每个离开出口只提交动作；真正导航前在这里统一检查。 */
+  function navigate(action: () => void) {
+    if (busyRef.current) return
+    if (dirtyRef.current) {
+      setPendingNavigation(() => action)
+      return
     }
-  }, [filterDate, reloadToken])
-
-  /** 打开任一入口前先进入「加载中」，并清掉上一次的错误与旧列表。 */
+    action()
+  }
+  function confirmLeave() {
+    const action = pendingNavigation
+    setPendingNavigation(null)
+    dirtyRef.current = false
+    action?.()
+  }
   function beginLoading() {
     setStatus('loading')
     setErrorMessage('')
-    setJournals([])
+    setResult(null)
   }
-
-  function handleFilterDateChange(value: string) {
-    if (value === filterDate) {
-      return
-    }
+  function refreshData() {
     beginLoading()
-    setFilterDate(value)
+    setDataRevision((value) => value + 1)
   }
-
-  function handleClearFilter() {
-    if (filterDate === '') {
-      return
-    }
-    beginLoading()
-    setFilterDate('')
+  function showList() {
+    dirtyRef.current = false
+    setPanel({ kind: 'list' })
   }
-
-  function handleRetry() {
-    beginLoading()
-    setReloadToken((token) => token + 1)
+  function changeModule(value: Module) {
+    navigate(() => {
+      showList()
+      setNotice('')
+      if (value !== module) {
+        if (value === 'journal') beginLoading()
+        setModule(value)
+      }
+    })
   }
-
-  /**
-   * 创建成功后的列表刷新。
-   *
-   * 只触发一次重新加载，保持当前筛选含义不变；
-   * 不在这里等待请求、也不向上抛异常——
-   * 列表刷新失败会在列表区域单独提示，不会被误报成「保存失败」。
-   */
-  function handleJournalSaved() {
-    beginLoading()
-    setReloadToken((token) => token + 1)
+  function openJournal(id: number) {
+    navigate(() => {
+      dirtyRef.current = false
+      setNotice('')
+      const nextKey = editorKey + 1
+      setEditorKey(nextKey)
+      setPanel({ kind: 'detail', file: { type: 'journal', id }, key: nextKey })
+    })
   }
-
-  /**
-   * 详情面板里的写操作（修改 / 删除）成功后的数据同步。
-   *
-   * 按**当前筛选语义**重新读取列表，并且额外让创建表单重读「当天已有记录」——
-   * 但不改筛选、不触碰正在填写的创建表单内容。
-   * 与 `handleJournalSaved` 一样，这里不等待请求、不抛异常：
-   * 刷新失败只在列表区域提示，不会被当成写入失败。
-   */
-  function handleDetailDataChanged() {
-    beginLoading()
-    setReloadToken((token) => token + 1)
-    setDataRevision((revision) => revision + 1)
+  function newJournal() {
+    navigate(() => {
+      dirtyRef.current = false
+      setNotice('')
+      const nextKey = editorKey + 1
+      setEditorKey(nextKey)
+      setPanel({ kind: 'create', key: nextKey })
+    })
   }
-
-  /** 打开某一条记录的详情。 */
-  function handleOpenJournal(id: number) {
-    // 有写操作在飞行中时入口本身已被禁用，这里再挡一层，避免换目标。
-    if (pendingWrite) {
-      return
-    }
-    setSelectedId(id)
+  function changeFilter(value: string) {
+    if (value === filterDate) return
+    navigate(() => {
+      showList()
+      beginLoading()
+      setFilterDate(value)
+      setPage(1)
+    })
   }
-
-  /** 返回列表：只关闭详情面板，不请求任何接口。 */
-  function handleDetailClose() {
-    setSelectedId(null)
-    setPendingWrite(false)
+  function changePage(value: number) {
+    navigate(() => {
+      showList()
+      beginLoading()
+      setPage(value)
+    })
   }
-
-  /** 删除成功：关闭详情，再按当前筛选刷新列表与当天记录。 */
-  function handleDetailDeleted() {
-    setSelectedId(null)
-    setPendingWrite(false)
-    handleDetailDataChanged()
-  }
-
-  const isFiltering = filterDate !== ''
 
   return (
     <main className="app">
       <header className="app-header">
         <h1>SeekJournal</h1>
-        <p className="app-subtitle">查看你的 Journal 记录</p>
+        <p className="app-subtitle">记录经历与思考</p>
       </header>
+      <nav className="app-navigation" aria-label="模块导航">
+        {modules.map((item) => (
+          <button key={item.id} type="button" aria-pressed={module === item.id}
+            disabled={busy} onClick={() => changeModule(item.id)}>{item.label}</button>
+        ))}
+      </nav>
 
-      <JournalEditor
-        listFilterDate={filterDate}
-        onSaved={handleJournalSaved}
-        externalRevision={dataRevision}
-        onOpen={handleOpenJournal}
-        openDisabled={pendingWrite}
-      />
-
-      <section className="app-toolbar">
-        <label className="app-filter">
-          <span>按日期查看</span>
-          <input
-            type="date"
-            value={filterDate}
-            onChange={(event) => handleFilterDateChange(event.target.value)}
-          />
-        </label>
-        <button type="button" onClick={handleClearFilter} disabled={!isFiltering}>
-          清除筛选
-        </button>
-      </section>
-
-      {selectedId !== null && (
-        // key 让「切换记录」变成重新挂载：旧详情状态与在飞请求一起作废。
-        <JournalDetail
-          key={selectedId}
-          journalId={selectedId}
-          onBusyChange={setPendingWrite}
-          onClose={handleDetailClose}
-          onDataChanged={handleDetailDataChanged}
-          onDeleted={handleDetailDeleted}
-        />
+      {module !== 'journal' && (
+        <section className="app-state" aria-label="尚未开放">
+          <h2>{modules.find((item) => item.id === module)?.label}</h2>
+          <p>该模块尚未开放。</p>
+          <button type="button" onClick={() => changeModule('journal')}>返回 Journal</button>
+        </section>
+      )}
+      {module === 'journal' && (
+        <>
+          <section className="app-toolbar" aria-label="Journal 列表工具">
+            <button type="button" onClick={newJournal} disabled={busy}>新建 Journal</button>
+            <button type="button" onClick={() => navigate(showList)} disabled={busy}>Journal 列表</button>
+            <label className="app-filter">
+              <span>按日期查看</span>
+              <input type="date" value={filterDate} disabled={busy}
+                onChange={(event) => changeFilter(event.target.value)} />
+            </label>
+            <button type="button" onClick={() => changeFilter('')} disabled={busy || filterDate === ''}>清除筛选</button>
+          </section>
+          {notice && <p className="detail-success" role="status">{notice}</p>}
+          {panel.kind === 'create' && (
+            <JournalEditor key={panel.key} listFilterDate={filterDate} externalRevision={dataRevision}
+              onSaved={refreshData} onOpen={openJournal} onClose={() => navigate(showList)}
+              onDirtyChange={setDirty} onBusyChange={setWriting} />
+          )}
+          {panel.kind === 'detail' && (
+            <JournalDetail key={`${panel.file.type}:${panel.file.id}:${panel.key}`} journalId={panel.file.id}
+              onBusyChange={setWriting} onDirtyChange={setDirty} onNavigate={navigate}
+              onClose={() => navigate(showList)} onDataChanged={refreshData}
+              onDeleted={() => {
+                showList()
+                setNotice('已移入回收箱，可以恢复。回收箱页面尚未开放。')
+                refreshData()
+              }} />
+          )}
+          <section className="journal-results" aria-label="Journal 列表">
+            {status === 'loading' && <p className="app-state" role="status">加载中……</p>}
+            {status === 'error' && (
+              <div className="app-state app-state-error" role="alert">
+                <p>列表加载失败：{errorMessage}</p>
+                <button type="button" onClick={refreshData} disabled={busy}>重试</button>
+              </div>
+            )}
+            {status === 'success' && result && (
+              <>
+                {result.items.length === 0
+                  ? <p className="app-state">{filterDate ? '该日期没有 Journal 记录。' : '还没有任何 Journal 记录。'}</p>
+                  : <JournalList journals={result.items} onOpen={openJournal}
+                    selectedId={panel.kind === 'detail' ? panel.file.id : null} openDisabled={busy} />}
+                <Pagination page={result.page} total={result.total} hasNext={result.has_next}
+                  onPageChange={changePage} disabled={busy} label="Journal 列表分页" />
+              </>
+            )}
+          </section>
+        </>
       )}
 
-      {status === 'loading' && (
-        <p className="app-state" role="status">
-          加载中……
-        </p>
-      )}
-
-      {status === 'error' && (
-        <div className="app-state app-state-error" role="alert">
-          <p>列表加载失败：{errorMessage}</p>
-          <button type="button" onClick={handleRetry}>
-            重试
-          </button>
+      <dialog ref={confirmDialog} className="leave-dialog" aria-labelledby="leave-title"
+        onCancel={(event) => { event.preventDefault(); setPendingNavigation(null) }}>
+        <h2 id="leave-title">当前内容尚未保存，确定离开？</h2>
+        <p>确认离开会丢弃本次未保存的改动。</p>
+        <div className="detail-confirm-actions">
+          <button type="button" autoFocus onClick={() => setPendingNavigation(null)}>继续编辑</button>
+          <button type="button" onClick={confirmLeave}>确认离开</button>
         </div>
-      )}
-
-      {status === 'success' && journals.length === 0 && (
-        <p className="app-state">
-          {isFiltering ? '该日期没有 Journal 记录。' : '还没有任何 Journal 记录。'}
-        </p>
-      )}
-
-      {status === 'success' && journals.length > 0 && (
-        <JournalList
-          journals={journals}
-          onOpen={handleOpenJournal}
-          selectedId={selectedId}
-          openDisabled={pendingWrite}
-        />
-      )}
+      </dialog>
     </main>
   )
 }
-
 export default App

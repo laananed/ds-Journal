@@ -3,8 +3,8 @@
 > 2026-10-07。Goal：把已确认的本地基础记录规则落实为可独立 Review/Test/Commit 的任务。
 > Architecture：保留三类独立文件表、一级 Folder、现有 Router → Service → SQLAlchemy；local State + fetch。
 > Tech Stack：React/TypeScript/Vite、FastAPI/Pydantic/SQLAlchemy/psycopg/PostgreSQL/Alembic、pytest。
-> 执行者：DeepSeek Developer；Lead 做设计与独立 Review。本文不是开始编码指令。
-> 使用逐 Task 执行与验收检查点；不自动派发并行 Agent。正文不给实现代码，按用户本轮“只做文档”的要求制定行为与验证计划。
+> T01/T02已完成；2026-10-08用户授权T03/T04并行实施。Lead负责共享规则与独立验收，后续任务未授权。
+> 本轮使用既有T03/T04工作树，分别由两个实施Agent执行，不递归派发；不自动commit/merge/push/tag或清理工作树。
 
 ## 1. 阅读、范围与统一完成标准
 
@@ -32,7 +32,7 @@ Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5
 | S2-T06 | 实现用户手动管理 Insight 的完整小闭环 | Insight API + UI |
 | S2-T07 | 实现一级 Folder 的后端契约 | Folder CRUD/引用限制/混合分页 |
 | S2-T08 | 接通 Folder 选择、移动和混合列表 | Folder 可用 UI |
-| S2-T09 | 实现回收箱只读、恢复与永久删除 API | 三类文件恢复/永删契约 |
+| S2-T09 | 实现回收箱只读、恢复与永久删除 API | Journal/Insight恢复/永删契约 |
 | S2-T10 | 接通单条回收箱操作与正常页刷新 | Trash 可用 UI |
 | S2-T11 | 实现三类普通搜索与全局结果分页 | Search API + UI |
 | S2-T12 | 实现最小 Markdown 阅读，保持源码编辑 | 渲染组件与源码往返验证 |
@@ -173,29 +173,29 @@ Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5
 
 ## 6. S2-T04 — Inbox / Daily API
 
-1. **Goal**：用户有效保存才创建 Inbox；Daily 由身份查询与约束控制。
-2. **Scope**：`backend/app/inbox/{schemas,service,router}.py`（拟新增）、`app/main.py`、`tests/test_inbox_api.py`、`test_daily_inbox_api.py`（拟新增）、M3；必要隔离/migration 测试。
-3. **Out of Scope**：Inbox 状态/过期/整理到 Journal、Frontend、定时空记录、自动合并正文。
-4. **前置依赖**：T01、T02；P1 只阻塞显式清空标题分支，其他 CRUD 可先写；P2 必须在 M3/Daily 冲突与回收箱查询分支前确认。
-5. **主要模块**：Inbox 请求验证、身份、Daily 只读查询、普通 CRUD。
-6. **DB/Migration**：M3 接 M2，添加确认后的唯一部分索引；不改已执行 M2 文件。若先有非空数据必须只读检查冲突，不自动去重。
-7. **后端行为**：按客户端 inbox_date；省略标题默认日期；一日多普通 Inbox；is_daily/日期不可 PATCH；GET Daily 零写入；改名/移动仍找到原 Daily；重复有效保存冲突 rollback +409；软删时间行为同已确认契约。
-8. **前端行为**：本任务只定义 T05 需要的 API 输入输出，不接页面。
-9. **测试要求**：空/超长/有效正文、title 边界与 P1 结果、日期默认请求、Daily 未保存查询无行、有效创建后可读、普通同日多篇、并发两个 Session 保存只能一个 Daily、409 无残留、改名仍命中、P2 软删后查询/重复保存策略、PATCH/null/原始 Markdown；真实恢复 API 联动在 T09 验收，不提前实现。
-10. **人工验收**：连续 GET Daily 不增加行数；POST 有效正文后再 GET 为同 id；同日普通 Inbox 还能创建；API 模拟双标签冲突。
-11. **执行步骤**：实现无 Pending 的 Schema/普通 API → 决策同步 → M3 → Daily 分支/冲突 → 指定测试及后端回归。
-12. **Definition of Done**：确认后的 Daily 契约/唯一约束一致，无占位空数据和隐藏状态系统。
+1. **Goal**：有效正文保存才创建Inbox；普通/Daily完整CRUD与分页，所有Inbox硬删除，同日Daily可重建。
+2. **Scope**：仅SeekJournal-T04；backend/app/inbox/{schemas,service,router}.py、models.py必要唯一索引映射/注释；app/main.py路由注册；相关Schema/Service/API/并发/迁移测试；新M3与必要backend运行说明。共享docs/agents由Lead修改。
+3. **Out of Scope**：前端、状态/过期/Inbox→Journal、AI、操作历史、Trash/Restore/Permanent Delete、Search、其他后续功能；不删除既有deleted_at列。
+4. **前置依赖**：T01/T02已完成，P1/P2/P3已确认；不再等待旧回收箱决策。
+5. **主要模块**：请求字段语义、Inbox CRUD/Daily只读查询、硬删除、数据库唯一性与事务。
+6. **DB/Migration**：新增线性M3接a8d98342e603；inbox_date唯一部分索引条件仅is_daily=true，无deleted_at条件；不改旧Migration；只升级seekjournal_test，不升级个人库或T03专属库。
+7. **后端行为**：POST省略title默认存inbox_date，显式null/空串原值保存、display_title回退日期；非空含纯空白title不trim/80码点，正文同现有空白集合且50,000码点/原样Markdown；PATCH仅title/content/folder_id，日期/is_daily依extra=ignore不可修改；空/相同PATCH时间不变。Daily身份不依赖title，GET零写；重复并发创建409并rollback。所有Inbox DELETE物理删除204空体，之后详情/PATCH/重复DELETE404，Daily可同日重建。未启用deleted_at不参与筛选、不赋值，响应恒null。
+8. **前端行为**：不改前端，提供T05后续消费契约。
+9. **测试要求**：Schema/Service/API、title省略/null/空串/纯空白/80/81与emoji、content空白集合/50,000/50,001/Markdown原样；分页0/20/21/41/日期筛选/排序；系统字段忽略、空/相同PATCH、日期/Daily身份不可变；零写GET、唯一性冲突及两个独立Session并发创建；普通/当日/往日Daily硬删除、404及同日重建；Folder不存在/写入故障rollback、Session可继续；旧迁移不变、新M3元数据一致，全量后端回归、库隔离。
+10. **人工验收**：8014实际连接seekjournal_test；GET不存在Daily行数不变；POST→改名/清空→GET同id；普通同日多篇；重复/并发409；DELETE204零字节与物理不存在→GET/PATCH/DELETE404→同日创建新Daily成功；只清理本轮自建typed IDs。
+11. **执行步骤**：最小失败用例→Schema/Service/Router→M3人工检查/测试库升级→指定及全量测试→真实HTTP演示→独立验收。
+12. **Definition of Done**：全部确认规则有实际证据，M3线性/旧迁移不变，个人库与T03库不变，零残留/零新依赖；无Trash或其他后续API；无自动Git写入。
 
 ## 7. S2-T05 — Inbox 使用流程
 
 1. **Goal**：提供容易找到的 Daily 和可长期保存的额外 Inbox。
 2. **Scope**：拟新增 `frontend/src/api/inboxes.ts`、`types/inbox.ts`、`pages/InboxPage.tsx`，复用 FileCard/Pagination/源码编辑；`journalDate.ts` 的必要共享使用与测试，App 导航。
 3. **Out of Scope**：自动草稿、来源关系、任务状态按钮、Checkbox 自动写库。
-4. **前置依赖**：T03、T04；P1/P2 对应 UI 分支已确认。
+4. **前置依赖**：T03、T04；P1/P2已确认：标题允许清空、全部Inbox硬删除。
 5. **主要模块**：Daily 快捷入口、新建/详情/编辑、同日多 Inbox。
 6. **DB/Migration**：无。
 7. **后端行为**：消费 T04；通过只读 Daily 查询判断编辑器状态。
-8. **前端行为**：未保存 Daily 显示日期+空编辑器，离开无输入不提醒且不 POST；有效保存创建一次；已存在则打开；额外 Inbox 独立创建；Daily 无论当前列表页码都可到达；跨 04:00 不重置编辑中内容；软删状态说明依 P2，此时不提前实现回收箱，T10 完成后接通查看/恢复入口。
+8. **前端行为**：未保存 Daily 显示日期+空编辑器，离开无输入不提醒且不 POST；有效保存创建一次；已存在则打开；额外 Inbox 独立创建；Daily 无论当前列表页码都可到达；跨 04:00 不重置编辑中内容；删除Inbox明确不可恢复；删除Daily后允许同日有效保存重建，不增加trashed/recovery或回收箱入口。
 9. **测试要求**：03:59/04:00、跨月/年/闰日、草稿初始 Dirty、有效保存/失败输入/重复按钮/409重读；分页/条件复用；build/lint、真实浏览器。
 10. **人工验收**：当天无记录进入后查行数不变；输入有效正文保存，再进同 id；另建两个自定义标题 Inbox；翻至第 2 页还能打开 Daily；Dirty 切换提示正确。
 11. **执行步骤**：接 API → Daily 临时编辑状态 → 普通 Inbox UI → 失败/日期/分页检查 → 演示。
@@ -227,7 +227,7 @@ Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5
 7. **后端行为**：Folder name 校验/改名；查看混合有效文件；不存在 Folder 404；非空（含 Trash 引用）409；锁目标行+FK竞争仲裁；移入/移出与内容同事务，移动更新文件 updated_at。
 8. **前端行为**：不接新页面，T08 消费接口。
 9. **测试要求**：name 空白/80/81、空 PATCH/404；三个同 id 不撞类型；21条混合分页，隐藏已删；引用存在/清空后可删；只有 Trash 引用仍409；Folder并发删除/移入无孤儿/半截正文更新，失败rollback。
-10. **人工验收**：创建 Folder、三类型移入、混合列表；逐条移出有效文件后空 Folder 删除成功；另一 Folder 中软删所有内容后正常列表空但删除409。恢复后移出/永久删除释放引用的组合行为留到 T09/T10，不依赖尚未实现的回收箱 API。
+10. **人工验收**：创建 Folder、三类型移入、混合列表；逐条移出有效文件后空 Folder 删除成功；另一 Folder 中硬删 Inbox、软删 Journal/Insight 后正常列表空但删除409。恢复后移出/永久删除释放引用的组合行为留到 T09/T10，不依赖尚未实现的回收箱 API。
 11. **执行步骤**：CRUD 用例 → 引用/事务限制 → 混合查询 → 竞争验证 → API演示。
 12. **Definition of Done**：删除不会破坏恢复的原Folder关系；混合文件按(type,id)可辨认；无额外层。
 
@@ -248,16 +248,16 @@ Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5
 
 ## 11. S2-T09 — Trash API 与时间保持
 
-1. **Goal**：三类文件的软删除能只读查看、原样恢复和单条永久删除。
-2. **Scope**：拟新增 `backend/app/trash/{schemas,service,router}.py`、`tests/test_trash_api.py`；必要三类 service 协作、main 注册。Trash 不新建 Model。
+1. **Goal**：Journal/Insight的软删除能只读查看、原样恢复和单条永久删除；排除Inbox。
+2. **Scope**：拟新增 `backend/app/trash/{schemas,service,router}.py`、`tests/test_trash_api.py`；必要Journal/Insight service协作、main 注册。Trash 不新建 Model。
 3. **Out of Scope**：编辑、Folder改动、批量操作、定时清除、历史日志。
-4. **前置依赖**：T02、T04、T06、T07，P2 恢复策略已冻结。
-5. **主要模块**：跨类型已删除投影、恢复/物理删除事务。
+4. **前置依赖**：T02、T06、T07；Inbox已硬删除，不参与本Task。
+5. **主要模块**：Journal/Insight跨类型已删除投影、恢复/物理删除事务；不存在Inbox恢复。
 6. **DB/Migration**：无。
 7. **后端行为**：deleted_at排序全局分页；只读详情；restore只清删除字段并保留原updated_at/id/正文/日期/Folder；purge仅已删除对象；普通入口一直404；Folder引用随物理删除释放。
 8. **前端行为**：本任务API验收，T10接页面。
-9. **测试要求**：三类型生命周期逐字段快照；空/21条/类型筛选/重复操作；有效对象永删404；回收箱编辑无接口；普通列表/详情/Folder隐藏；onupdate陷阱；restore/purge失败回滚，兄弟记录不变；Daily与Folder关系保留。
-10. **人工验收**：三类各软删→查库行/时间→Trash详情→恢复→原六字段/Folder一致；再软删→永久删→物理行消失及普通404，Folder可重新判断是否真空。
+9. **测试要求**：Journal/Insight生命周期逐字段快照；空/21条/类型筛选/重复操作；有效对象永删404；回收箱编辑无接口；普通列表/详情/Folder隐藏；onupdate陷阱；restore/purge失败回滚，兄弟记录不变；原Folder关系保留；Inbox类型不得进入Trash接口。
+10. **人工验收**：Journal/Insight各软删→查库行/时间→Trash详情→恢复→原六字段/Folder一致；再软删→永久删→物理行消失及普通404，Folder可重新判断是否真空。
 11. **执行步骤**：生命周期快照用例 → 列表/详情 → 恢复/永删 → 故障注入/回归 → API演示。
 12. **Definition of Done**：完整时间保留有真实DB断言，204空体不丢，物理删除只在明确Trash入口发生。
 
@@ -267,12 +267,12 @@ Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5
 2. **Scope**：拟新增 `frontend/src/api/trash.ts`、`pages/TrashPage.tsx`；类型/卡片复用；App刷新与三类删除文案。
 3. **Out of Scope**：批量选中、清空、恢复后自动编辑、编辑Trash正文。
 4. **前置依赖**：T03、T05、T06、T08、T09。
-5. **主要模块**：只读详情、删除确认、操作后列表/Folder/Daily刷新。
+5. **主要模块**：只读详情、删除确认、操作后Journal/Insight列表/Folder刷新；不刷新已不存在的Inbox恢复分支。
 6. **DB/Migration**：无。
-7. **后端行为**：消费T09及P2确认的Daily查询。
-8. **前端行为**：只显示读取/恢复/永久删除；永久删除明确不可恢复；取消不请求；成功后清过期详情并按有效页重读；恢复后更新正常模块、Folder与Daily入口；失败不伪装删除。
+7. **后端行为**：消费T09的Journal/Insight契约，不接Inbox恢复。
+8. **前端行为**：只显示读取/恢复/永久删除；永久删除明确不可恢复；取消不请求；成功后清过期详情并按有效页重读；恢复后更新Journal/Insight正常模块与Folder；失败不伪装删除。
 9. **测试要求**：204不解析JSON、取消零请求、404/500、写成功刷新失败分开、分页类型变化回1、最后页回退；浏览器确认/只读UI。
-10. **人工验收**：各类型移入、查看全文、恢复原Folder；Daily进入Trash后的快捷入口符合P2；永久删取消不动数据，确认后正常页/Folder均不能打开。
+10. **人工验收**：Journal/Insight移入、查看全文、恢复原Folder；Inbox不出现；永久删取消不动数据，确认后正常页/Folder均不能打开。
 11. **执行步骤**：只读页面 → 单条动作与文案 → 跨视图刷新 → 异常/分页验收。
 12. **Definition of Done**：不存在Trash编辑/移动入口，单条操作正确，无批量/定时扩张。
 
@@ -287,7 +287,7 @@ Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5
 7. **后端行为**：每词title/content OR，多词AND；英文忽略大小写/中文子串；排除deleted；空q空结果；LIKE通配符转义；updated_at/type/id排序；全局20条。
 8. **前端行为**：关键词/类型变化回第一页；新请求取消旧请求；无输入/无结果/失败分别显示；整个结果卡片打开真实对象，并执行Dirty离开提醒。
 9. **测试要求**：中文、AI/ai、跨字段AND、空白分词、重复词、%/_/反斜杠字面匹配、已删隐藏/恢复重现/永删消失；三类型各有>20匹配仍总页20；相同时间/type+id排序；无结果/最后页，快速输入竞态。
-10. **人工验收**：`AI 培训` 在标题/正文分别命中三类文件；软删后找不到，恢复后找到；翻页总数正确，清关键词无全库列表；点击正确详情。
+10. **人工验收**：`AI 培训` 在标题/正文分别命中三类文件；Journal/Insight软删后找不到、恢复后找到；Inbox硬删后找不到且不能恢复；翻页总数正确，清关键词无全库列表；点击正确详情。
 11. **执行步骤**：后端条件/排序用例 → 查询API → Search页面 → 回收箱/分页联动演示。
 12. **Definition of Done**：搜索规则和排序一致，没有额外搜索语法；不拿前端已加载内容作全库搜索。
 
@@ -316,7 +316,7 @@ Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5
 6. **DB/Migration**：无，不存引用关系。
 7. **后端行为**：全部有效类型等值匹配当前display_title；排除已删；单/多/零候选统一envelope与total；候选类型/id/日期时间完整；全范围Journal编号。
 8. **前端行为**：只在阅读文本激活，代码/未闭合不激活；单目标开真实详情，多目标选择可翻页，无目标提示；点击统一Dirty检查；改名不改源正文。
-9. **测试要求**：三类型单目标、跨类型同标题同id、多目标>20、零目标、Journal自动日期/编号跨页/Folder、软删/恢复/永删、重名其他有效对象仍匹配；候选选中前目标已删除；code/fence/HTML边界与导航取消。
+9. **测试要求**：三类型单目标、跨类型同标题同id、多目标>20、零目标、Journal自动日期/编号跨页/Folder、软删/恢复/永删、重名其他有效对象仍匹配；Journal/Insight验证软删/恢复/永删，Inbox验证硬删后不命中；候选选中前目标已删除；code/fence/HTML边界与导航取消。
 10. **人工验收**：源文含单、多、零三种链接；候选显示类型+标题+时间，选中准确；改名后原链接失效；回收箱目标不命中；代码块内[[文本]]不可跳转。
 11. **执行步骤**：精确解析用例 → Backend → 文本渲染扩展/候选UI → 跨模块与Dirty演示。
 12. **Definition of Done**：文件级跳转达标，正文未自动修改，没有引用系统或关系维护副作用。
@@ -342,7 +342,7 @@ Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5
 执行前检查清单 → S1.5-T1 → S1.5-T2（阶段验收）
   → S2-T01（M1 → M2）
   → S2-T02（P3 gate）→ S2-T03
-  → S2-T04（P1局部分支 / P2 gate → M3）→ S2-T05
+  → S2-T04（已确认硬删除与空标题 → M3）→ S2-T05
   → S2-T06
   → S2-T07 → S2-T08
   → S2-T09 → S2-T10
@@ -353,16 +353,16 @@ Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5
 ```
 
 上图是推荐串行执行次序；每任务的前置依赖栏是最小依赖，不自动派并行 Agent。
-P1/P2未回复时可继续Journal/T03、Insight及已确定的Folder/Trash通用规则；Inbox受影响分支保留未完成状态，不能冒称T04验收通过。
+P1/P2已确认，T04不再等待；与T03分别在自己的工作树/数据库并行。共享规则由Lead同步，两个Agent不得同时维护。
 P3 已于 2026-10-07 确认为**动态编号**：S2-T02 按「新增/软删/恢复不改其他现存记录编号」实现，
 永久删除/改日期/改标题允许重新编号，不新增永久编号字段或 Migration。
 
-Migration当前计划只有T01的M1/M2与T04的M3。先建被引用Folder，再扩Journal，再建新文件表；Daily唯一性待P2再落地。P3选择不同方案必须先修此链。
+Migration当前计划只有T01的M1/M2与T04的M3。先建被引用Folder，再扩Journal，再建新文件表；Daily唯一性按已确认硬删除语义落地，条件仅is_daily=true。P3选择不同方案必须先修此链。
 每一份Migration先人工Review，再在隔离数据上升级与检查，最后在明确授权的开发库执行；不把autogenerate结果直接视为正确。
 
 ## 18. 验证命令与人工验收顺序
 
-PowerShell，各命令单独运行；以下为执行阶段使用，本轮文档工作不运行这些写测试/迁移。
+PowerShell，各命令单独运行；按当前授权Task执行。T03只运行前端检查，T04与其独立验收独占seekjournal_test后端检查；不升级个人库。
 
 在backend/：
 
@@ -417,7 +417,7 @@ node --experimental-strip-types src/utils/dirtyState.test.ts
 3. 三类基础CRUD、输入边界、旧值读取/逐字段修改、空/相同PATCH、持久化。
 4. 21条以上分页、排序/筛选变页、跨页Journal号，Daily04:00与无空创建。
 5. Folder混合移入/移出/空/回收箱引用限制。
-6. 三类软删/恢复/永删及所有时间字段、Folder/Daily联动。
+6. Journal/Insight软删/恢复/永删及时间/Folder；Inbox硬删、Daily同日重建。
 7. Search跨字段AND、类型/全局分页与回收箱排除。
 8. Markdown阅读/源码完整往返、链接单/多/零/改名/删除/代码边界。
 9. 所有Dirty出口、失败保留输入、写成功刷新失败、卡片/窄屏；收尾保护与无残留。
@@ -429,7 +429,7 @@ node --experimental-strip-types src/utils/dirtyState.test.ts
 | 编号×分页/Folder/Search/Link | 先完整日期编号再过滤；P3决定永久删除等是否改号，不能把动态display_title当永久ID |
 | Soft Delete×onupdate | 显式保留原updated_at；软删/恢复不是内容修改；普通Session.get也不能漏掉deleted检查 |
 | Folder×恢复 | Trash引用仍算非空；不能先删Folder再说恢复时移出；锁/FK在同一事务 |
-| Daily×改名/Trash/并发 | 用inbox_date+is_daily身份；P2决定唯一性范围与入口行为；P1只影响空标题分支 |
+| Daily×清空标题/硬删/并发 | 用inbox_date+is_daily身份；标题清空不改身份；硬删释放唯一键可同日重建，deleted_at不参与索引条件 |
 | Markdown×数据验证×旧值 | trim检查不能破坏缩进/空格；输出不收紧旧值；读取HTML不执行；编辑仍是源码 |
 | Link×标题变化/重名 | 精确display_title、类型/id分开；旧链接允许失效；无关系自动维护 |
 | Search×三表分页 | count/排序/page在合并后；字面通配符处理、title/content每词OR再AND，排除Trash |
@@ -438,7 +438,26 @@ node --experimental-strip-types src/utils/dirtyState.test.ts
 
 ## 20. 验收记录区
 
-当前状态：**Stage 2 尚未整体验收；S2-T01 已实现并通过测试环境验证（见 §3 的 S2-T01 执行记录），
-开发库尚未升级。**
+当前状态：**Stage 2 尚未整体验收；T01/T02已完成，T03/T04在各自工作树实施完成且独立验收已通过，尚未提交/合并/集成。本轮个人库只读，起始已处M2，本轮未升级它。**
 T14实际执行后在此追加日期、branch/HEAD、命令/退出码/实际数量、A01～A13证据、迁移与开发库保护结果、真实/合成区分、未验证项、用户学习/最终验收情况。
 不得提前填“全部通过”。
+
+## 本轮并行执行记录入口（2026-10-08，Lead维护）
+
+- 共同起始HEAD：01bf8a86a875332b590ef6e5c0f0d087ac44c50b。
+- T03：SeekJournal-T03，task/s02-t03-journal-ui；只改前端；5175/8013，seekjournal_t03_ui_test；不得运行后端pytest。
+- T04：SeekJournal-T04，task/s02-t04-inbox-api；只改Inbox后端/测试/新M3；8014，seekjournal_test；不升级个人开发库。
+- 实施Agent不改共享docs/agents；共享规则由Lead从主仓库单一版本同步到两树，并核对SHA256一致。
+- 两个实施Agent不得递归启动子Agent，不覆盖他人修改；共享文件需求先报告Lead。
+- 独立验收在实施停止后进行，按各自端口/库隔离，T04测试库同一时刻只允许一个测试/验收流程。
+- helper/.env/.venv/node_modules/构建产物保持忽略；不启动Compose、不动原服务、不安装或升级依赖。
+- 本轮不自动commit/merge/push/tag、删分支、清理工作树；结束报告实际Git状态/服务收尾/数据保护，未集成前不宣称完整Web或Stage2完成。
+
+## S2-T03 / S2-T04 本轮验收结果（2026-10-08，Lead）
+
+- T03：独立build/lint退出0，六份纯逻辑145项，独立浏览器171项；报告见 `s2-t03-acceptance.md`。
+- T04：独立指定105、全量481通过；heads/current/check一致；实际HTTP stdout39项；报告见 `s2-t04-acceptance.md`。
+- M3实际revision18ecf7e09da6接a8d98342e603，仅seekjournal_test升级；T03专属库与个人库仍M2。
+- Lead最终只读确认个人13篇/原字段摘要/revision/sequence未变，两个测试库四表0、临时schema0，11份环境/helper/依赖指纹未变。
+- 三仓库HEAD均01bf8a86a875332b590ef6e5c0f0d087ac44c50b，任务源码保留未提交；本轮自建5175/8013/8014已停，原服务PID保持。
+- 两项可分别整理commit；本轮不提交/合并/推送。未验证跨任务合并组合，不宣布完整Web或Stage2完成，后续任务未授权。

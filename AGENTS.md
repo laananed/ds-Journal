@@ -15,8 +15,8 @@ Stage 2 - 本地 Web 完整基础记录版（进行中）
   - API 契约 `docs/stage2-api.md`
   - 技术架构 `docs/stage2-architecture.md`
   - 任务计划 `docs/stage2-tasks.md`
-- 当前只授权执行 **S2-T02（Journal 分页、统一显示标题与软删除 API）**；
-  S2-T03 及之后的任务**尚未获得实施授权**；
+- S2-T01 / S2-T02 已完成；2026-10-08 用户明确授权 **S2-T03 前端与 S2-T04 Inbox 后端并行实施及独立验收**；
+  T03 限 `SeekJournal-T03`，T04 限 `SeekJournal-T04`；其他后续 Task 未授权。
 - S2-T02 按已确认的 P3（动态编号）实现，不新增编号字段或 Migration；
 - 实施轮只在独立测试库上迁移；**真实开发库 `seekjournal` 的升级由用户单独授权后进行**。
 
@@ -48,7 +48,7 @@ Stage 1 已完成的能力：
 
 1. `docs/stage2.md`（产品需求）、`docs/stage2-api.md`（API 契约）、
    `docs/stage2-architecture.md`（技术架构）、`docs/stage2-tasks.md`（任务计划）；
-2. 只执行 `docs/stage2-tasks.md` 中被点名授权的 Task（当前为 **S2-T02**）。
+2. 只执行 `docs/stage2-tasks.md` 中被点名授权的 Task（本轮仅 **S2-T03 / S2-T04**）。
    未被授权的 Task 及其中的规划内容**不构成实施授权**。
 3. Stage 1.5 的输入规则修订以 `docs/stage1.5-bugfix.md` 为准（历史依据，已完成）。
 
@@ -325,3 +325,13 @@ Agent 不仅负责完成代码。
 - 修改文件已经说明；
 - 测试结果已经说明；
 - 用户能够知道本次修改大致发生了什么。
+## 12. 本轮并行执行边界（2026-10-08）
+
+- Lead 独占共享 docs/ 与 agents/、本文件的同步；产品决定只维护于 docs/stage2.md。
+- Agent A 仅修改 SeekJournal-T03 的前端；Agent B 仅修改 SeekJournal-T04 的 Inbox 后端、测试、新 M3 与必要运行说明。
+- 不跨工作树覆盖他人文件，不递归启动子 Agent；共享文件需求先报告 Lead。
+- T03 浏览器写入只用 seekjournal_t03_ui_test（5175/8013）；不得运行会固定连接 seekjournal_test 的后端 pytest。
+- T04 后端测试与新迁移只用 seekjournal_test（8014）；个人库 seekjournal 只读。
+- 复用既有 PostgreSQL，不启动 Compose；不动 5173/8000/5432 服务。
+- 不自动 commit/merge/push/tag、删分支、清理工作树、安装或升级依赖；不修改个人记忆。
+- Inbox 硬删除、标题与 Daily 规则按四份 Stage 2 文档实施；不提前实现 Trash/Search/Insight/Folder 后续功能。
