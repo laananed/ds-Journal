@@ -67,10 +67,11 @@
 .inbox-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .inbox-identity { margin: 0; font-size: 14px; color: #4a4453; }
 .inbox-daily-status { margin: 0; font-size: 14px; color: #4a4453; }
+.insight-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 @media (max-width: 480px) {
   .app { padding: 20px 12px 40px; gap: 16px; }
   .journal-editor, .journal-detail, .app-toolbar { padding: 12px; }
   .app .file-card { padding: 12px; }
   .pagination { gap: 8px; }
-  .inbox-page { gap: 12px; }
+  .inbox-page, .insight-page { gap: 12px; }
 }

@@ -6,6 +6,7 @@ import JournalEditor from './components/JournalEditor'
 import JournalList from './components/JournalList'
 import Pagination from './components/Pagination'
 import InboxPage from './pages/InboxPage'
+import InsightPage from './pages/InsightPage'
 import type { FileIdentity } from './types/file'
 import type { JournalPage } from './types/journal'
 import { nearestValidPage } from './utils/pagination'
@@ -156,7 +157,7 @@ function App() {
         ))}
       </nav>
 
-      {module !== 'journal' && module !== 'inbox' && (
+      {module !== 'journal' && module !== 'inbox' && module !== 'insight' && (
         <section className="app-state" aria-label="尚未开放">
           <h2>{modules.find((item) => item.id === module)?.label}</h2>
           <p>该模块尚未开放。</p>
@@ -165,6 +166,9 @@ function App() {
       )}
       {module === 'inbox' && (
         <InboxPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate} />
+      )}
+      {module === 'insight' && (
+        <InsightPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate} />
       )}
       {module === 'journal' && (
         <>

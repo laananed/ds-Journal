@@ -2,12 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Register all M2 models at runtime so Folder foreign keys resolve.
-# S2-T04 adds the Inbox router; Insight/Folder routers remain future tasks.
+# S2-T04 adds the Inbox router; S2-T06 adds the Insight router.
+# The Folder router remains a future task.
 from app.folder import models as _folder_models  # noqa: F401
 from app.inbox import models as _inbox_models  # noqa: F401
 from app.insight import models as _insight_models  # noqa: F401
 from app.journal.router import router as journal_router
 from app.inbox.router import router as inbox_router
+from app.insight.router import router as insight_router
 
 app = FastAPI(title="SeekJournal API")
 
@@ -32,6 +34,7 @@ app.add_middleware(
 
 app.include_router(journal_router)
 app.include_router(inbox_router)
+app.include_router(insight_router)
 
 
 @app.get("/api/health")

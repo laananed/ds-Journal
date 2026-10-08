@@ -1,10 +1,12 @@
 # SeekJournal Backend
 
-> S2-T04 backend implementation: Inbox/Daily CRUD and M3 are available in this
-> worktree. The personal `seekjournal` database is **not upgraded**. Existing
-> S2-T01/T02 execution records below describe those tasks at their execution time.
-> Current migration head is `18ecf7e09da6`; current migration tests use a private
-> schema in `seekjournal_test`, never a separate migration database.
+> S2-T06 backend implementation: manual Insight CRUD (create / list / detail /
+> partial update / **soft delete**) is available in this worktree, on top of S2-T04
+> Inbox/Daily CRUD and M3. Insight adds **no new migration** — the `insights` table
+> already exists (M2). The personal `seekjournal` database is **not upgraded**.
+> Existing S2-T01/T02/T04 execution records below describe those tasks at their
+> execution time. Current migration head is `18ecf7e09da6`; current migration tests
+> use a private schema in `seekjournal_test`, never a separate migration database.
 
 
 SeekJournal 后端（Stage 1 / Task 8.1–8.4 列表、创建、详情 / 修改 / 删除与整体验收的后端产物；
@@ -21,7 +23,7 @@ Stage 2 / S2-T02 把 Journal 读取 / 修改 / 删除升级为分页 envelope、
 - 一份本地 PostgreSQL 开发数据库的 Compose 配置；
 - SQLAlchemy 2.x 数据库基础（Engine / Session 工厂 / 请求级 Session 依赖 / Declarative Base）；
 - Journal SQLAlchemy Model（Stage 2 / S2-T01 增加可空 `folder_id`、`deleted_at`）；
-- Folder / Inbox / Insight SQLAlchemy models; Inbox now also has its S2-T04 API (Folder/Insight APIs remain future tasks);
+- Folder / Inbox / Insight SQLAlchemy models; Inbox has its S2-T04 API and Insight has its S2-T06 API (the Folder API remains a future task);
 - Alembic: original Journal migration, M1/M2, plus S2-T04 M3 `18ecf7e09da6` (unique Daily date where `is_daily = true`);
 - Journal 的 Pydantic Schema（`JournalCreate` / `JournalUpdate` / `JournalResponse` / `JournalPage`）；
   响应为完整十字段（`type` / `id` / `title` / `display_title` / `content` / `journal_date` /
@@ -79,7 +81,10 @@ backend/
 │   │   └── models.py           # Inbox Model（S2-T01 / M2）
 │   └── insight/
 │       ├── __init__.py
-│       └── models.py           # Insight Model（S2-T01 / M2）
+│       ├── models.py           # Insight Model（S2-T01 / M2）
+│       ├── schemas.py          # InsightCreate / InsightUpdate / InsightResponse / InsightPage（S2-T06）
+│       ├── service.py          # create / list（分页）/ get / update（部分）/ delete（软删除）（S2-T06）
+│       └── router.py           # POST / GET /api/insights、GET / PATCH / DELETE /api/insights/{id}（S2-T06）
 ├── tests/
 │   ├── conftest.py             # 共享 api fixture（事务隔离 + 四张业务表无残留检查）
 │   ├── test_journal_schemas.py # Task 4.1 的 Schema 测试（只用内存数据）
@@ -90,6 +95,9 @@ backend/
 │   ├── test_journal_update_api.py # Task 6.2 的修改 API 测试（真实 PostgreSQL）
 │   ├── test_journal_delete_api.py # Task 7.1 / 7.2 的删除 API 测试（软删除，真实 PostgreSQL）
 │   ├── test_journal_pagination_api.py # S2-T02 的分页 / 编号 / 软删除测试（真实 PostgreSQL）
+│   ├── test_insight_schemas.py # S2-T06 的 Insight Schema 测试（只用内存数据）
+│   ├── test_insight_api.py     # S2-T06 的 Insight CRUD / 分页 / 软删除 API 测试（真实 PostgreSQL）
+│   ├── test_insight_service.py # S2-T06 的回滚 / identity map / 软删时间保护测试（真实 PostgreSQL）
 │   ├── test_stage2_migrations.py  # S2-T01 的 M1 / M2 迁移与旧数据保留验证（一次性隔离库）
 │   ├── test_cors.py            # 最小 CORS 测试（只读 health / 四种方法预检，不写数据库）
 │   └── test_test_database.py   # 隔离守卫：断言测试进程连的是 seekjournal_test（不建连接）
@@ -913,7 +921,8 @@ docker compose --env-file backend/.env stop
 
 - 可配置的 `page_size` 与自定义排序参数；
 - 恢复 / 永久删除 / 回收箱列表（S2-T09）；
-- Folder、Inbox、Insight 的 API（只有表结构与 Model）；
+- Folder 的 API（只有表结构与 Model）；
+- Insight 的来源 Journal 关系、版本 / 操作历史、AI 字段；
 - 搜索、内部链接解析；
 - 认证。
 
@@ -1163,3 +1172,61 @@ inside `seekjournal_test`. Each Alembic child connection verifies its database a
 search_path. No extra database is created/upgraded/dropped; public rows/revision
 are compared before/after. API tests use savepoints; the real concurrency test
 commits only its generated marker/IDs and deletes only those IDs afterward.
+
+## S2-T06: Manual Insight CRUD
+
+Insight is the simplest of the three file types: **no business date, no source
+Journal link, no AI state**. Users manage it by hand. It follows the same
+Router -> Service -> SQLAlchemy -> PostgreSQL flow and adds **no new migration**
+(the `insights` table was created by M2; head stays `18ecf7e09da6`).
+
+| Method | Endpoint | Behavior |
+|---|---|---|
+| POST | `/api/insights` | Required `content`; optional `title`, `folder_id`; 201 with the full record |
+| GET | `/api/insights` | Optional `folder_id`, `page >= 1`; fixed 20 items; `updated_at DESC, id DESC` |
+| GET | `/api/insights/{id}` | 200 or 404 |
+| PATCH | `/api/insights/{id}` | Only `title`, `content`, `folder_id`; 200 or 404 |
+| DELETE | `/api/insights/{id}` | **Soft delete** (moves to Trash); 204 with zero bytes; later GET/PATCH/DELETE 404 |
+
+Response fields: `type="insight"`, `id`, `title`, `display_title`, `content`,
+`folder_id`, `created_at`, `updated_at`, `deleted_at`. There is no
+`journal_date` / `inbox_date` / `is_daily`, and no source or AI field.
+
+- **Title / content** reuse Journal's exact request rules: title <= 80 code points
+  (omitted / null / empty all allowed, non-empty not trimmed); content <= 50,000
+  code points with at least one non-blank character. Raw Markdown and meaningful
+  whitespace round-trip unchanged. These limits apply **only to request schemas**,
+  so historical oversized rows stay readable.
+- **Empty title** projects to `display_title = "未命名 Insight"`. This is a
+  read-only projection; the fallback text is never written back into `title`.
+- **PATCH** uses `model_dump(exclude_unset=True)`: omitted fields stay unchanged,
+  `title=null` explicitly clears, `content=null` is illegal (NOT NULL column),
+  `folder_id=null` clears the Folder. System / unknown fields are ignored and
+  `id` / timestamps / `deleted_at` can never be rewritten by a client.
+- **Empty / ignored / same-value PATCH** returns the current record without an
+  UPDATE, so `updated_at` is unchanged. A real change advances `updated_at` but
+  never `created_at`. Multi-field updates share one transaction; a missing Folder
+  raises before any assignment, so there is no partial write and the Session stays
+  usable after rollback.
+- **List** returns only `deleted_at IS NULL` rows, ordered `updated_at DESC,
+  id DESC`; `total` is computed after filtering and before paging; out-of-range
+  pages return 200 with empty `items`.
+- **Delete** is a soft delete: `deleted_at` is set, the row stays, and
+  **`created_at` / `updated_at` are preserved exactly** — the `UPDATE` writes
+  `updated_at = insights.updated_at` back in the same statement to cancel the
+  Model `onupdate`. Hidden rows are excluded by an explicit
+  `WHERE deleted_at IS NULL` query (not `Session.get()`), so a stale object in the
+  identity map cannot resurrect them. Trash listing / restore / permanent delete
+  belong to S2-T09 and are not implemented here.
+
+Run from `backend/`. Insight tests:
+
+```powershell
+# Schema tests need no database:
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_insight_schemas.py
+# API + service tests need seekjournal_test:
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_insight_service.py tests/test_insight_api.py
+# Full regression:
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests
+.\.venv\Scripts\python.exe -B -m alembic heads
+```
