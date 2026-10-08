@@ -1,37 +1,14 @@
-"""Inbox SQLAlchemy Model。
+"""Inbox storage mapping (M2) plus Daily's partial unique index (M3).
 
-Stage 2 / S2-T01（M2）。
-
-字段定义以 `docs/stage2.md`、`docs/stage2-api.md` 与
-`docs/stage2-architecture.md` 第 3 节为准：
-
-- id；
-- title：Nullable Text；
-- content：Text Not Null；
-- inbox_date：Date Not Null（本机 04:00 业务日期）；
-- is_daily：Boolean Not Null，默认 false（区分当日 Daily 与额外 Inbox）；
-- folder_id：Nullable 外键 → folders.id；
-- created_at / updated_at：带时区时间；
-- deleted_at：Nullable 带时区时间。
-
-刻意**没有**的字段：
-
-- 整理状态、完成状态、颜色、过期规则；
-- Journal 来源关系；
-- Daily 唯一索引（属于 S2-T04 的 M3，本任务不建）。
-
-`title` 先保持 Nullable：**「用户能否主动清空 Inbox 标题」是产品 Pending P1**，
-本任务只提供不丢数据的存储，不替产品做决定。
-
-时间沿用 Journal 的 Python default / onupdate 方式，不新增数据库触发器。
-本模块只描述表结构映射，不创建表；实际的表由 Alembic Migration 建立。
+All Inbox kinds are physically deleted. M2's deleted_at column stays unused.
+Daily identity is inbox_date + is_daily, independent of title and Folder.
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Text, false
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Text, false, Index, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -55,6 +32,10 @@ class Inbox(Base):
     """
 
     __tablename__ = "inboxes"
+    __table_args__ = (
+        Index('uq_inboxes_daily_date', 'inbox_date', unique=True,
+              postgresql_where=text('is_daily = true')),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
@@ -93,7 +74,7 @@ class Inbox(Base):
         onupdate=_utcnow,
     )
 
-    # 软删除时间。本轮只建立列，不实现软删除行为。
+    # Retained M2 column; Inbox never assigns or filters this field.
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

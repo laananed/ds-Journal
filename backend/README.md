@@ -1,5 +1,12 @@
 # SeekJournal Backend
 
+> S2-T04 backend implementation: Inbox/Daily CRUD and M3 are available in this
+> worktree. The personal `seekjournal` database is **not upgraded**. Existing
+> S2-T01/T02 execution records below describe those tasks at their execution time.
+> Current migration head is `18ecf7e09da6`; current migration tests use a private
+> schema in `seekjournal_test`, never a separate migration database.
+
+
 SeekJournal 后端（Stage 1 / Task 8.1–8.4 列表、创建、详情 / 修改 / 删除与整体验收的后端产物；
 Stage 1.5 / S1.5-T2 增加请求输入校验：`title` ≤80 码点、`content` 非空白且 ≤50,000 码点；
 Stage 2 / S2-T01 建立数据基础：新增 `folders` / `inboxes` / `insights` 三张表，
@@ -14,8 +21,8 @@ Stage 2 / S2-T02 把 Journal 读取 / 修改 / 删除升级为分页 envelope、
 - 一份本地 PostgreSQL 开发数据库的 Compose 配置；
 - SQLAlchemy 2.x 数据库基础（Engine / Session 工厂 / 请求级 Session 依赖 / Declarative Base）；
 - Journal SQLAlchemy Model（Stage 2 / S2-T01 增加可空 `folder_id`、`deleted_at`）；
-- Folder / Inbox / Insight SQLAlchemy Model（Stage 2 / S2-T01，只有表结构，尚无 API）；
-- Alembic 迁移：初始 `journals` 表，以及 S2-T01 的 M1（folders + journals 两列）与 M2（inboxes / insights）；
+- Folder / Inbox / Insight SQLAlchemy models; Inbox now also has its S2-T04 API (Folder/Insight APIs remain future tasks);
+- Alembic: original Journal migration, M1/M2, plus S2-T04 M3 `18ecf7e09da6` (unique Daily date where `is_daily = true`);
 - Journal 的 Pydantic Schema（`JournalCreate` / `JournalUpdate` / `JournalResponse` / `JournalPage`）；
   响应为完整十字段（`type` / `id` / `title` / `display_title` / `content` / `journal_date` /
   `folder_id` / `created_at` / `updated_at` / `deleted_at`），Stage 2 / S2-T02）；
@@ -37,7 +44,7 @@ Stage 2 / S2-T02 把 Journal 读取 / 修改 / 删除升级为分页 envelope、
   （后六套使用 TestClient + 真实 PostgreSQL）；
 - 一套 CORS 测试（`test_cors.py`，只读 `GET /api/health` 与 `OPTIONS`，不写数据库）；
 - 一个测试库隔离守卫（`test_test_database.py`，断言测试进程连的是 `seekjournal_test`）；
-- 一套迁移验证测试（`test_stage2_migrations.py`，在一次性隔离验证库上验证 M1 / M2 逐行保留旧 Journal）；
+- Migration tests (`test_stage2_migrations.py`): base -> M1 -> M2 -> M3 in a private schema inside `seekjournal_test`, with exact legacy fields/public protection/old migration hashes;
 - 一个只读的历史连接验证脚本。
 
 前端（React）通过真实 HTTP `GET`（列表、筛选、详情）、`POST`（创建）、
@@ -758,7 +765,7 @@ Schema 测试仍只使用内存，不建立数据库连接。
 | `test_journal_update_api.py` | 67 | 是（测试库） |
 | `test_journal_delete_api.py` | 27 | 是（测试库） |
 | `test_journal_pagination_api.py` | 39 | 是（测试库） |
-| `test_stage2_migrations.py` | 9 | 是（**一次性隔离迁移验证库**，不碰测试库与开发库） |
+| `test_stage2_migrations.py` | 11 | PostgreSQL, private schema in `seekjournal_test`; public and personal DB untouched |
 | `test_cors.py` | 17 | 否（只读 health / 预检） |
 | `test_test_database.py` | 1 | 否（只读 Engine 元数据） |
 
@@ -778,7 +785,7 @@ Schema 测试仍只使用内存，不建立数据库连接。
 它的总数断言一律带 `journal_date` / `folder_id` 筛选，只数自己造的数据，
 因此无论测试库之前是否有记录都能通过。
 
-`tests/test_stage2_migrations.py` 不依赖测试库基线：它在运行时创建自己的
+`tests/test_stage2_migrations.py` now uses a unique schema in `seekjournal_test` and verifies base -> M1 -> M2 -> M3; the schema is removed after validation:
 一次性隔离迁移验证库，跑完即删。但 `folders` / `inboxes` / `insights`
 三张新表必须已经存在，所以这个测试同样要求先跑一次 `prepare_test_db`。
 
@@ -885,7 +892,7 @@ docker compose --env-file backend/.env stop
 - 本地 PostgreSQL 开发数据库的 Compose 配置
 - SQLAlchemy 2.x 数据库基础：Engine、Session 工厂、共享 Declarative Base（`app/database.py`）
 - Journal Model：原六字段 + 可空 `folder_id`、`deleted_at`（`app/journal/models.py`）
-- Alembic 迁移：初始 `journals` 表，以及 S2-T01 的 M1 / M2（S2-T02 无新迁移）
+- Alembic: original Journal migration, M1/M2, plus S2-T04 M3 `18ecf7e09da6` (unique Daily date where `is_daily = true`);
 - Journal Pydantic Schema：`JournalCreate` / `JournalUpdate` / `JournalResponse` / `JournalPage`
   （`app/journal/schemas.py`）
 - 八套 pytest 测试：`tests/test_journal_schemas.py`、
@@ -976,7 +983,7 @@ Stage 1.5 的六个字段、数组列表响应与硬删除行为在当时原样�
 
 ### 迁移验证方式
 
-`tests/test_stage2_migrations.py` 在**一次性隔离验证库**（名字带进程号，跑完即删）上：
+`tests/test_stage2_migrations.py` now uses a unique schema in `seekjournal_test` and verifies base -> M1 -> M2 -> M3; the schema is removed after validation:
 
 1. 升到 `3a70890ddb10`，用**旧六字段 SQL** 合成 8 条历史数据
    （NULL / 空字符串 / 纯空白标题、同日多篇、空字符串与纯空白正文、
@@ -1107,3 +1114,52 @@ S2-T02 按 `docs/stage2-api.md` 把 Journal 的读取 / 修改 / 删除升级为
 > 注：S2-T01 记录里开发库停在 `3a70890ddb10`，而本次实施开始时它**已经在 head**
 > （含 `folders` / `inboxes` / `insights` / `journals` 四张业务表）。
 > 这属于本任务之外的状态变化，本任务没有运行过任何 `alembic upgrade`。
+
+## S2-T04: Inbox and Daily API
+
+Inbox follows the existing Router -> Service -> SQLAlchemy -> PostgreSQL flow.
+No new runtime dependency or frontend change is introduced.
+
+| Method | Endpoint | Behavior |
+|---|---|---|
+| POST | `/api/inboxes` | Required `content` and client-computed `inbox_date`; optional `title`, `is_daily` (false), `folder_id`; 201 |
+| GET | `/api/inboxes` | Optional `inbox_date`, `folder_id`, `page >= 1`; fixed 20 items; `created_at DESC, id DESC` |
+| GET | `/api/inboxes/daily?inbox_date=YYYY-MM-DD` | Pure read; `missing` or `active` with ID and full file; never creates a row |
+| GET / PATCH | `/api/inboxes/{id}` | 200 or 404; PATCH only `title`, `content`, `folder_id` |
+| DELETE | `/api/inboxes/{id}` | Physical delete for ordinary/today/past Daily; 204 with zero bytes; later GET/PATCH/DELETE 404 |
+
+Omitted POST title stores the supplied business date. Explicit null/empty string
+remain null/empty; display_title falls back to the date without changing title.
+Nonempty title, including whitespace, stays unchanged. Request validation reuses
+Journal's 80 code-point title and nonblank/raw 50,000 code-point content rules.
+Markdown indentation, trailing spaces and newlines round-trip unchanged.
+
+Daily identity depends on `inbox_date + is_daily`, independent of title/Folder.
+PATCH ignores identity/system fields; empty/same-value PATCH preserves timestamps.
+Inbox's old `deleted_at` column is retained, unused and never a query filter;
+responses always return null. All Inbox deletes are permanent, with no Trash or
+restore endpoint. Deleting Daily releases its date for another Daily creation.
+
+M3 `18ecf7e09da6` follows M2 `a8d98342e603`. It adds only
+`uq_inboxes_daily_date`, unique on `inbox_date WHERE is_daily = true`.
+Duplicate/concurrent Daily requests return 409 after rollback; unrelated database
+errors propagate. Folder validation and all submitted changes share one transaction.
+
+Run from `backend/` using the existing `.venv`. Confirm DATABASE_URL targets the
+explicitly authorized database before any migration. This round upgrades only
+`seekjournal_test`; the personal database requires separate user authorization.
+Do not start Compose or modify the existing 5173/8000/5432 services.
+
+```powershell
+.\.venv\Scripts\python.exe -B -m alembic heads
+.\.venv\Scripts\python.exe -B -m alembic current
+.\.venv\Scripts\python.exe -B -m alembic check
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_inbox_schemas.py tests/test_inbox_api.py tests/test_daily_inbox_api.py tests/test_inbox_service.py tests/test_stage2_migrations.py
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests
+```
+
+Migration tests create/drop only their uniquely named `s2t04_migcheck_*` schema
+inside `seekjournal_test`. Each Alembic child connection verifies its database and
+search_path. No extra database is created/upgraded/dropped; public rows/revision
+are compared before/after. API tests use savepoints; the real concurrency test
+commits only its generated marker/IDs and deletes only those IDs afterward.

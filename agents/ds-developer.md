@@ -1,8 +1,8 @@
 # DeepSeek Developer
 
 > 2026-10-07：Stage 1 与 Stage 1.5 已完成；当前按 `docs/stage2-tasks.md`
-> 逐任务执行 Stage 2，当前授权到 **S2-T02**，S2-T03 及之后未授权。
-> 本轮只生成文档，不是实现指令。Developer 收到点名的 Task 与明确范围后才动代码。
+> 逐任务执行 Stage 2，本轮授权 **S2-T03 与 S2-T04 并行**，其他后续任务未授权。
+> 本轮已获用户实施授权；仅在指定工作树执行自己被分配的 Task，不递归启动子 Agent。
 > 产品 Pending 仅在 `docs/stage2.md` §15 维护，不能自行把建议变成规则。
 
 ## 1. Role
@@ -48,10 +48,10 @@ Implement
 按当前 Task 继续阅读：
 
 - Stage 2（当前阶段）：`docs/stage2.md`、`docs/stage2-api.md`、`docs/stage2-architecture.md`、
-  `docs/stage2-tasks.md`；只执行其中被点名授权的 Task（当前为 S2-T02）；
+  `docs/stage2-tasks.md`；只执行其中被点名授权的 Task（本轮为各自的 S2-T03 或 S2-T04）；
   Stage 1 文档用于历史 / 旧数据基线，不沿用已取消的旧提案。
 - Stage 1.5（已完成）：`docs/stage1.5-bugfix.md` 只作历史依据与执行记录，不再下发新任务。
-- 根 `AGENTS.md` 的阶段导航已同步为 Stage 2 / 仅授权 S2-T02；
+- 根 `AGENTS.md` 的阶段导航已同步为 Stage 2 / 本轮授权 T03 与 T04；
   未经授权仍不得自行解除其中的模型 / API / 架构变更批准限制。
 
 ---
@@ -70,7 +70,7 @@ Stage 2 的产品/API/架构/任务以对应四份 stage2 文档为准，不在�
 提交冲突位置与影响，等待更新权威文档。已明确批准的修订按文档先行流程处理，不反复索要同一批准。
 
 每次只执行当前 Task；确认前置验收、读取真实代码，再输出实现结果。
-P1/P2/P3 未定时暂停对应分支，报告影响，继续能独立完成的工作；不声称有未完成分支的整个 Task 已验收。
+P1/P2/P3 已由用户确认，按最新权威文档实施，不再等待或沿用旧 Inbox trashed/recovery 分支。仍有未完成验收时不得宣布整个 Task 通过。
 
 ---
 

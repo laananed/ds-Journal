@@ -1,18 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Stage 2 / S2-T01：在应用运行时也注册新增的 Model。
-#
-# Journal / Inbox / Insight 的 folder_id 外键指向 folders，
-# metadata 里必须同时包含 folders，外键才能解析；
-# 因此不能等到 S2-T07 的 Folder API 时才导入。
-#
-# 这里只导入 Model（注册表结构），**不注册任何新的业务 Router**：
-# /api/inboxes、/api/insights、/api/folders 属于后续 Task。
+# Register all M2 models at runtime so Folder foreign keys resolve.
+# S2-T04 adds the Inbox router; Insight/Folder routers remain future tasks.
 from app.folder import models as _folder_models  # noqa: F401
 from app.inbox import models as _inbox_models  # noqa: F401
 from app.insight import models as _insight_models  # noqa: F401
 from app.journal.router import router as journal_router
+from app.inbox.router import router as inbox_router
 
 app = FastAPI(title="SeekJournal API")
 
@@ -36,6 +31,7 @@ app.add_middleware(
 )
 
 app.include_router(journal_router)
+app.include_router(inbox_router)
 
 
 @app.get("/api/health")

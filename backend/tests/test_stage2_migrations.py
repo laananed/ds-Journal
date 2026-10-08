@@ -1,25 +1,8 @@
-"""Stage 2 / S2-T01：M1 / M2 迁移与旧 Journal 保留验证。
+"""Migration checks use a private schema inside seekjournal_test only.
 
-本文件**不碰**开发库 `seekjournal`，也**不碰**共享测试库 `seekjournal_test`：
-它在每次运行时创建一个**一次性隔离迁移验证库**（名字带进程号），
-从 Stage 1 的初始 revision 开始，用**旧六字段 SQL** 合成历史数据，
-再逐步 `alembic upgrade` 到 M1、M2，每一步都逐行比对原有六字段。
-
-## 为什么需要独立库
-
-pytest 里其他 API 测试用的 `api` fixture 是「外层事务 + savepoint」，
-它永远看不到 `alembic upgrade` 产生的 DDL，也回滚不了 DDL。
-迁移验证必须真的执行迁移，所以只能在真正的库里做。
-用独立库还有一个好处：完全不依赖 `seekjournal_test` 当前是空还是已有数据。
-
-## 安全约束
-
-- 库名固定前缀 + 进程号；创建前确认不存在，结束时只 `DROP` 这个库；
-- 绝不 drop 其它数据库，也不清空任何表；
-- 迁移子进程通过**独立 `DATABASE_URL` 环境变量**启动，
-  因此 `alembic/env.py` → `app/database.py` 在子进程里新建的 Engine
-  指向这个临时库，**不会**复用当前测试进程里已经创建的 Engine；
-- 断言信息里只出现表名、行数、id 与 digest，不输出任何正文内容与连接密码。
+The fixture creates a unique schema, passes search_path through DATABASE_URL to
+independent Alembic processes, preserves public data/revision, and drops only its
+own schema. No other database is created, upgraded, or dropped.
 """
 
 from __future__ import annotations
@@ -51,7 +34,7 @@ from scripts.prepare_test_db import get_test_database_url
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 # 验证库名字前缀：只用于本轮一次性验证，用后即删。
-CHECK_DB_PREFIX = "seekjournal_s2t01_migcheck"
+CHECK_DB_PREFIX = "s2t04_migcheck"
 
 # Stage 1 的初始 revision（文档中记录的实际值）。
 STAGE1_REVISION = "3a70890ddb10"
@@ -68,46 +51,43 @@ EXPECTED_TABLES = {"journals", "folders", "inboxes", "insights"}
 # ---------------------------------------------------------------------------
 
 
-def _sqlalchemy_url(dbname: str) -> str:
-    """给 SQLAlchemy 用的 URL（postgresql+psycopg 驱动）。"""
-    return get_test_database_url().set(database=dbname).render_as_string(
-        hide_password=False
-    )
+def _sqlalchemy_url(schema: str) -> str:
+    url = get_test_database_url()
+    assert url.database == 'seekjournal_test'
+    return url.update_query_dict({'options': f'-csearch_path={schema}'}).render_as_string(hide_password=False)
 
 
-def _psycopg_url(dbname: str) -> str:
-    """给 psycopg.connect 用的 URL（不带 SQLAlchemy 驱动后缀）。"""
-    return (
-        get_test_database_url()
-        .set(drivername="postgresql", database=dbname)
-        .render_as_string(hide_password=False)
-    )
+def _schema_connection():
+    url = get_test_database_url()
+    assert url.database == 'seekjournal_test'
+    return psycopg.connect(url.set(drivername='postgresql').render_as_string(hide_password=False), autocommit=True, connect_timeout=5)
 
 
-def _admin_connection() -> psycopg.Connection:
-    """连到 postgres 管理库；CREATE / DROP DATABASE 必须在这里做。"""
-    return psycopg.connect(_psycopg_url("postgres"), autocommit=True, connect_timeout=5)
+def _schema_exists(schema: str) -> bool:
+    with _schema_connection() as connection:
+        return connection.execute('SELECT 1 FROM pg_namespace WHERE nspname=%s', (schema,)).fetchone() is not None
 
 
-def _database_exists(dbname: str) -> bool:
-    with _admin_connection() as connection:
-        found = connection.execute(
-            "SELECT 1 FROM pg_database WHERE datname = %s", (dbname,)
-        ).fetchone()
-    return found is not None
+def _create_schema(schema: str) -> None:
+    with _schema_connection() as connection:
+        connection.execute(sql.SQL('CREATE SCHEMA {}').format(sql.Identifier(schema)))
 
 
-def _create_database(dbname: str) -> None:
-    with _admin_connection() as connection:
-        connection.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(dbname)))
+def _drop_schema(schema: str) -> None:
+    assert schema.startswith(CHECK_DB_PREFIX + '_') and schema != 'public'
+    with _schema_connection() as connection:
+        connection.execute(sql.SQL('DROP SCHEMA {} CASCADE').format(sql.Identifier(schema)))
 
 
-def _drop_database(dbname: str) -> None:
-    """只删除显式传入的这一个库；WITH (FORCE) 用来踢掉可能残留的连接。"""
-    with _admin_connection() as connection:
-        connection.execute(
-            sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(dbname))
-        )
+def _public_snapshot():
+    with _schema_connection() as connection:
+        revision = connection.execute('SELECT version_num FROM public.alembic_version').fetchone()[0]
+        rows = {}
+        for table in sorted(EXPECTED_TABLES):
+            # Digest only; never print user content.
+            result = connection.execute(sql.SQL('SELECT row_to_json(t)::text FROM public.{} t ORDER BY id').format(sql.Identifier(table))).fetchall()
+            rows[table] = hashlib.sha256(repr(result).encode()).hexdigest()
+    return revision, rows
 
 
 # ---------------------------------------------------------------------------
@@ -146,16 +126,23 @@ def _sanitize(output: str) -> str:
     return re.sub(r"\S+://\S+", "<url>", output)
 
 
-def _run_alembic(dbname: str, *args: str) -> None:
-    """在临时库上执行 alembic 子命令。
+def _run_alembic(schema: str, *args: str) -> None:
+    """Run Alembic in the private migration schema of seekjournal_test.
 
     关键是 `DATABASE_URL` 通过**子进程环境变量**传入：
     Alembic 的 env.py 会重新导入 `app.database`，
-    因此子进程里新建的 Engine 指向临时库，而不是当前测试进程的 Engine。
+    因此子进程里新建的 Engine uses the private search_path, not public tables.
     """
     env = os.environ.copy()
-    env["DATABASE_URL"] = _sqlalchemy_url(dbname)
+    env["DATABASE_URL"] = _sqlalchemy_url(schema)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+
+    probe = subprocess.run(
+        [sys.executable, '-B', '-c', "from app.database import engine; from sqlalchemy import text; c=engine.connect(); print(c.execute(text('select current_database(), current_schema()')).one()); c.close()"],
+        cwd=BACKEND_DIR, env=env, capture_output=True, text=True,
+    )
+    assert probe.returncode == 0, 'search_path connection probe failed'
+    assert probe.stdout.strip() == repr(('seekjournal_test', schema)), 'Alembic child escaped the migration schema'
 
     result = subprocess.run(
         [sys.executable, "-B", "-m", "alembic", *args],
@@ -308,6 +295,7 @@ class MigrationCheck:
     """一次迁移验证的全部证据（不含任何正文）。"""
 
     dbname: str
+    schema: str
     engine: Engine
     chain: list[str]
     baseline: list[dict] = field(default_factory=list)
@@ -324,52 +312,38 @@ class MigrationCheck:
         return self.chain[1:]
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def migration_check() -> MigrationCheck:
-    dbname = f"{CHECK_DB_PREFIX}_{os.getpid()}"
-
-    if _database_exists(dbname):
-        pytest.fail(
-            f"验证库 {dbname} 已存在；拒绝复用或删除来源不明的库，请先人工确认"
-        )
-
-    _create_database(dbname)
-    engine: Engine | None = None
+    from uuid import uuid4
+    schema = f'{CHECK_DB_PREFIX}_{os.getpid()}_{uuid4().hex[:8]}'
+    assert not _schema_exists(schema), 'Refusing to reuse an unknown schema'
+    before_public = _public_snapshot()
+    _create_schema(schema)
+    engine = None
     try:
         chain = _linear_revision_chain()
-
-        # 1. 先升到 Stage 1 revision（旧表结构），再用旧六字段 SQL 合成数据。
-        _run_alembic(dbname, "upgrade", chain[0])
-
-        engine = create_engine(_sqlalchemy_url(dbname))
+        _run_alembic(schema, 'upgrade', chain[0])
+        engine = create_engine(_sqlalchemy_url(schema))
+        with engine.connect() as connection:
+            assert connection.execute(text('SELECT current_database(), current_schema()')).one() == ('seekjournal_test', schema)
         _seed_legacy_rows(engine)
         baseline = _snapshot_six_fields(engine)
-
-        check = MigrationCheck(dbname=dbname, engine=engine, chain=chain, baseline=baseline)
-
-        # 2. 逐个 revision 升级；每升一次就重新读一遍原六字段。
+        check = MigrationCheck(dbname='seekjournal_test', schema=schema, engine=engine, chain=chain, baseline=baseline)
         for revision in chain[1:]:
-            _run_alembic(dbname, "upgrade", revision)
-            # 迁移在子进程里改了结构，这里丢掉旧连接重新取，保证读到新结构。
+            _run_alembic(schema, 'upgrade', revision)
             engine.dispose()
             check.snapshots[revision] = _snapshot_six_fields(engine)
-
-        print(
-            f"[migration_check] db={dbname} chain={chain} "
-            f"legacy_rows={len(baseline)}"
-        )
-        for line in _digest_rows(baseline):
-            print(f"[migration_check] base    {STAGE1_REVISION} {line}")
+        print(f'[migration_check] db=seekjournal_test schema={schema} chain={chain} legacy_rows={len(baseline)}')
         for revision, rows in check.snapshots.items():
-            print(f"[migration_check] after {revision}: rows={len(rows)}")
-            for line in _digest_rows(rows):
-                print(f"[migration_check] upgrade {revision} {line}")
-
+            print(f'[migration_check] revision={revision} preserved={rows == baseline} rows={len(rows)}')
+        _run_alembic(schema, 'check')
         yield check
     finally:
         if engine is not None:
             engine.dispose()
-        _drop_database(dbname)
+        _drop_schema(schema)
+        assert not _schema_exists(schema)
+        assert _public_snapshot() == before_public, 'Migration check changed public data/revision'
 
 
 # ---------------------------------------------------------------------------
@@ -382,8 +356,8 @@ def test_revision_chain_is_single_head_and_unchanged_base(migration_check):
     chain = migration_check.chain
 
     assert chain[0] == STAGE1_REVISION, "初始迁移不能改，链的起点必须仍是 Stage 1 revision"
-    # 本阶段只有 M1、M2 两份迁移，没有 M3。
-    assert len(chain) == 3, f"本阶段应只有 base + M1 + M2，实际 {chain}"
+    # Stage 2 now contains base + M1 + M2 + M3.
+    assert len(chain) == 4, f"Expected base + M1 + M2 + M3, got {chain}"
 
 
 def test_only_expected_tables_exist(migration_check):
@@ -393,8 +367,8 @@ def test_only_expected_tables_exist(migration_check):
             row[0]
             for row in connection.execute(
                 text(
-                    "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-                )
+                    "SELECT tablename FROM pg_tables WHERE schemaname = :schema"
+                ), {"schema": migration_check.schema}
             )
         }
 
@@ -402,7 +376,7 @@ def test_only_expected_tables_exist(migration_check):
 
 
 def test_legacy_six_fields_survive_every_upgrade(migration_check):
-    """核心断言：M1、M2 前后，原有六字段逐行完全一致。"""
+    """核心断言：M1/M2/M3 前后，原有六字段逐行完全一致。"""
     baseline = migration_check.baseline
 
     assert len(baseline) == len(LEGACY_ROWS), "合成旧数据行数与预期不一致"
@@ -607,3 +581,28 @@ def test_new_tables_are_writable_via_orm_in_isolated_transaction(migration_check
     assert counts["inboxes"] == 0, f"inboxes 有残留：{counts}"
     assert counts["insights"] == 0, f"insights 有残留：{counts}"
     assert counts["journals"] == len(LEGACY_ROWS), f"旧数据被改动：{counts}"
+
+
+OLD_MIGRATION_HASHES = {
+    '3a70890ddb10_create_journals_table.py': '0a0f060a812c5ac1281a13ee6213a8ecea9059e40ababc336b6ec9a091c8fdfa',
+    '52c8e94a365c_create_folders_add_journal_folder_id_deleted_at.py': '0172440504f900f9da8d26b63403c9e2d93acf729fb552090277bf4c2ff94a3d',
+    'a8d98342e603_create_inboxes_and_insights.py': 'ae636671c119715c287413d11e1c6b05a1ec20cd540e01cebf917892582190ce',
+}
+
+
+def test_m3_extends_m2_and_original_migrations_are_byte_unchanged():
+    chain = _linear_revision_chain()
+    assert len(chain) == 4 and chain[-2] == 'a8d98342e603'
+    for filename, digest in OLD_MIGRATION_HASHES.items():
+        assert hashlib.sha256((BACKEND_DIR / 'alembic' / 'versions' / filename).read_bytes()).hexdigest() == digest
+
+
+def test_daily_unique_index_matches_metadata_and_has_no_deleted_filter(migration_check):
+    indexes = inspect(migration_check.engine).get_indexes('inboxes')
+    index = next(index for index in indexes if index['name'] == 'uq_inboxes_daily_date')
+    assert index['unique'] is True and index['column_names'] == ['inbox_date']
+    predicate = str(index['dialect_options']['postgresql_where']).lower()
+    assert 'is_daily' in predicate and 'true' in predicate and 'deleted_at' not in predicate
+    mapped = next(index for index in Inbox.__table__.indexes if index.name == 'uq_inboxes_daily_date')
+    assert mapped.unique and [column.name for column in mapped.columns] == ['inbox_date']
+    assert 'deleted_at' not in str(mapped.dialect_options['postgresql']['where'])

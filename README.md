@@ -2,10 +2,12 @@
 
 SeekJournal 是一个以个人认知成长为核心、生活与情感记录为辅的个人记录与复盘软件。
 
-**Stage 1 与 Stage 1.5 已完成；Stage 2（本地 Web 完整基础记录版）正在进行，当前只授权到 S2-T01（数据基础与旧 Journal 升级），S2-T02 及之后未获实施授权。**
-Stage 1.5 只修复 Stage 1 的体验问题（编号方向、预览截断、输入校验），未新增产品功能。
-Stage 2 / S2-T01 只在数据层增加 `folders` / `inboxes` / `insights` 三张表与 Journal 的两个可空列，
-Stage 1.5 的六个字段、API 路由与数组响应都不变；旧 Journal 数据迁移后逐行保留。已跑通的开发链路：
+**Stage 1、Stage 1.5、S2-T01 与 S2-T02 已完成；本轮授权 T03 前端和 T04 Inbox 后端在指定工作树并行实施与独立验收。其他后续 Task 未授权。**
+主仓库共同基线为 `01bf8a86a875332b590ef6e5c0f0d087ac44c50b`，Journal 后端已提供分页、display_title 与软删除。
+T03/T04 实施代码仍在各自工作树、尚未提交或合并；主仓库旧前端需要 T03 配套，不能把单独的后端验收说成完整 Web 已可用。
+本轮不安装依赖、不自动 Git 发布、不升级个人库；Inbox 硬删除与其他最新产品决定以 `docs/stage2.md` 为准。
+
+已跑通的开发链路：
 
 ```text
 React → REST API / JSON → FastAPI → Pydantic → Service → SQLAlchemy → psycopg → PostgreSQL
@@ -20,8 +22,8 @@ Stage 1 不是完整产品。范围、验收标准与架构见：
 | `docs/stage1-architecture.md` | Stage 1 历史技术架构 |
 | `docs/stage1-acceptance.md` | Stage 1 整体验收记录（一次带时间点的快照） |
 | `docs/stage1.5-bugfix.md` | Stage 1.5 的 Bug Fix 需求、契约修订与 2 个 Task（已完成，含执行记录） |
-| `docs/stage2.md` | Stage 2 产品需求、未来阶段路线、Pending Product Decisions（权威） |
-| `docs/stage2-api.md` | Stage 2 API 契约设计（尚未实现） |
+| `docs/stage2.md` | Stage 2 产品需求、阶段路线与已确认产品决定（权威） |
+| `docs/stage2-api.md` | Stage 2 API 契约（T02已实现，T04本轮任务树中验收，其他部分仍为规划） |
 | `docs/stage2-architecture.md` | Stage 2 对象关系、模块、事务、迁移与测试设计 |
 | `docs/stage2-tasks.md` | Stage 2 的 14 个开发 Task、依赖、验证顺序 |
 | `AGENTS.md` / `agents/*.md` | Agent 协作规则 |
@@ -46,15 +48,13 @@ Stage 1.5（已完成，只修复 Stage 1 体验问题、未新增功能）：
   **旧 Journal 数据完整保留**：数据库里的超长 / 空白历史记录仍可正常读取，
   只改其它合法字段时也不会被连带清洗或截断。
 
-Stage 2（进行中，当前只实现到 S2-T01）：
+Stage 2 当前基线与任务树状态：
 
-- **S2-T01（已实现，待独立验收）**：新增 `folders` / `inboxes` / `insights` 三张表，
-  `journals` 增加可空 `folder_id`、`deleted_at`；两份 Migration `52c8e94a365c` → `a8d98342e603`，
-  旧 Journal 原六字段逐行保留。**只建立表结构，未新增任何 API**；
-  软删除、Inbox、Insight、Folder 等行为属于后续 Task。
-- 其余 Stage 2 能力（Inbox、手动 Insight、一级 Folder、Markdown 阅读、普通搜索、
-  回收箱、简单内部链接、20 条/页、基础卡片与统一离开提醒）**尚未实现**。
-  **Inbox → Journal 整理、操作记录与内容版本历史已取消，不在 Stage 2。**
+- **T01 已完成**：Folder/Inbox/Insight表与Journal可空关联/删除列，M1 `52c8e94a365c` → M2 `a8d98342e603`；旧Journal原六字段保留。
+- **T02 已完成**：Journal分页envelope、统一display_title、软删除API。Stage1历史“数组与硬删除”不再是当前后端契约。
+- **T03/T04**：分别在SeekJournal-T03与SeekJournal-T04实施完成，独立验收已通过；尚未提交、合并或集成验证。T04新增M3仅升级自己的seekjournal_test。
+- Inbox前端、手动Insight、Folder业务、Markdown阅读、Search、Trash页面/恢复、内部链接等后续任务未实施。T03导航对这些模块显示未开放，不伪造数据。
+- Inbox全部硬删除，不进入回收箱；Journal/Insight仍按软删除规划。Inbox→Journal、操作记录与内容版本历史已取消。
 
 未来功能尚未实现：注册 / 登录 / 多用户 / 权限、图片、标签、AI、同步、云部署等。
 阶段路线与 Non-goals 以 `docs/stage2.md` 为准。
