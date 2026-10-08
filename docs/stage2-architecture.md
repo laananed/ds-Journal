@@ -1,7 +1,7 @@
 # SeekJournal — Stage 2 Architecture
 
 > 2026-10-07。Stage 2 的技术设计依据 `stage2.md`，API 依据 `stage2-api.md`。
-> 本轮是文档设计；未生成 Migration，未修改 Model、源码或依赖。产品 Pending 只在 `stage2.md` §15 登记。
+> T01/T02已完成；本轮授权T03/T04，2026-10-08确认规则以 `stage2.md` §15为准。后续任务仍只规划。
 
 ## 1. 保留现有边界
 
@@ -34,7 +34,7 @@ React 编辑/阅读/列表
 | 表 | 字段设计 | 新增/历史处理 |
 |---|---|---|
 | journals | 现有六字段 + folder_id Nullable FK、deleted_at Nullable timestamptz | 原六字段逐行保留；新增默认 NULL |
-| inboxes | id、title Text、content Text Not Null、inbox_date Date Not Null、is_daily Boolean Not Null 默认 false、folder_id Nullable FK、created_at、updated_at、deleted_at Nullable | 新表，无旧数据；title 的 Nullable/写入约束待 P1 最终冻结，先用 Nullable Text 不损数据 |
+| inboxes | id、title Text、content Text Not Null、inbox_date Date Not Null、is_daily Boolean Not Null 默认 false、folder_id Nullable FK、created_at、updated_at、deleted_at Nullable | 新表，无旧数据；title允许NULL/空串；省略创建标题存业务日期。deleted_at列保留但本期不使用，删除物理移除 |
 | insights | id、title Nullable Text、content Text Not Null、folder_id Nullable FK、created_at、updated_at、deleted_at Nullable | 新表；没有所属日期/AI/来源字段 |
 | folders | id、name Text Not Null | 新表，无 parent_id、颜色、图标、排序字段 |
 
@@ -47,8 +47,7 @@ title/content 继续 Text，规则由请求 Schema 强制；不为旧 Journal �
 
 inbox_date 用于 04:00 业务日期，is_daily 区分默认 Daily 与额外 Inbox；两者不随用户改标题或移动 Folder 改变。
 默认日期在前端计算并明确发送。有效保存前只有前端状态，不存在数据库占位行。
-P2 推荐策略确认后，对 `is_daily=true` 的 inbox_date 建唯一部分索引，覆盖有效与已删除 Daily；普通 Inbox 不受该唯一约束。
-该索引在 S2-T04 的 M3 新增，P2 未确认时不提前决定 deleted_at 是否参与条件。
+P2已确认：所有Inbox硬删除。S2-T04的M3在 inbox_date 上建立 `WHERE is_daily=true` 唯一部分索引，不包含deleted_at条件；普通Inbox不受约束。删除Daily物理释放该日期的唯一身份，可同日重建。
 本地单用户也可能双标签提交，唯一约束负责最终仲裁；409 后重读并提示，不覆盖已有正文。
 
 ## 4. Journal 编号与投影
@@ -81,7 +80,7 @@ S2-T02 的实现方式：一个 `ROW_NUMBER() OVER (PARTITION BY journal_date OR
 | `backend/app/inbox/` | 同样四文件；Inbox CRUD、Daily 查询/创建、身份唯一性 |
 | `backend/app/insight/` | 同样四文件；手动 Insight CRUD |
 | `backend/app/folder/` | Folder CRUD、引用检查、混合内容查询 |
-| `backend/app/trash/` | 已删除三类列表、只读详情、恢复、永久删除；无需 Model |
+| `backend/app/trash/` | 仅Journal/Insight的已删除列表、只读详情、恢复、永久删除；排除Inbox；无需Model |
 | `backend/app/search/` | SQL 子串 AND 查询、跨类型排序分页；无需 Model |
 | `backend/app/link/` | 精确 display_title 候选查询；无需关系 Model |
 | `backend/app/main.py` | 注册 Router，保留 health/CORS；不塞业务逻辑 |
@@ -102,8 +101,8 @@ S2-T02 的实现方式：一个 `ROW_NUMBER() OVER (PARTITION BY journal_date OR
 - 每次写请求一个原子事务。正文/title/日期/Folder 同次 PATCH 要么全部成功，要么 rollback。
 - GET 纯读取，不 flush/commit，不创建 Daily、不创建链接、不改变时间。
 - 创建/内容修改按当前模式 commit 后回读；空 PATCH 直接返回；相同值不强制更新时间。
-- 软删除/恢复 **必须显式将原 updated_at 写回同一个 UPDATE**，或采用经验证不会触发 onupdate 的等价写法。仅改 deleted_at 的 ORM 赋值会触发现有 onupdate，不能沿用为正确实现。
-- 永久删除只接受 deleted_at 非空目标；失败 rollback、Session 可继续用；不删除 Folder。
+- Journal/Insight的软删除/恢复 **必须显式将原 updated_at 写回同一个 UPDATE**，或采用经验证不会触发 onupdate 的等价写法。仅改 deleted_at 的 ORM 赋值会触发现有 onupdate，不能沿用为正确实现。
+- Journal/Insight的永久删除只接受 deleted_at 非空目标；失败 rollback、Session 可继续用；不删除 Folder。
 - Folder 删除：锁住目标 Folder 行，检查三张文件表全部引用（含已删除），真空才删除；FK 防止竞争写入造成孤儿。并发引用失败转换为明确冲突，不泄漏 DB 内部错误。
 - 文件写入先验证 Folder 存在，在同一事务完成 FK 写入；Folder 并发删除时整个 PATCH 回滚，不能先保存正文再失败移动。
 - Daily 唯一性冲突回滚后查询；不在事务失败状态继续使用 Session。
@@ -113,8 +112,8 @@ S2-T02 的实现方式：一个 `ROW_NUMBER() OVER (PARTITION BY journal_date OR
 
 三类各形成同形投影，用 UNION ALL 组合，在数据库进行共同排序、count、分页。
 type 固定顺序 Journal→Inbox→Insight；同时间加 id，避免三个表 id 撞号或分页并列不稳定。
-普通列表/详情、Folder、Search、Link 都必须显式加有效状态条件；Session.get 命中 identity map 也不能跳过已删除检查。
-Trash 只读 deleted_at 非空，采用独立入口，不给普通详情开 include_deleted 参数。
+Journal/Insight在普通列表/详情、Folder、Search、Link均检查deleted_at为空；Inbox读取所有现存行，不使用未启用deleted_at列。Session identity map不能绕过Journal/Insight软删除检查。
+Trash仅查询Journal/Insight的deleted_at非空记录，不包含Inbox，采用独立入口，不给普通详情开include_deleted。
 
 Search 按空白词组 AND，各词在 title/content 间 OR；用参数化 ILIKE/等价不分大小写子串，转义通配符。没有全文索引、分词服务或 relevance 算法。
 Folder 排序用 updated_at；Trash 用 deleted_at；Search 用 updated_at；Journal 原排序保留。
@@ -149,7 +148,7 @@ AbortController 或请求序号使迟到旧响应失效；点击卡片真实读�
 | 基线 | 执行前检查、S1.5-T1～T2 | 无 Migration；起点 `3a70890ddb10` | 输入验证/CSS/全量前端编号不改表 |
 | M1 | S2-T01 | 建 folders；为 journals 加 Nullable folder_id/deleted_at 及 FK | 被引用表先建；旧 Journal 新列 NULL，无删改原六字段 |
 | M2 | S2-T01，接 M1 | 建 inboxes/insights 与 folder FK、业务日期/Daily 身份字段 | 先有 Folder，再建两个文件类型；不提前含 P2 唯一性分支 |
-| M3 | S2-T04，接 M2 | P2 确认后的 Daily 唯一部分索引 | 唯一性覆盖范围取决于回收箱后的 Daily 行为 |
+| M3 | S2-T04，接实际M2 `a8d98342e603` | Daily唯一索引，条件仅is_daily=true | 所有Inbox硬删除，删除后释放Daily身份；本轮只升级seekjournal_test |
 
 M1/M2 作为同一基础 Task 的两份线性 revision，可逐步核对旧数据。revision ID 在执行时由 Alembic 产生，文档代号不伪造实际 ID。
 **P3 已确认为动态编号（2026-10-07），因此 S2-T02 不需要新 Migration，编号不参与表结构。**
@@ -163,7 +162,7 @@ M1/M2 作为同一基础 Task 的两份线性 revision，可逐步核对旧数�
 4. 通过测试库迁移和后端回归后，在该任务明确授权的开发库上执行同一迁移，并做前后摘要对比。
 5. 不通过 drop database/table、create_all/drop_all、stamp head、改历史 revision、重新初始化数据卷来代替升级。
 
-测试 prepare 脚本目前只检查 journals，fixture 无残留也只数 journals；S2-T01 必须扩展为所有新业务表，不得因为新增表而自动清空测试库。
+S2-T01已将prepare/fixture守卫扩展到全部四张业务表；继续保留，不因新增功能清空测试库。
 破坏性 downgrade 不在真实开发库演练；回退能力在专用空白/合成迁移库验证，任何真实数据回退另行授权。
 开发库出现既有非法值不会让迁移截断或失败，因为长度/非空新规则不作为旧数据 CHECK。
 
@@ -172,7 +171,7 @@ M1/M2 作为同一基础 Task 的两份线性 revision，可逐步核对旧数�
 | 层次 | 必测重点 |
 |---|---|
 | Schema/纯逻辑 | 80/50,000、空白、Unicode、PATCH 省略/null、原样 Markdown、04:00 边界、Dirty |
-| PostgreSQL API | 三类 CRUD、分页和 total、编号不依赖过滤、软删/恢复时间、永删、Folder FK/非空、Daily 唯一性、Search、Link |
+| PostgreSQL API | 三类CRUD/分页/total；Journal编号、Journal/Insight软删/恢复/永删时间；Inbox硬删/Daily重建；Folder/Daily唯一性、Search、Link |
 | 故障/竞争 | 写失败 rollback、Session 继续可用；Daily 并发冲突；Folder 检查后竞争引用；软删不触发 onupdate |
 | Migration | 从 Stage 1 六字段数据升级，旧非法内容完整保留，无默认伪日志，单 head/metadata 一致 |
 | 前端 build/lint/纯逻辑 | 沿用 Node 类型剥离，无必要不加测试框架；新规则、分页/Dirty 状态转换 |
@@ -183,9 +182,11 @@ API 写测试用 seekjournal_test + 外层事务/savepoint；schema 迁移验证
 浏览器所有写请求指向测试库后端，先证明所连库名；仅清理自己创建的 (type,id)，恢复四表空白基线，不能整库清理。
 测试结果须记实际命令、退出码、数量，真实成功与合成错误状态分开，不把历史 232 或 README 预期当新证据。
 
-## 12. 开发前治理说明
+## 12. 本轮并行治理（2026-10-08）
 
-根 `AGENTS.md` 目前仍保留 Stage 1 的必读/禁止项。本轮只授权文档与必要 agents 文件，未改根文件。
-Stage 1.5 执行前检查中，先由用户明确授权并同步根文件的阶段与权威文档导航，保留技术栈/架构变更审批；之后 Developer 只执行被点名的 Task。
-这不是重新确认已经批准的产品方向，而是避免后续执行 Agent 同时看到“只准 Stage 1”和 Stage 2 Task。
-本规划不自动授权实际修改 Journal Model/API、执行 Migration、安装渲染依赖或开始功能编码。
+T01/T02已完成，当前共同HEAD为01bf8a86a875332b590ef6e5c0f0d087ac44c50b。
+Lead独占主仓库与两个指定工作树的共享产品/API/架构/任务/Agent规则同步，实施者不维护另一个版本。
+T03只改前端，在5175/8013与seekjournal_t03_ui_test验收；不运行固定指向seekjournal_test的后端pytest。
+T04只改Inbox后端/测试/新M3，在8014与seekjournal_test验收；不升级seekjournal个人库，不影响T03数据库。
+复用PostgreSQL，不启动Compose，不停原有服务，不安装/升级依赖，不自动Git写入或清理工作树。
+Inbox硬删除；deleted_at列保留为未使用字段。Journal/Insight软删除规则不变。两个实施者不得递归启动子Agent。

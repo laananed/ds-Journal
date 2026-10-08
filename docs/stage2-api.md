@@ -1,7 +1,7 @@
 # SeekJournal — Stage 2 API Contract
 
 > 2026-10-07。产品依据 `stage2.md`，架构依据 `stage2-architecture.md`。
-> 这是 Lead 为已确认功能制定的开发契约，尚未实现。P1/P2 分支必须确认并同步文档后才实现；其余契约可独立开发。
+> 2026-10-08：P1/P2/P3 均已确认；T01/T02 已实现，本轮授权 T03/T04。其他契约仍为后续规划，不提前实现。
 > **P3 已于 2026-10-07 确认（见 `stage2.md` §15）：Journal 采用动态编号，S2-T02 按此实现。**
 > Stage 1.5 仍使用原六字段与数组响应，只修请求验证；Stage 2 明确改变列表响应、添加只读字段和软删除语义，前后端必须配套更新。
 
@@ -19,7 +19,7 @@ Base path `/api`。JSON；日期 `YYYY-MM-DD`，时间为带时区 ISO 8601。
 - 额外/系统字段沿用 ignore；客户端不能设 id、display_title、created_at、updated_at、deleted_at。
 - 系统维护字段的“忽略”不等于允许修改；PATCH 仅白名单业务字段更新。
 - 所有 POST/PATCH 中实际提交的 title/content 遵循产品的 80/50,000、非空白正文和原样保存；输出不套新请求限制，以便读取历史 Journal。
-- PATCH 省略字段表示不变；显式 `title=null` 对 Journal/Insight 表示清空；Inbox 空标题 P1 待定。显式 `content=null`、日期 null 非法；`folder_id=null` 表示移出 Folder。
+- PATCH 省略字段表示不变；显式 `title=null` 对 Journal/Insight 表示清空；Inbox 显式 null/空串同样可清空，原值保留，省略创建标题另有日期默认。显式 `content=null`、日期 null 非法；`folder_id=null` 表示移出 Folder。
 - 空 PATCH/仅忽略字段：有效对象 200 原值，不写库；不存在或软删除 404。相同值不改变 updated_at。
 
 ## 2. 文件响应与分页
@@ -35,7 +35,7 @@ Base path `/api`。JSON；日期 `YYYY-MM-DD`，时间为带时区 ISO 8601。
 | content | string | 原始完整 Markdown |
 | folder_id | integer / null | 唯一 Folder；null 为无 Folder |
 | created_at / updated_at | datetime | 原创建/内容修改时间 |
-| deleted_at | datetime / null | 删除时间；普通响应必须为 null |
+| deleted_at | datetime / null | Journal/Insight 删除时间；普通响应为 null；Inbox 保留列但本期不使用，响应恒 null |
 
 Journal 另有 `journal_date: date`；Inbox 另有 `inbox_date: date, is_daily: boolean`；Insight 没有所属日期。
 Inbox 日期/Daily 身份在创建时确定，不在 PATCH 可改字段中。Folder 关系变化属于文件修改。
@@ -92,37 +92,38 @@ journal_date 筛选也分页。新建时“当天已有记录”使用 total 展
   检查在 SQL 的 `WHERE` 里完成，不依赖（可能已缓存软删对象的）Session identity map。
   恢复 / 永久删除 / Trash 属 S2-T09，本任务不实现。
 
-## 4. Inbox 与 Daily
+## 4. Inbox 与 Daily（2026-10-08 已确认）
 
 | Method | Endpoint | 请求/行为 |
 |---|---|---|
-| POST | `/api/inboxes` | content、inbox_date 必填；title 省略时为该日期；is_daily 默认 false；folder_id 可省略/null |
-| GET | `/api/inboxes` | 可选 inbox_date、folder_id、page；仅有效对象，`created_at DESC, id DESC` |
-| GET | `/api/inboxes/daily` | 必填 inbox_date；只查询 Daily 身份，无自动创建 |
-| GET | `/api/inboxes/{id}` | 200 有效 Inbox；不存在/已删除 404 |
-| PATCH | `/api/inboxes/{id}` | 仅 title、content、folder_id |
-| DELETE | `/api/inboxes/{id}` | 软删除；204 空体；不改 updated_at |
+| POST | `/api/inboxes` | content、inbox_date 必填；is_daily 默认 false；folder_id 可省略/null；201 完整 Inbox |
+| GET | `/api/inboxes` | 可选 inbox_date、folder_id、page；全部现存 Inbox，created_at DESC、id DESC；20条分页 |
+| GET | `/api/inboxes/daily` | 必填 inbox_date；只查询该日期 is_daily=true 身份，不写入/自动创建 |
+| GET | `/api/inboxes/{id}` | 200 完整现存 Inbox；不存在/已物理删除 404 |
+| PATCH | `/api/inboxes/{id}` | 仅 title、content、folder_id；200 完整 Inbox；不存在404 |
+| DELETE | `/api/inboxes/{id}` | 所有 Inbox 物理删除，包括当日/往日 Daily；204 空体；删除后 GET/PATCH/再次 DELETE 均404 |
 
-前端明确发送按本机 04:00 算出的 inbox_date，后端不从服务器 UTC 猜业务日期。
-Daily 保存同样调用 POST，`is_daily=true`。改名后仍按身份字段查询，不按 title 匹配。
-静态 `/daily` 在动态 `/{id}` 路由前注册；合法日期无 Daily 时不是路径 404。
+title 请求与响应口径：
 
-**P1 边界**：非空用户标题和省略默认标题已确定；显式 null/空字符串/纯空白标题的保存与回退分支暂不冻结，不写“必须非空”或“必然允许清空”的实现。
+- POST 省略 title：存入请求 inbox_date 的 `YYYY-MM-DD` 字符串作为默认标题。
+- POST/PATCH 显式 `title=null`：原始 title 存 NULL；显式 `title=""`：原始 title 存空串。两种均以 inbox_date 生成 display_title，但不写回原 title。
+- PATCH 省略 title：不修改；非空字符串包括纯空白标题不 trim、原样保存；最多80 Unicode码点。content使用现有同一空白集合、最多50,000码点且至少一个非空白字符；Markdown原样保存。
+- inbox_date 与 is_daily 创建时确定，PATCH 不声明这两个可写字段；按既有 extra=ignore 规则忽略它们，若请求仅这些字段则按空PATCH返回原值，不改updated_at。
+- id、display_title、created_at、updated_at、deleted_at 等系统字段不能由客户端写入。
+- 空/相同值 PATCH 不改变 updated_at；真实 title/content/Folder 变化更新时间、created_at不变。
 
-**P2 建议契约（须产品确认）**：
+前端明确发送本机04:00业务日期，后端不从服务器UTC推断。Daily由 inbox_date+is_daily 识别，不依赖标题，改名/清空/移Folder不改变身份。
+静态 `/daily` 在动态 `/{id}` 前注册。查询响应：
 
 ```json
-{
-  "state": "missing",
-  "id": null,
-  "file": null
-}
+{"state":"missing","id":null,"file":null}
 ```
 
-state 为 missing/active/trashed；active 返回 id 与完整有效 file；trashed 仅返回 id、file=null，正文通过回收箱详情获取。
-这样 GET 不写库；当 Daily 已在回收箱时，引导恢复，重复 Daily POST 返回 409。
-日期内并发保存/双标签创建靠数据库唯一约束兜底，409 后重新查询，不自动覆盖正文。
-若产品选择“删除后可新建 Daily”，需改此契约、唯一性范围与恢复冲突规则；不得仅改索引。
+只有 missing/active：active返回同一现存Daily的id及完整file；missing不是404、不创建空行。不存在trashed/recovery状态。
+每日期最多一个现存Daily，普通Inbox不限。M3在 inbox_date 上建立 `WHERE is_daily=true` 唯一索引，不含 deleted_at 条件。
+重复/并发Daily创建返回409，rollback，不覆盖已有正文。硬删除Daily后查询missing，同日期可再次创建。
+保留M2已部署deleted_at列，本期服务不赋值、不按它筛选，Inbox普通响应deleted_at恒null；不为清理列生成迁移。
+写入与Folder引用验证在同一事务；失败rollback，不能发生部分更新。GET不改变时间/数据。
 
 ## 5. Insight
 
@@ -158,17 +159,17 @@ POST/PATCH 指定不存在 Folder 返回 404，整个写入回滚，不留下其
 
 | Method | Endpoint | 结果 |
 |---|---|---|
-| GET | `/api/trash` | 可选 type（all/journal/inbox/insight）、page；仅已删除文件，全局分页 |
+| GET | `/api/trash` | 可选 type（all/journal/insight）、page；仅已删除文件，全局分页 |
 | GET | `/api/trash/{type}/{id}` | 200 完整已删除文件；未删除/不存在 404；只读 |
 | POST | `/api/trash/{type}/{id}/restore` | 无业务请求体；200 恢复后的完整有效文件 |
 | DELETE | `/api/trash/{type}/{id}` | 单条永久删除，仅已删除文件；204 空体 |
 
-type 路径只接受单数 journal/inbox/insight，非法类型 422。
+Trash 的 type 路径只接受 journal/insight，inbox 与其他非法类型均422；列表仅包含 Journal/Insight，Inbox 没有 Trash/Restore/Permanent Delete 接口。
 排序 `deleted_at DESC, type 顺序, id DESC`。
 恢复清空 deleted_at，不改变其他原有字段/时间/Folder；对有效对象重复恢复 404。
 有效文件不得借用 Trash DELETE 直接永久删除；回收箱不存在 PATCH 或 Folder 修改接口。
 详情页中的确认文案区分“移入回收箱，可以恢复”和“永久删除，无法恢复”。
-P2 若采用推荐约束，恢复 Daily 不产生同日身份冲突；否则先明确恢复冲突契约。
+Inbox 已硬删除，不参与回收箱与恢复；这里只规划 Journal/Insight，T04 不实现这些接口。
 
 ## 8. Search
 
@@ -176,7 +177,7 @@ P2 若采用推荐约束，恢复 Daily 不产生同日身份冲突；否则先�
 
 q 可省略，空白时返回空分页；type 默认 all，仅接受 all/journal/inbox/insight。
 对 q 按连续空白分词；每词 `(title 命中 OR content 命中)`，各词 AND；英文不分大小写，中文子串；参数化 SQL 并转义 LIKE `%/_/转义符`。
-排除 deleted_at 非空。排序 `updated_at DESC, type 顺序, id DESC`；分页在合并三类结果之后执行。
+Journal/Insight 排除 deleted_at 非空；Inbox 查询现存行，不使用未启用的 deleted_at 列过滤。排序 `updated_at DESC, type 顺序, id DESC`；分页在合并三类结果之后执行。
 不搜索 display_title、folder 名称、日期字段，不返回相关性分值。
 200 通用分页文件响应；无结果 total=0。没有独立搜索索引或数据库迁移。
 
