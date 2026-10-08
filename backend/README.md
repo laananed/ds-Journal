@@ -1237,3 +1237,28 @@ Run from `backend/`. Insight tests:
 .\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests
 .\.venv\Scripts\python.exe -B -m alembic heads
 ```
+
+## S2-T09 Trash API
+
+Trash only contains soft-deleted Journal/Insight files. `GET /api/trash`
+accepts `type=all|journal|insight` and `page>=1`, with 20 items per global page.
+Ordering is deleted_at DESC, Journal before Insight, then id DESC.
+`GET /api/trash/{type}/{id}` reads full content; `POST .../restore` clears
+only deleted_at and returns the active file. Restore preserves updated_at,
+created_at, original fields and Folder. `DELETE /api/trash/{type}/{id}`
+physically removes only a deleted row and returns 204 with an empty body.
+Active/missing targets return 404; Inbox/invalid types return 422.
+Journal titles reuse full-date numbering; permanent deletion can renumber
+remaining untitled Journals under P3. No new migration is required.
+
+Validation (backend directory; existing isolated seekjournal_test fixture):
+
+```powershell
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_trash_api.py
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests
+```
+
+For an HTTP demo, set DATABASE_URL only in the demo process to seekjournal_test
+and bind to 127.0.0.1:8019. Do not edit .env, migrate seekjournal, or reuse a
+running personal backend. Clean up only demo-created typed IDs and stop only
+the demo server.
