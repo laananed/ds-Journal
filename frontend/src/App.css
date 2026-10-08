@@ -64,9 +64,13 @@
 .leave-dialog { width: min(440px, calc(100vw - 64px)); border: 1px solid #cfc9d6; border-radius: 10px; padding: 20px; color: #4a4453; }
 .leave-dialog h2 { margin: 0; font-size: 18px; }
 .leave-dialog::backdrop { background: rgb(20 12 36 / 35%); }
+.inbox-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.inbox-identity { margin: 0; font-size: 14px; color: #4a4453; }
+.inbox-daily-status { margin: 0; font-size: 14px; color: #4a4453; }
 @media (max-width: 480px) {
   .app { padding: 20px 12px 40px; gap: 16px; }
   .journal-editor, .journal-detail, .app-toolbar { padding: 12px; }
   .app .file-card { padding: 12px; }
   .pagination { gap: 8px; }
+  .inbox-page { gap: 12px; }
 }
