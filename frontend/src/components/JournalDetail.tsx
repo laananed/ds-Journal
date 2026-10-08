@@ -172,7 +172,7 @@ function JournalDetail({ journalId, onBusyChange, onDirtyChange, onNavigate, onC
           </div>
           {deleteStage === 'confirming' && (
             <div className="detail-confirm">
-              <p>这篇 Journal 将移入回收箱，可以恢复。确定要删除吗？回收箱页面尚未开放。</p>
+              <p>这篇 Journal 将移入回收箱，可以恢复，也可在 Trash 页面永久删除。确定要移入回收箱吗？</p>
               <div className="detail-confirm-actions">
                 <button type="button" className="detail-danger" onClick={confirmDelete} disabled={busy}>确认移入回收箱</button>
                 <button type="button" onClick={() => setDeleteStage('idle')} disabled={busy}>取消</button>

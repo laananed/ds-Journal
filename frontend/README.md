@@ -125,6 +125,11 @@ node --experimental-strip-types src/utils/insightDraft.test.ts
 - `components/JournalEditor.tsx` / `JournalDetail.tsx`：Journal 的输入基线、写入锁、失败保留、当天分页。
 - `pages/InboxPage.tsx`：Inbox 工具栏/列表/分页/筛选/Daily 状态 + 创建/详情/编辑面板。
 - `pages/InsightPage.tsx`：Insight 工具栏/列表/分页 + 创建/详情/编辑/移入回收箱面板。
+- `pages/TrashPage.tsx`（S2-T10）：回收箱列表（all/journal/insight 筛选、20 条/页）+ 只读详情 +
+  恢复/永久删除；按 (type, id) 打开真实详情；恢复/删除成功与列表刷新失败分开反馈；
+  目标消失（404）提示状态变化并重读列表；Inbox 不进入回收箱。
+- `api/trash.ts` / `types/trash.ts` / `utils/trashFeedback.ts`：Trash 契约（204 不解析 JSON）
+  与操作反馈文案纯逻辑。
 - `utils/dirtyState.ts` / `pagination.ts` / `journalDetail.ts` / `inboxDraft.ts` / `insightDraft.ts`：可脱离 React
   验证的比较、页码与 Inbox / Insight 草稿建造规则。
 

@@ -306,7 +306,7 @@ function InsightPanel({
           </div>
           {deleteStage === 'confirming' && (
             <div className="detail-confirm">
-              <p>这篇 Insight 将被移入回收箱，不再出现在列表与详情中。确定要移入回收箱吗？</p>
+              <p>这篇 Insight 将移入回收箱，可以恢复。确定要移入回收箱吗？</p>
               <div className="detail-confirm-actions">
                 <button type="button" className="detail-danger" onClick={confirmDelete} disabled={busy}>确认移入回收箱</button>
                 <button type="button" onClick={() => setDeleteStage('idle')} disabled={busy}>取消</button>
@@ -447,7 +447,7 @@ function InsightPage({ onDirtyChange, onBusyChange, onNavigate, initialOpen = nu
   }
   function handleDeleted() {
     onDirtyChange(false)
-    setNotice('已移入回收箱，可以恢复。回收箱页面尚未开放。')
+    setNotice('已移入回收箱，可以恢复。可到 Trash 页面查看或恢复。')
     setPanel({ kind: 'list' })
     refreshList()
   }

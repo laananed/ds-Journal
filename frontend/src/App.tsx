@@ -8,6 +8,7 @@ import Pagination from './components/Pagination'
 import FolderPage from './pages/FolderPage'
 import InboxPage from './pages/InboxPage'
 import InsightPage from './pages/InsightPage'
+import TrashPage from './pages/TrashPage'
 import type { FileIdentity } from './types/file'
 import type { JournalPage } from './types/journal'
 import { nearestValidPage } from './utils/pagination'
@@ -179,12 +180,15 @@ function App() {
         ))}
       </nav>
 
-      {module !== 'journal' && module !== 'inbox' && module !== 'insight' && module !== 'folder' && (
+      {module !== 'journal' && module !== 'inbox' && module !== 'insight' && module !== 'folder' && module !== 'trash' && (
         <section className="app-state" aria-label="尚未开放">
           <h2>{modules.find((item) => item.id === module)?.label}</h2>
           <p>该模块尚未开放。</p>
           <button type="button" onClick={() => changeModule('journal')}>返回 Journal</button>
         </section>
+      )}
+      {module === 'trash' && (
+        <TrashPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate} />
       )}
       {module === 'folder' && (
         <FolderPage onDirtyChange={setDirty} onBusyChange={setWriting}
@@ -224,7 +228,7 @@ function App() {
               onClose={() => navigate(showList)} onDataChanged={refreshData}
               onDeleted={() => {
                 showList()
-                setNotice('已移入回收箱，可以恢复。回收箱页面尚未开放。')
+                setNotice('已移入回收箱，可以恢复。可到 Trash 页面查看或恢复。')
                 refreshData()
               }} />
           )}
