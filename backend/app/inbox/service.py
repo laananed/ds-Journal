@@ -5,7 +5,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.folder.models import Folder
+from app.folder.models import Folder, folder_fk_violation
 from app.inbox.models import Inbox
 from app.inbox.schemas import DailyInboxResponse, InboxCreate, InboxPage, InboxResponse, InboxUpdate
 
@@ -61,6 +61,11 @@ def create_inbox(db: Session, data: InboxCreate) -> InboxResponse:
                 and getattr(error.orig, 'sqlstate', None) == '23505'
                 and getattr(getattr(error.orig, 'diag', None), 'constraint_name', None) == DAILY_INDEX_NAME):
             raise DailyInboxConflictError('Daily Inbox already exists for this date') from error
+        # S2-T07: FK arbitration when racing a concurrent vacuum Folder delete.
+        # Only this specific reference conflict becomes 404; every other failure
+        # (including the Daily unique index above) keeps its own semantics.
+        if folder_fk_violation(error):
+            raise FolderNotFoundError(f'Folder {data.folder_id} does not exist') from error
         raise
     db.refresh(inbox)
     return _to_response(inbox)
@@ -107,8 +112,15 @@ def update_inbox(db: Session, inbox_id: int, data: InboxUpdate) -> InboxResponse
         for field, value in changes.items():
             setattr(inbox, field, value)
         db.commit()
-    except Exception:
+    except Exception as error:
         db.rollback()
+        # S2-T07: FK arbitration when racing a concurrent vacuum Folder delete.
+        # The rollback restores title/content so no partial update survives and
+        # the session stays usable. Only the Folder reference conflict maps to
+        # FolderNotFoundError (Router -> 404); real DB failures propagate.
+        if folder_fk_violation(error):
+            target = submitted.get('folder_id')
+            raise FolderNotFoundError(f'Folder {target} does not exist') from error
         raise
     db.refresh(inbox)
     return _to_response(inbox)

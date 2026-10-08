@@ -33,6 +33,13 @@ def test_write_failure_rolls_back_and_session_can_continue(api, monkeypatch, ope
 
 
 def test_other_integrity_error_is_not_mislabeled_as_daily_conflict(api):
+    """S2-T04 原意图：FK 类 IntegrityError 不得被误标为 Daily 冲突（409）。
+
+    S2-T07 起契约细化：这里的合成故障恰好是「Folder 引用冲突」
+    （before_flush 里强行写入不存在的 folder_id=10**9），
+    按新契约应映射为 404 Folder not found，而不是裸 500；
+    关键不变量仍然成立——它**不是** 409，也不是 DailyInboxConflictError。
+    """
     client, session = api
     def force_invalid_fk(session, flush_context, instances):
         for row in session.new:
@@ -41,7 +48,8 @@ def test_other_integrity_error_is_not_mislabeled_as_daily_conflict(api):
     event.listen(session, 'before_flush', force_invalid_fk)
     try:
         response = client.post('/api/inboxes', json={'content': 'S2T04 FK failure', 'inbox_date': '2034-03-03', 'is_daily': True})
-        assert response.status_code == 500
+        assert response.status_code == 404
+        assert response.json()['detail'] == 'Folder not found'
     finally:
         event.remove(session, 'before_flush', force_invalid_fk)
     assert session.scalar(text('SELECT 1')) == 1

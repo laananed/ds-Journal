@@ -41,7 +41,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.folder.models import Folder
+from app.folder.models import Folder, folder_fk_violation
 from app.journal.models import Journal
 from app.journal.schemas import (
     JournalCreate,
@@ -143,9 +143,14 @@ def create_journal(db: Session, data: JournalCreate) -> JournalResponse:
     db.add(journal)
     try:
         db.commit()
-    except Exception:
+    except Exception as error:
         # 写入失败必须回滚，否则该 Session 会停留在待回滚状态。
         db.rollback()
+        # S2-T07：与 Folder 真空删除竞争时，FK 仲裁失败（引用的 Folder
+        # 在校验之后、提交之前被删除）。只转换这种 Folder 引用冲突为 404，
+        # 其他数据库故障原样向上抛，不掩盖真实写入问题。
+        if folder_fk_violation(error):
+            raise FolderNotFoundError(f"Folder {data.folder_id} 不存在") from error
         raise
 
     # commit 后重新按 id 读回带编号的投影，保证返回的 display_title
@@ -298,9 +303,17 @@ def update_journal(
 
     try:
         db.commit()
-    except Exception:
-        # 写入失败必须回滚，否则该 Session 会停留在待回滚状态。
+    except Exception as error:
+        # 写入失败必须回滚，否则该 Session 会停留在待回滚状态；
+        # rollback 后正文、标题、日期、Folder 都回到提交前的值，
+        # 不会留下「正文改了、Folder 没移成」的半截更新，
+        # 该 Session 也可以继续执行后续合法操作。
         db.rollback()
+        # S2-T07：与 Folder 真空删除竞争时，FK 仲裁失败
+        # （目标 Folder 在存在性检查之后、提交之前被并发删除）。
+        # 只转换这种 Folder 引用冲突为 404，其他数据库故障原样向上抛。
+        if folder_fk_violation(error):
+            raise FolderNotFoundError(f"Folder {target_folder} 不存在") from error
         raise
 
     return _project_required(db, journal_id)

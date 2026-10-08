@@ -23,7 +23,7 @@ Stage 2 / S2-T02 把 Journal 读取 / 修改 / 删除升级为分页 envelope、
 - 一份本地 PostgreSQL 开发数据库的 Compose 配置；
 - SQLAlchemy 2.x 数据库基础（Engine / Session 工厂 / 请求级 Session 依赖 / Declarative Base）；
 - Journal SQLAlchemy Model（Stage 2 / S2-T01 增加可空 `folder_id`、`deleted_at`）；
-- Folder / Inbox / Insight SQLAlchemy models; Inbox has its S2-T04 API and Insight has its S2-T06 API (the Folder API remains a future task);
+- Folder / Inbox / Insight SQLAlchemy models; Inbox has its S2-T04 API and Insight has its S2-T06 API; S2-T07 adds the Folder CRUD / mixed-files / vacuum-delete API;
 - Alembic: original Journal migration, M1/M2, plus S2-T04 M3 `18ecf7e09da6` (unique Daily date where `is_daily = true`);
 - Journal 的 Pydantic Schema（`JournalCreate` / `JournalUpdate` / `JournalResponse` / `JournalPage`）；
   响应为完整十字段（`type` / `id` / `title` / `display_title` / `content` / `journal_date` /
@@ -75,7 +75,10 @@ backend/
 │   │   └── router.py           # POST / GET /api/journals、GET / PATCH / DELETE /api/journals/{id}
 │   ├── folder/
 │   │   ├── __init__.py
-│   │   └── models.py           # Folder Model（S2-T01 / M1）
+│   │   ├── models.py           # Folder Model（S2-T01 / M1）
+│   │   ├── schemas.py          # FolderCreate / FolderUpdate / FolderResponse / FolderFilesPage（S2-T07）
+│   │   ├── service.py          # Folder CRUD / 混合文件统一分页 / 真空删除（锁行+三表引用检查）（S2-T07）
+│   │   └── router.py           # POST / GET /api/folders、PATCH / DELETE /api/folders/{id}、GET /api/folders/{id}/files（S2-T07）
 │   ├── inbox/
 │   │   ├── __init__.py
 │   │   └── models.py           # Inbox Model（S2-T01 / M2）
@@ -98,6 +101,10 @@ backend/
 │   ├── test_insight_schemas.py # S2-T06 的 Insight Schema 测试（只用内存数据）
 │   ├── test_insight_api.py     # S2-T06 的 Insight CRUD / 分页 / 软删除 API 测试（真实 PostgreSQL）
 │   ├── test_insight_service.py # S2-T06 的回滚 / identity map / 软删时间保护测试（真实 PostgreSQL）
+│   ├── test_folder_schemas.py  # S2-T07 的 Folder Schema 测试（只用内存数据）
+│   ├── test_folder_api.py      # S2-T07 的 Folder CRUD / 真空删除 / 引用限制测试（真实 PostgreSQL）
+│   ├── test_folder_files_api.py # S2-T07 的混合列表 / 全局分页 / 跨 Folder 编号测试（真实 PostgreSQL）
+│   ├── test_folder_concurrency.py # S2-T07 的删除×移入真实并发竞争测试（独立连接，真实提交）
 │   ├── test_stage2_migrations.py  # S2-T01 的 M1 / M2 迁移与旧数据保留验证（一次性隔离库）
 │   ├── test_cors.py            # 最小 CORS 测试（只读 health / 四种方法预检，不写数据库）
 │   └── test_test_database.py   # 隔离守卫：断言测试进程连的是 seekjournal_test（不建连接）
