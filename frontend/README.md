@@ -1,269 +1,83 @@
 # SeekJournal Frontend
 
-SeekJournal 前端项目（Stage 1 / Task 8.1–8.4：列表、创建、详情 / 修改 / 删除与整体验收；
-Stage 1.5 / T1：编号与预览修复；Stage 1.5 / T2：输入校验与详情标题显示）。
+当前交付为 Stage 2 / S2-T03：Journal 新契约 UI、基础导航、卡片、分页和统一离开确认。
+产品/API/架构/任务分别以根目录 `docs/stage2*.md` 为准；Stage 1 历史验收见 `docs/stage1-acceptance.md`。
+后续模块仍未开放；此处没有实现 Inbox、Insight、Search、Trash 或 Folder 业务页面。
 
-## 技术栈
+## 已实现的流程
 
-- React
-- TypeScript
-- Vite
-- 浏览器原生 `fetch`（不引入 Axios / React Query 等）
-- 组件本地 State（不引入 Redux / Zustand / React Router）
-- Oxlint（代码检查）
+- Journal 新建、真实详情读取、按实际修改字段 PATCH，以及移入回收箱的软删除；204 不解析 JSON。
+- 主列表与新建表单的当天已有记录都按固定 20 条分页；数量使用响应 `total`。
+- 日期条件改变回第 1 页，删除导致当前页越界时按 `total` 重读最近有效页。
+- 所有卡片直接显示服务器 `display_title`，不在当前页上重算 Journal 编号，不把生成标题写回 `title`。
+- 整张卡片是原生按钮，支持点击、Enter、Space；打开时重新请求真实详情。
+- 默认 Journal 日期按本机 04:00 换日，打开编辑器时确定，后续不自动重置。
+- 新建与详情编辑只保留一个活动面板；模块、文件、列表、主分页、日期筛选、返回、取消、新建等离开出口统一经 App 的 Dirty 检查。
+- 默认值不算改动，恢复初始字段值不再 Dirty；继续编辑保留输入，确认离开才丢弃。
+- title ≤80、content ≤50,000 个 Unicode 码点；正文有非空白字符。原始 Markdown 空格、缩进与换行原样保存。
+- PATCH 只验证实际提交字段，旧空白/超长正文可继续读取、只改其他字段；历史空串标题未编辑时保持空串。
+- 写入期间阻止重复提交与导航；保存失败保留输入/Dirty；保存成功重置基线。后续列表刷新失败单独显示，不冒充保存失败。
+- 日期/详情快速切换用 AbortController 和组件身份作废旧请求；404 清掉过期详情。
+- 标题一行、摘要三行省略；详情保持完整正文。阅读仍是安全普通文本，Markdown 渲染属于后续 T12。
 
-## 安装
+## 运行与配置
 
-```bash
-cd frontend
-npm install
-```
+继续使用 React + TypeScript + Vite、组件 state 和原生 fetch，无新增依赖。
+前端读取 `VITE_API_BASE_URL`，值为后端根地址，不含 `/api`；未配置时默认 `http://127.0.0.1:8000`。
+`VITE_*` 进入浏览器产物，只能放非敏感地址，不能放数据库凭据。
 
-## 配置后端地址
+普通开发端口由 `vite.config.ts` 设置为 `127.0.0.1:5173`，`strictPort` 防止端口占用时自动换端口。
+后端 CORS 必须允许所用前端来源。当前轮的既有 `node_modules` 直接复用，不安装或升级包。
 
-前端通过 `VITE_API_BASE_URL` 读取后端根地址，**不包含 `/api`**：
-
-```text
-VITE_API_BASE_URL=http://127.0.0.1:8000
-```
-
-- 未设置时，代码内使用同一默认值 `http://127.0.0.1:8000`（见 `src/api/journals.ts`），
-  因此本地开发可以不建 `.env`。
-- 如需覆盖，复制 `frontend/.env.example` 为 `frontend/.env` 并修改。
-- 注意：`VITE_*` 会被编译进浏览器产物，只能放非敏感配置，
-  **不要**在其中写数据库凭据或其它秘密。
-
-## 本地开发
-
-需要同时运行后端（FastAPI，默认 `127.0.0.1:8000`）与前端（Vite）。
-后端启动方式见 `backend/README.md`。
-
-```bash
-npm run dev
-```
-
-开发地址是固定的：
+本轮 T03 自测在独立工作树运行，`frontend/.env.local` 指向：
 
 ```text
-http://127.0.0.1:5173
+VITE_API_BASE_URL=http://127.0.0.1:8013
 ```
 
-`vite.config.ts` 里显式写了 `host: '127.0.0.1'`、`port: 5173`、`strictPort: true`：
+在本树 `frontend/` 执行：
 
-- 写死 `host` 是为了避免只监听 IPv6 的 `[::1]`，导致 `127.0.0.1` 打不开；
-- `strictPort` 让端口被占用时**直接报错**，而不是悄悄换到 5174——
-  后端 CORS 只放开了 5173 这两个来源，换端口会静默失效。
-
-前端与后端是不同来源（端口不同），因此后端已配置 CORS 允许
-`http://127.0.0.1:5173` 与 `http://localhost:5173` 的
-**GET / POST / PATCH / DELETE** 请求，
-详见 `backend/README.md` 的 CORS 说明。
-
-## 构建
-
-```bash
-npm run build
+```powershell
+npm.cmd run dev -- --host 127.0.0.1 --port 5175
 ```
 
-构建前会先执行 TypeScript 类型检查（`tsc -b`），产物输出到 `dist/`。
+浏览器地址为 `http://127.0.0.1:5175`。后端 8013 必须使用 `seekjournal_t03_ui_test`，
+并允许 `http://127.0.0.1:5175`；启动器会校验实际库名。
+不得借用个人库进行写测试，不启动 Compose、不动 5173/8000/5432 服务。
+本树禁止运行后端 pytest，因为现有 fixture 固定指向另一个并行任务的 `seekjournal_test`。
 
-## 代码检查
+## 可复现的前端检查
 
-```bash
-npm run lint
-```
+在 `frontend/` 分别执行：
 
-使用 Oxlint，配置在 `.oxlintrc.json`。
-
-## 日期规则测试
-
-默认业务日期规则（本机 04:00 换日）有一份最小测试，**不引入测试框架**，
-直接用 Node 内置的类型剥离运行：
-
-```bash
-node --experimental-strip-types src/utils/journalDate.test.ts
-```
-
-成功时输出 `defaultJournalDate: 10 cases passed`。
-
-## 详情 / 编辑纯逻辑测试
-
-Task 8.3 里唯一值得单测的纯逻辑（PATCH 请求体构造 + 时间戳排版）放在
-`src/utils/journalDetail.ts`，测试同样用 Node 类型剥离直接跑：
-
-```bash
-node --experimental-strip-types src/utils/journalDetail.test.ts
-```
-
-成功时输出 `journalDetail: 30 assertions passed`
-（Stage 1.5 / T2 增加了详情标题显示 `displayJournalTitle()` 的断言）。
-
-## 同一天编号纯逻辑测试（Stage 1.5 / T1）
-
-同日无标题记录的显示编号放在 `src/utils/journalTitles.ts`：
-
-```bash
-node --experimental-strip-types src/utils/journalTitles.test.ts
-```
-
-成功时输出 `journalTitles: 20 assertions passed`。
-它依赖**同一天的全部记录**都在传入数组里，因此**不能**直接套在 Stage 2 的分页结果上。
-
-## 输入校验纯逻辑测试（Stage 1.5 / T2）
-
-请求体的 `title` / `content` 校验放在 `src/utils/contentValidation.ts`，
-与后端 `backend/app/journal/schemas.py` 使用**同一份空白字符集合与同一套码点计数口径**：
-
-```bash
-node --experimental-strip-types src/utils/contentValidation.test.ts
-```
-
-成功时输出 `contentValidation: 63 assertions passed`。
-
-## 预览构建产物
-
-```bash
-npm run preview
-```
-
-## 当前范围
-
-### Task 8.1：API 接入与列表（已实现）
-
-- Journal 列表：通过真实 HTTP `GET /api/journals` 读取并展示；
-- 按 `journal_date` 精确筛选：`GET /api/journals?journal_date=YYYY-MM-DD`，
-  筛选在**后端**执行，前端不拿全量再过滤；
-- 清除筛选后恢复全部列表；
-- 状态处理：加载中、有记录、列表为空、指定日期无记录、请求失败与重试；
-- 列表顺序完全沿用后端返回顺序（`journal_date DESC`、同日 `created_at DESC`），前端不再排序；
-- `title` 为 `null` 时用 `journal_date` 作为显示标题（**仅 UI**，不写回数据库）；
-- 正文用普通文本渲染（不使用 `dangerouslySetInnerHTML`）。
-
-### Task 8.2：创建 Journal（已实现）
-
-- 创建表单：标题（可选）、正文、日期，调用已有 `POST /api/journals`；
-- **默认业务日期**按本机 04:00 换日规则计算（`src/utils/journalDate.ts`）：
-  00:00～03:59 默认前一天，04:00～23:59 默认当天；
-  表单打开时计算一次，之后只由用户修改，不会被任何 effect 或列表筛选覆盖；
-- 标题留空时按契约发送 `null`（不是空字符串）；其它字符串原样发送，不做 `trim`；
-- 正文校验（Stage 1.5 / T2）：必须包含至少一个非空白字符，且不超过 50,000 个 Unicode 码点；
-  标题不超过 80 个码点。提交前先在本地校验，不合法就**不发 POST**、保留输入并给出明确错误；
-  长度按**码点**计数（不是 `length` 的 UTF-16 计数），因此合法的 emoji 内容不会被误拒；
-- 所选日期变化时真实查询该日期已有记录，显示数量与摘要，**允许同日多篇**；
-- 保存中禁用提交按钮并显示状态，避免重复提交；
-- 保存失败保留输入、显示错误，由用户决定是否重试（不自动重试）；
-- 保存成功后清空标题与正文（保留日期，方便同日继续写），
-  并按**当前筛选语义**刷新列表（全部还是全部，某日期还是该日期），不偷偷改筛选；
-- 新记录不在当前筛选范围内时给出明确提示（例如「当前列表筛选的是 2026-05-19，
-  这篇不在当前列表中」），避免误以为没保存；
-- **「保存成功」与「列表刷新失败」严格区分**：列表刷新失败只在列表区域提示，
-  不会把已经成功的 POST 报成保存失败；
-- 同一日期多篇无标题记录时，显示标题依次为 `2026-05-02`、`2026-05-02 (2)`、`2026-05-02 (3)`；
-  编号只计无标题记录，有自定义标题的记录不消耗编号，且**只存在于 UI**，
-  不写回数据库（数据库里的 `title` 仍是 `null`）；
-- **编号方向（Stage 1.5 / T1）**：按同一天无标题记录的 `created_at ASC` 编号
-  （只有 `created_at` 精确相同时才用 `id ASC` 打破并列），
-  因此新增一条较晚的记录只追加新号，**旧记录的编号不变**；
-  编号顺序与列表展示顺序（后端倒序）是两件事。
-
-### Task 8.3：详情、修改与删除（已实现）
-
-新增 `src/components/JournalDetail.tsx`（详情面板，内含查看 / 编辑 / 删除确认三个状态）
-与 `src/utils/journalDetail.ts`（纯逻辑，见上一节）。
-
-**打开详情**
-
-- 主列表和创建表单的「当天已有记录」每条都有「打开」入口，两处入口行为一致；
-- 打开时真实调用 `GET /api/journals/{id}`，**不把列表里那条数据当详情用**——
-  列表可能已经过期；
-- 详情展示：显示标题（`title` 为 `null` **或空字符串**时回退显示 `journal_date`）、完整正文、`journal_date`、
-  `created_at`、`updated_at`，另外显示 `id` 便于和数据库对照；
-- 正文用普通文本渲染并保留换行，**不使用 `dangerouslySetInnerHTML`**；
-- 状态齐全：加载中、读取失败（带「重新读取」重试）、记录不存在（明确说明）、返回列表；
-- 详情 404 时会清掉过期内容，不会继续展示已经不存在的记录；
-- **编号是列表上下文**：详情只用「标题，没有标题就用日期」这一条规则，
-  不另造一套 `(2)`、`(3)` 的详情编号，也不会把编号写回 `title`；
-- 切换记录时用 `key={journalId}` 让详情面板整体重新挂载，
-  旧状态与在飞请求一起作废，因此**迟到的旧响应不会覆盖新记录**。
-
-**修改**
-
-- 编辑表单用真实详情初始化标题、正文、日期；原 `title` 为 `null` 时输入框显示空字符串；
-- 只把**真正改过的字段**放进 `PATCH`（`buildJournalUpdate()`）：
-  - 空标题按创建表单的同一约定发送 `null`，其它字符串原样发送、不做 `trim`；
-  - 正文校验（Stage 1.5 / T2）：**只校验这次 PATCH 里实际提交的字段**。
-    旧记录正文超长 / 空白但本次没改正文时，仍能修改标题或日期；
-    真的把非法值提交进来（例如把正文清空）才被拒绝；
-  - 日期必须提供合法值，**不套用新建时的 04:00 默认日期规则**；
-  - `id` / `created_at` / `updated_at` 永远不放进请求体；
-  - 一个字段都没改时发送 `{}`，沿用后端已确认的空更新语义
-    （返回原记录、不改变 `updated_at`）；
-- 保存中禁用提交与「取消」，也禁用打开其它记录的入口，避免写入过程中换目标；
-- 保存失败保留输入、留在编辑模式，由用户决定是否重试（不自动重试）；
-- 取消编辑**不发任何请求**；有未保存改动时先弹一句明确提示（放弃修改 / 继续编辑），
-  不引入草稿持久化或自动保存；
-- 保存成功后用**后端返回值**作为当前详情（`updated_at` 由后端生成，前端不自己造）。
-
-**删除**
-
-- 删除前必须经过确认，确认框明确写出「删除后无法恢复」；
-- 取消确认**不发 `DELETE`**，详情保持原样；
-- 成功后是 `204 No Content`：`deleteJournal()` **不调用 `response.json()`**
-  （否则会因解析空响应体而把成功误报为失败）；
-- 成功后清掉详情与编辑状态、关闭面板，并按当前筛选刷新列表与当天记录提示；
-- 失败时**不从 UI 假装删掉记录**：详情保持原样，只提示删除失败；
-- `404` 只说明「记录本来就不存在（可能已被删除）」，**不冒充「本次删除成功」**，
-  同时清掉过期内容并刷新读取视图；
-- 不实现回收箱、批量删除或撤销删除，也不从 UI 直接连数据库。
-
-**同步与错误**
-
-- 修改 / 删除成功后按**当前筛选语义**刷新列表，不偷偷改筛选；
-- 修改日期后，原日期的筛选不再显示该记录，新日期能看到它；
-- 详情写成功后通过一个自增的「数据版本」`dataRevision` 让创建表单重读当天已有记录，
-  但**不触碰用户正在填写的创建表单内容**；没有全局事件总线或共享状态；
-- **「写入成功」与「随后读取刷新失败」严格区分**：`PATCH` / `DELETE` 已成功时，
-  列表刷新失败只在列表区域提示，不会被当成写入失败，也不会诱导用户重复提交；
-- API 错误携带 HTTP 状态（`JournalApiError`），UI 据此区分 `404` 与普通请求失败；
-  本文件内只加这一个 `Error` 子类，不引入通用错误框架。
-
-工程细节：
-
-- 只用组件本地 `useState` / `useEffect`，保留 `StrictMode`；
-- 用 `AbortController` 取消过期请求，避免旧日期的迟到响应覆盖新结果，
-  取消不会被显示成错误；
-- 请求失败时不保留过期列表，避免把旧结果伪装成当前筛选结果；
-- 日期与时间字段在前端保持**字符串**，不做 `Date` 转换，避免时区导致的日期偏移；
-  详情里的 `created_at` / `updated_at` 只做字符串层面的排版
-  （`2026-10-06T09:33:15.123456+00:00` → `2026-10-06 09:33:15+00:00`），
-  换算时区会让「刚刚保存过」显示成别的时间；
-- 列表与表单的「当天已有记录」复用同一个 `JournalList` 组件，
-  因此两处的标题、编号与打开行为天然一致；
-- `src/utils/` 下的纯逻辑都用 `node --experimental-strip-types` 直接测试，
-  不引入测试框架。
-
-尚未实现（后续阶段）：
-
-- 分页、搜索、路由、全局状态管理、前端测试框架。
-
-## Stage 1 整体验收（Task 8.4）
-
-Stage 1 的整体验收记录在
-[`docs/stage1-acceptance.md`](../docs/stage1-acceptance.md)，包含验收时 HEAD / 日期 / 环境、
-逐项证据、真实与合成证据的区分、持久化专项、数据保护与未验证项。
-
-前端侧的可复现检查（本目录执行）：
-
-```bash
-npm run build
-npm run lint
+```powershell
+npm.cmd run build
+npm.cmd run lint
 node --experimental-strip-types src/utils/journalDate.test.ts
 node --experimental-strip-types src/utils/journalDetail.test.ts
 node --experimental-strip-types src/utils/journalTitles.test.ts
 node --experimental-strip-types src/utils/contentValidation.test.ts
+node --experimental-strip-types src/utils/dirtyState.test.ts
+node --experimental-strip-types src/utils/pagination.test.ts
 ```
 
-浏览器验收的做法：在 5173 上运行真实前端，用 Playwright 把 API 的 **端口 8000 换成指向
-测试库的临时后端**（`page.route` 改写 URL），页面 / React / `fetch` / CORS /
-FastAPI / PostgreSQL 全真，只有端口不同；且**所有写请求都不落到开发库**。
-完整命令与证据见上述验收文档。
+构建先运行 TypeScript 检查，再输出忽略的 `dist/`。
+纯逻辑直接用 Node 类型剥离，不添加测试框架；实际结果以当次输出为准。
+`journalTitles.ts` 和对应测试保留 Stage 1.5 完整日期编号的历史回归；
+当前 Journal UI **不调用此函数**，跨页/软删编号来自 T02 的服务器投影。
+
+真实浏览器自测必须先证明数据库隔离，记录每次自建的 `(type, id)`，
+将真实链路、合成失败和延迟真实响应分开记录；收尾只清理本轮自建记录，不重置 sequence。
+实施者自测结束后仍需 Lead 独立验收，不代表完整 Stage 2 已验收。
+
+## 核心代码
+
+- `src/App.tsx`：活动模块/文件、统一 Dirty 离开检查、主列表与写后刷新。
+- `src/api/journals.ts` / `types/`：分页响应、只读显示标题与 fetch。
+- `components/FileCard.tsx` / `Pagination.tsx`：真实被 Journal 使用的最小共享组件。
+- `components/JournalEditor.tsx` / `JournalDetail.tsx`：输入基线、写入锁、失败保留、当天分页。
+- `utils/dirtyState.ts` / `pagination.ts` / `journalDetail.ts`：可脱离 React 验证的比较和页码规则。
+
+当前最值得理解的是：`total` 与当前页 `items.length` 不同；
+`display_title` 是读取投影，原始 `title` 是可写字段；
+Dirty 比较编辑基线，而写成功与后续读失败是两个独立结果。

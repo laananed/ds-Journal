@@ -41,6 +41,10 @@ function expectEqual(actual: unknown, expected: unknown, label: string): void {
 /** 构造一条 Journal；只写出本文件关心的字段，其余给固定值。 */
 function journal(overrides: Partial<Journal> = {}): Journal {
   return {
+    type: 'journal',
+    display_title: '2026-10-02',
+    folder_id: null,
+    deleted_at: null,
     id: 1,
     title: null,
     content: '正文',
