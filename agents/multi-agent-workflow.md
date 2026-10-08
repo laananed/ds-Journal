@@ -1,740 +1,161 @@
 # SeekJournal Multi-Agent Workflow
 
-> 2026-10-07：Stage 1 与 Stage 1.5 已完成；当前阶段权威入口为四份 `docs/stage2*.md`。
-> 当前按 `docs/stage2-tasks.md` 逐任务执行，T01/T02 已完成；本轮明确授权 **T03/T04 在各自既有工作树并行实施及独立验收**，后续任务未授权。
-> 保留 User → Lead → Developer → 独立 Review/验收 → User 的循环；本轮按用户授权并行两个实施 Agent，Lead 独占共享文档，验收不得由实施者自测替代。
+本文件维护 Agent 配置、任务规划、Git/Worktree 协作与统一验收流程。
+产品/API/架构/Task 分别引用根 `AGENTS.md` 指定的阶段文档；规划不构成实施授权，历史执行记录不代表当前状态。
 
-## 1. Purpose
+## 1. 当前配置与职责
 
-本文档规定 SeekJournal 开发过程中：
+| Agent | 模型 | 职责入口 |
+|---|---|---|
+| Codex | GPT-6.1-Sol | Lead Agent + Developer；`gpt-lead.md` |
+| WorkBuddy | GLM-5.3-Flash | Developer，可承担完整 Task；`ds-developer.md` |
 
-User
+User 是 Product Owner，决定产品方向、批准重大变化和开始实施，并最终接受交付。
+Codex 负责技术方案、依赖分析、任务分配、直接开发、审核、整合及最终质量；WorkBuddy 按分配开发、独立运行适用测试并报告风险。
 
-GPT Lead
+当前最多两个并行开发 Agent，包含正在写代码的 Codex。未来扩展至三个时，先由用户明确第三个 Agent 的身份、模型和职责，再复用相同分配表与隔离规则；现在不配置额外 Agent 或调度框架。
 
-DeepSeek Developer
+## 2. 分配原则
 
-三者如何协作。
+每个子任务有明确产出、文件责任和验收标准。Codex 综合判断：
 
-目标不是模拟一个人数很多的软件公司。
+| 因素 | 要判断的问题 |
+|---|---|
+| 任务依赖 | 前置产出是否就绪，哪些必须串行、哪些可以独立执行？ |
+| 技术风险 | 是否涉及迁移、数据一致性、核心架构或跨模块改动，需要哪些审核点？ |
+| 模型能力 | 哪个 Agent 更适合该项分析/实现/调试工作，既有上下文是否有用？ |
+| 并行效率 | 扣除交接、等待、冲突与整合成本后，是否减少总体时间？ |
+| 文件冲突 | 是否能在独立 Worktree 修改不同文件，共享入口如何安排？ |
+| 成本效率 | 在质量达标前提下如何使用已有额度，避免重复开发/无收益拆分？ |
+| 可验证性 | 产出和通过条件是否清楚，能否提供实际测试证据？ |
 
-目标是：
+不把 Codex 固定为只做复杂决策、WorkBuddy 固定为只写简单代码；不强制平均分工。
+整个 Task 可由任一 Agent 实施。紧密依赖、共享文件或共享测试资源不宜拆开时串行执行；没有合适的 WorkBuddy 工作时说明原因，不生成空任务。
 
-利用不同模型的优势，
+## 3. 新开发 Task 的标准流程
 
-同时控制：
+1. **只读检查**：读规则、相关阶段文档和代码；核对 Task 范围/状态/前置验收、Git 分支/HEAD/已有改动/Worktree，以及实际环境与测试资源。不依据提交标题推断验收完成。
+2. **方案与依赖**：确定最简单可行方案、接口与数据流、风险和必要文档修订。重大变化按根规则交用户决定；不擅自改变产品/API/架构。
+3. **必要拆分**：保留原 Task ID、范围、依赖与 DoD；子任务 ID 用原 ID 的后缀，如 `S2-T08-A`。拆分不新增阶段功能。
+4. **输出分配表**：使用下表，为每个子任务给出可核验标准和分配理由；预计路径在检查后具体化。
+5. **明确串并行**：列出必须串行的链和能并行的组；同时交付工作区/分支基线、文件责任、资源表及 Git 权限。无并行收益时明确串行。
+6. **输出 WorkBuddy 提示词**：每项分配给 WorkBuddy 的任务按 §4 生成一份完整可复制文本，填好路径、约束、交付与实际测试命令。
+7. **确认后实施**：默认先停在方案/提示词交付，用户确认开始后才修改代码；Codex 承担自己的开发工作并协调 WorkBuddy。用户此前明确授权的实施范围继续有效，不重置正在进行的 Task。
+8. **审核与整合**：局部验证 → 获授权提交 → Codex 审查 → 按权限整合 → 必要集成/回归与统一验收 → 向用户交付结果。
 
-- 技术方向；
-- 开发成本；
-- Scope；
-- 代码质量；
-- 学习效果。
+分配表：
 
----
+| 子任务 ID | 任务内容 | 执行 Agent | 前置依赖 | 预计文件/模块 | 验收标准 | 分配原因 |
+|---|---|---|---|---|---|---|
+| 填实际 ID | 填具体产出 | Codex / WorkBuddy | Task/子任务和所需证据 | 填允许路径 | 填可核验行为/测试 | 按 §2 说明 |
 
-## 2. Roles
+不在多个角色文件重复维护 Task 状态；实际执行记录由 Codex 按需同步到既有任务计划/验收记录。
+本次规范修改已获授权，仅改相关文档且不提交；S2-T07 的既有实施/验收不因这套新流程重新开始，也不因此批准 T08 或后续 Task。
 
-### User
+## 4. WorkBuddy 可复制执行提示词
 
-身份：
-
-- Product Owner
-- Final Decision Maker
-- Learner
-
-负责：
-
-- 提出真实需求；
-- 决定产品方向；
-- 批准重大技术变化；
-- 决定是否接受功能；
-- 学习关键技术；
-- 最终验收。
-
----
-
-### GPT Lead
-
-身份：
-
-- Technical Lead
-- Architect
-- Reviewer
-- Learning Mentor
-
-负责：
-
-Think
-→ Design
-→ Break Down
-→ Review
-→ Explain
-
----
-
-### DeepSeek Developer
-
-身份：
-
-Implementation Agent。
-
-负责：
-
-Implement
-→ Test
-→ Debug
-→ Report
-
----
-
-## 3. Core Principle
-
-GPT 主要负责：
-
-高错误成本决策。
-
-例如：
-
-- 架构；
-- 数据模型；
-- API；
-- 技术选型；
-- 复杂 Bug 判断；
-- Review。
-
-DeepSeek 主要负责：
-
-低错误成本、可以测试验证的具体执行。
-
-例如：
-
-- 创建文件；
-- 编写 CRUD；
-- 修改 Component；
-- 写测试；
-- Debug；
-- 执行明确任务。
-
----
-
-## 4. Standard Development Loop
-
-完整开发循环：
-
-User
-↓
-提出需求
-↓
-GPT Lead
-↓
-确认 Scope
-↓
-检查现有 Documentation
-↓
-判断是否需要调整设计
-↓
-拆成小 Task
-↓
-DeepSeek Developer
-↓
-实现
-↓
-测试
-↓
-输出 Completion Report
-↓
-GPT Lead
-↓
-Code Review
-↓
-检查 Scope / Architecture / Correctness
-↓
-向 User 解释关键知识
-↓
-User
-↓
-验收
-↓
-Commit
-↓
-下一 Task
-
----
-
-## 5. Before Coding
-
-任何代码任务开始前：
-
-GPT Lead 应确认：
-
-### 1
-
-这个需求是否属于当前 Stage？
-
-### 2
-
-现有文档是否已经定义它？
-
-### 3
-
-是否需要修改：
-
-- Product Requirement；
-- API；
-- Architecture；
-- Database Schema。
-
-### 4
-
-是否可以拆成更小任务？
-
----
-
-## 6. Task Size
-
-一个 Task 应尽可能只有一个明确目标。
-
-推荐：
-
-### Task 1
-
-初始化 Backend。
-
-### Task 2
-
-配置 PostgreSQL。
-
-### Task 3
-
-创建 Journal SQLAlchemy Model。
-
-### Task 4
-
-创建 Alembic Migration。
-
-### Task 5
-
-实现 POST `/api/journals`。
-
-### Task 6
-
-测试 POST API。
-
----
-
-不推荐：
-
-### Task
-
-完成 Stage 1 后端。
-
----
-
-更加不推荐：
-
-### Task
-
-帮我把 SeekJournal 做完。
-
----
-
-## 7. Task Specification
-
-GPT Lead 给 Developer 的任务至少应该包含：
-
-当前完整 Task 格式见 `docs/stage1.5-bugfix.md` / `docs/stage2-tasks.md`：
-Goal、Scope、Out of Scope、前置 Task、模块/路径、DB/Migration、后端/前端行为、
-测试、人工步骤、DoD。下方旧 Stage 1 示例仅说明写法，不是当前待执行任务。
-
-### Goal
-
-这次完成什么？
-
-### Allowed Scope
-
-允许修改哪些部分？
-
-### Requirements
-
-具体行为是什么？
-
-### Constraints
-
-哪些东西不能改？
-
-### Acceptance
-
-做到什么算完成？
-
-例如：
+以下是模板。Codex 下发时必须替换全部占位项、删除不适用条目；多个任务分别生成，不能只发模板或要求对方猜范围。
 
 ```text
-Goal:
-实现 POST /api/journals。
+你是 SeekJournal 的 WorkBuddy Developer，按 Codex 的已确认方案执行。
 
-Allowed Scope:
-backend/app/journal/
-相关测试文件。
+Task：<原 Task ID / 子任务 ID 与名称>
+授权：<用户确认开始的指令/范围；commit 等 Git 权限单列>
+目标：<一个明确可验证的产出，可覆盖完整 Task>
+工作区：<绝对目录>；分支：<分支名>；起始 HEAD：<实际 hash>
 
-Requirements:
-遵守 docs/stage1-api.md。
+必读：根 AGENTS.md、agents/ds-developer.md、agents/multi-agent-workflow.md、
+根规则要求的 Stage 1 文档、Stage 1.5 历史修订，以及当前阶段产品/API/架构/任务文档。
+相关条款：<原 Task 与产品/API/架构的准确章节>
+前置依赖与证据：<已验收 Task/子任务、可用接口、证据路径和当前状态>
 
-Constraints:
-不得修改 Journal Schema。
-不得增加 Repository Layer。
-不得开发其他 API。
+实现方案与接口：<已确认的行为、请求/响应、数据流、失败语义和必要技术方案>
+允许修改：<准确文件或模块、必要测试/运行说明>
+禁止范围：<无关功能、其他 Agent 文件、未批准 API/Model/架构/依赖/迁移变更>
+你不是唯一执行者：不要覆盖或撤销其他人的改动；发现冲突先报告 Codex。
+共享 docs/agents/AGENTS.md 变更交 Codex；不另开 Agent，不跨目录接管任务。
 
-Acceptance:
-POST 创建成功返回 201。
-数据库中存在记录。
-pytest 测试通过。
+环境：<独立前端/后端端口、环境变量配置方式、测试数据库名>
+测试资源安排：<独占时段/并行隔离方式；确认 fixture 的实际目标库>
+个人库 seekjournal 默认只读；只启停自建实例，不改真实 .env、不清不明数据。
+Migration / 依赖权限：<允许内容或明确不允许；迁移顺序和验证要求>
+Git 权限：<允许的本地 commit；merge/push/tag/清理分别标明>
+
+验收标准：<逐项行为、边界、故障/回归、人工验收与证据要求>
+测试命令（PowerShell，指定工作目录，每条单独执行）：
+<根据真实项目文件填写完整命令；不预填期望数量，不发送凭据>
+失败处理：<前置/环境不符、文档冲突或超范围问题报告 Codex，仅暂停受影响工作>
+
+交付：按 agents/ds-developer.md §5 报告 Task/基线、文件/行为、命令/退出码/
+实际数量/证据、Git/环境收尾、风险/未验证/待决策项及 1～3 个学习点。
+局部验证后按授权提交，交 Codex 审核；未获提交授权保留 diff，不自行整合或宣布最终验收通过。
 ```
 
----
+## 5. Git、Worktree 与资源协调
 
-## 8. Developer Workflow
+### 工作区与权限
 
-DeepSeek 接到 Task：
+- main 原则上作为集成分支。每项并行开发工作使用独立分支和工作目录；Codex 写代码时同样遵守。一个 Agent 可以串行在同一任务分支完成多个子任务。
+- 开始前用 `git status --short --branch`、`git rev-parse HEAD`、`git branch -vv`、`git worktree list --porcelain` 核对现状；优先复用合适的既有 Worktree，不为形式新增目录。
+- 既有 `task/...` 分支保留；新增 Codex 分支默认 `codex/<task-name>`，用户指定名称优先。分支前缀不决定任务权限。
+- 同一工作目录同一时刻只有一个修改者；共享文件、迁移链和有实现依赖的修改按顺序交接。Worktree 只隔离文件，不隔离端口、环境变量、数据库和 Git 共享元数据。
+- 分配方案明确哪些 Git 操作获准：建/复用分支和 Worktree、本地 commit、整合到 main 分别列出。确认开始只授权方案中列明的操作，未列明的不推定批准；已明确批准不重复询问。
+- 本地子任务验证通过后先提交，再进入代码整合；Codex 审查后按授权 merge 或 cherry-pick，必要回归通过后才发布最终验收结论。未授权提交时先交 diff，明确“待提交/整合”，不擅自提交。
+- push、tag、删分支、清理 Worktree 单独按用户授权处理，不把 Task 完成视为自动许可。只提交任务文件，排除 .env、凭据、私人数据、私密 Prompt、helper 和构建产物。
+- 不用 reset --hard、强制切分支或整目录复制覆盖来解决协作冲突；Codex 审查冲突并保留必要改动。
 
-### Step 1
+### main 整合后的显式同步
 
-阅读相关文档。
+main 合并不会自动改变其他 Worktree 的文件。Codex 先确认对方停止写入、工作已保存、工作区干净，再由目录所有者更新对应分支：
 
-### Step 2
+- 已完成、无需保留独立提交的任务分支，可在该目录运行 `git merge --ff-only main`；
+- 仍有独立提交、无法快进时，由 Codex 协调 `git merge main`，审查冲突并重新做受影响验证；不自动 rebase 他人的工作；
+- 新任务从已验收的集成基线开始。更新后报告分支/HEAD、状态及必要检查；不得把旧 Worktree 当成已同步。
 
-检查当前代码。
+以上命令用于已确认的更新操作，不在文档修改轮执行；不能覆盖未提交改动，也不在已有 main checkout 时让另一个 Worktree 同时检出 main。
 
-### Step 3
+### 每轮资源表
 
-只实现当前 Task。
+规划时至少填写：
 
-### Step 4
+| 工作项/所有者 | 目录/分支/基线 | 文件责任 | 前端/后端端口 | 前端 API 地址配置 | 后端目标库配置/测试库 | 共享资源与串行安排 |
+|---|---|---|---|---|---|---|
+| 填实际工作项 | 填实际值 | 精确路径 | 检查空闲后分配 | VITE_API_BASE_URL | DATABASE_URL 的配置方式与库名，不贴密码 | fixture/迁移/测试库独占者 |
 
-运行必要测试。
+- 每个服务使用独立端口和进程环境；不复制覆盖真实 .env，不输出带密码的连接串。浏览器写入前证明实际连接测试库。
+- 复用已有 PostgreSQL，默认不启动 Compose、不动既有 5173/8000/5432 服务；确需变化先纳入方案授权。
+- 可用独立测试库并行时，必须确认迁移版本和测试 fixture 支持该库；当前固定指向 seekjournal_test 的后端 pytest 同一时刻只能一个流程使用，不能假定设置 DATABASE_URL 就能改它。
+- 无法隔离的测试/迁移/UI 写入排队执行；个人库 seekjournal 默认只读，真实库升级单独授权。每轮只清理自建对象并核对无残留。
+- Codex 负责协调共享文档；同步前核对基线与对方改动，只同步授权变更，不覆盖整个文件树。历史 T03/T04 的路径/端口/库见既有记录，不能自动用于新 Task。
 
-### Step 5
+## 6. 统一验收与完成条件
 
-输出 Completion Report。
+Codex 对双方产出执行同一套检查：
 
----
+| 检查 | 必要证据 |
+|---|---|
+| 需求与范围 | 实际 diff/行为映射原 Task 和验收标准，无擅自扩张 |
+| 测试与回归 | 适用局部测试、必要集成/回归、人工步骤；命令、退出码、结果和限制 |
+| 架构与重复 | 遵守权威架构/API，跨模块一致，无明显重复实现或无理由依赖 |
+| 数据与环境 | 迁移/旧数据保护、正确目标库、测试无残留、服务收尾 |
+| 文档 | 需要更新的契约/运行说明/执行记录已由责任人同步，历史证据保留 |
+| Git 与 Worktree | 分支/HEAD/工作区/提交/整合符合授权；需使用的其他分支显式更新或标明仍旧基线 |
 
-## 9. Completion Report
+WorkBuddy 自测不能替代 Codex 审核；Codex 读实际代码并检查证据，按风险独立复跑关键行为和必要组合测试，不重新实现正确代码或无依据重复全套检查。
+Codex 自己实施的工作也需以上验证；未进行独立复核时如实说明，不把自测报告称为独立验收。
 
-Developer 必须报告：
+只有全部必要验收、约定的整合以及原 Task DoD 完成，才能宣布 Task 完成。
+代码已写/局部测试通过/等待提交或整合是进度状态；未完成检查、风险和未获权限的操作必须明示。
+用户最终接受和 Stage 整体验收按原阶段计划执行，单个 Task 完成不等于 Stage 完成。
 
-### Changed Files
+## 7. 模拟分配示例（不是实施授权）
 
-修改文件。
+模拟：用户以后提交 S2-T08。先确认 T03/T05/T06/T07 前置已验收、基线已整合，沿用原 T08 范围，不因本示例批准新功能。
 
-### Implemented
+| 子任务 ID | 任务内容 | 执行 Agent | 前置依赖 | 预计文件/模块 | 验收标准 | 分配原因 |
+|---|---|---|---|---|---|---|
+| S2-T08-A | 只读核对 Folder 契约、已有三类表单与集成基线，输出方案 | Codex | T03/T05/T06/T07 的实际验收 | 文档、现有前端与 Git，只读 | 接口/文件责任/资源/测试命令明确 | 跨模块影响需 Lead 统一判断 |
+| S2-T08-B | 完整 Folder 前端与三类文件归属交互 | WorkBuddy | A、用户确认开始 | frontend/src/api/folders.ts、types/folder.ts、pages/FolderPage.tsx、实际三类表单、App 及必要测试 | 原 T08 DoD；Dirty、移动/移出、混合 type+id、409、分页回退、build/lint/浏览器证据 | 连贯完整闭环，WorkBuddy 可承担；拆给两个开发者会争用 App/表单并增加交接 |
+| S2-T08-C | 代码审核、获授权整合和组合验收 | Codex | B 局部验证/提交；整合权限 | B 的 diff、既有测试/测试环境、执行记录 | 需求/回归/文档/Git/环境均核对，必要组合检查通过 | Lead 负责最终质量与整合 |
 
-实现内容。
-
-### Tests
-
-测试内容和实际结果。
-
-### Problems
-
-遇到的问题。
-
-### Decisions Needed
-
-是否需要新的技术决策。
-
----
-
-## 10. GPT Review
-
-GPT Lead Review 时重点检查六个方面。
-
-### A. Correctness
-
-功能是否真的正确？
-
-### B. Scope
-
-有没有实现当前任务之外的内容？
-
-### C. Architecture
-
-有没有违反：
-
-当前 Task 所属阶段的权威 architecture 文档？
-
-### D. API
-
-有没有违反：
-
-当前 Task 所属阶段的权威 API 文档？
-
-### E. Simplicity
-
-有没有：
-
-为了“专业”
-
-增加不必要设计？
-
-### F. Tests
-
-Developer 是否真的测试？
-
----
-
-## 11. Learning Loop
-
-Review 完成后：
-
-GPT Lead 不能只回复：
-
-“代码没问题。”
-
-至少需要告诉 User：
-
-### 1
-
-这次程序新增了什么。
-
-### 2
-
-用户执行操作以后：
-
-数据怎么流。
-
-### 3
-
-最重要的代码在哪里。
-
-### 4
-
-当前值得理解哪些概念。
-
-通常控制在：
-
-1～3 个核心知识点。
-
----
-
-## 12. Documentation First
-
-如果需求变化影响项目事实：
-
-必须：
-
-先修改 Documentation。
-
-然后：
-
-修改 Implementation。
-
-例如：
-
-User 决定：
-
-Journal 增加某字段。
-
-流程：
-
-User
-↓
-GPT Lead 分析
-↓
-修改 stage1.md
-↓
-修改 stage1-api.md
-↓
-修改 stage1-architecture.md（如果需要）
-↓
-Developer 修改代码
-↓
-Alembic Migration
-↓
-Tests
-
----
-
-## 13. Conflict Rule
-
-如果：
-
-User 新指令
-
-和：
-
-已有文档
-
-冲突：
-
-Agent 应明确指出（没有批准对应修订时）：
-
-### Current Documentation
-
-当前文档怎么规定。
-
-### New Requirement
-
-用户现在提出什么。
-
-### Conflict
-
-二者冲突在哪里。
-
-然后等待用户决定未确认的部分；已明确批准的变更直接先更新权威文档，
-不重复请求同一授权，不让无依赖工作一起停下。
-
-不得：
-
-悄悄按照新要求修改代码，
-
-但让文档保持旧版本。
-
----
-
-## 14. Architecture Change Rule
-
-Developer 不拥有重大架构修改权。
-
-如果发现：
-
-当前设计存在问题。
-
-Developer 提交：
-
-Problem
-↓
-Impact
-↓
-Options
-↓
-Recommendation
-
-GPT Lead：
-
-分析。
-
-User：
-
-最终决定。
-
----
-
-## 15. New Dependency Rule
-
-如果 Developer 认为需要新 Library：
-
-不能因为：
-
-“通常大家都这样用”
-
-就直接安装。
-
-需要说明：
-
-- 名称；
-- 当前问题；
-- 为什么当前已有工具不能解决；
-- 新依赖的收益；
-- 是否能推迟。
-
----
-
-## 16. Git Workflow
-
-建议每个开发任务使用：
-
-```text
-task/<task-name>
-```
-
-例如：
-
-```text
-task/journal-model
-task/create-journal-api
-task/journal-list-ui
-```
-
-标准流程：
-
-```text
-main
-↓
-创建 task branch
-↓
-Developer 开发
-↓
-允许多次临时 commit
-↓
-Developer 测试
-↓
-GPT Review
-↓
-User 验收
-↓
-最终 commit / 整理 commit
-↓
-merge main
-↓
-删除 task branch
-```
-
-一个 Task：
-
-可以有多个 Commit。
-
-不要求：
-
-一个 Branch 只能有一个 Commit。
-
----
-
-## 17. Commit Principle
-
-Commit 应描述：
-
-“完成了什么”。
-
-例如：
-
-```text
-feat: add journal create API
-```
-
-```text
-test: add journal API tests
-```
-
-```text
-docs: define stage 1 architecture
-```
-
-避免：
-
-```text
-update
-```
-
-```text
-fix things
-```
-
-这种无法理解的 Commit Message。
-
----
-
-## 18. Public Repository
-
-以下内容建议提交 Git：
-
-- AGENTS.md
-- docs/
-- agents/
-- README.md
-- source code
-- tests
-- Alembic migrations
-- `.env.example`
-
-不得提交：
-
-- `.env`
-- API Key
-- 数据库真实密码
-- Token
-- 私人日记数据库
-- 用户隐私数据
-- 私密 Prompt / 个人账号信息
-
----
-
-## 19. Stage Transition
-
-Stage 1 完成后：
-
-不要删除 Stage 1 历史设计。
-
-当前 Stage 1 与 Stage 1.5 都已完成（Stage 1.5 见 `docs/stage1.5-bugfix.md` 的执行记录）。
-现按 `docs/stage2-tasks.md` 执行 T01～T14；本轮只下发已明确授权的 **S2-T03 / S2-T04**，分别在指定工作树执行。
-路线与取消项只在 `docs/stage2.md` 维护。
-原操作记录和 Inbox → Journal 规划已取消，不执行旧讨论里的八任务提案。
-
-建议保留：
-
-```text
-docs/stage1.md
-docs/stage1-api.md
-docs/stage1-architecture.md
-```
-
-Stage 2 已建立（规划完成不代表实现完成）：
-
-```text
-docs/stage2.md
-docs/stage2-api.md
-docs/stage2-architecture.md
-docs/stage2-tasks.md
-```
-
-这样可以保留项目演进历史。
-
-根 `AGENTS.md` 的阶段导航已在 S1.5-T1/T2 与 S2-T01 中同步为 Stage 2 / 仅授权当前 Task，
-技术栈、API/Model/架构变更的范围批准规则与禁止项保留不变。
-产品 Pending 唯一登记在 `docs/stage2.md`，Lead 下发任务时注明具体 gate；Developer 不代产品经理决定。
-
----
-
-## 20. Agent Evolution
-
-不要一开始建立大量 Agent。
-
-Stage 1：
-
-只使用：
-
-- GPT Lead
-- DeepSeek Developer
-
-等以后真正出现：
-
-- 并行开发；
-- Frontend / Backend 同时推进；
-- AI 模块明显复杂；
-- Testing 工作量明显增加；
-
-再考虑拆分：
-
-- Frontend Agent
-- Backend Agent
-- AI Agent
-- Test Agent
-
-新增 Agent 必须解决实际协作问题。
-
----
-
-## 21. Stage 1 Final Principle
-
-当前阶段优先级：
-
-1. 正确；
-2. 简单；
-3. 用户能理解；
-4. 可测试；
-5. 可以继续扩展。
-
-不是：
-
-1. 企业级；
-2. 技术最多；
-3. 架构最复杂。
-
-Stage 1 的成功标准是：
-
-开发者真正跑通并理解第一次完整：
-
-React
-→ FastAPI
-→ PostgreSQL
-
-软件开发闭环。
+A → 用户确认 → B → C 串行；本例无两个 Agent 同时开发。Codex 按 §4 为 B 输出填好的完整提示词后等待开始确认。对其他真正独立的工作可安排两个隔离开发目录并行，共享测试资源仍需串行。

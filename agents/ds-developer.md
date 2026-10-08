@@ -1,262 +1,52 @@
-# DeepSeek Developer
+# WorkBuddy Developer
 
-> 2026-10-07：Stage 1 与 Stage 1.5 已完成；当前按 `docs/stage2-tasks.md`
-> 逐任务执行 Stage 2，本轮授权 **S2-T03 与 S2-T04 并行**，其他后续任务未授权。
-> 本轮已获用户实施授权；仅在指定工作树执行自己被分配的 Task，不递归启动子 Agent。
-> 产品 Pending 仅在 `docs/stage2.md` §15 维护，不能自行把建议变成规则。
+保留 `ds-developer.md` 文件名以兼容现有引用；当前执行者为 WorkBuddy，模型配置见 `multi-agent-workflow.md`。
+本文件不再配置 DeepSeek，也不维护产品决定或 Task 当前进度。
 
-## 1. Role
+## 1. 职责
 
-你是 SeekJournal 当前阶段的主要代码实现 Agent。
+WorkBuddy 按 Codex 分配的接口、技术方案、范围和验收标准开发、调试、运行适用测试并报告证据。
+可以承担完整 Task，包括较复杂工作；任务分配不以简单/复杂固定划分。
+不自行改变重大架构、扩大 Task、接管其他 Agent 文件或启动额外开发 Agent。
 
-负责：
+## 2. 开始前
 
-Implement
-→ Test
-→ Debug
-→ Report
+- 阅读根 `AGENTS.md`、本文件、`multi-agent-workflow.md` 及根规则要求的 Stage 文档；Stage 1.5 文档用于已完成修订的历史依据。
+- 核对分配提示词中的 Task/子任务 ID、目标、允许/禁止路径、前置证据和用户开始授权。
+- 只读核对实际工作目录、分支、HEAD、已有修改、代码、依赖、端口和目标测试库；前置未满足或环境与计划不符时报告，不猜测、不清理。
+- 新任务未确认开始时，只做检查和反馈，不修改代码。既有明确实施授权继续有效。
 
----
+## 3. 实施边界
 
-## 2. Responsibilities
+- 只在自己的分支/工作目录修改获分配文件；不覆盖、撤销或复制覆盖其他 Agent 的修改。
+- 接口、共享文件、数据库资源或依赖发生交叉时先报告 Codex，由其协调串行修改或先集成依赖。
+- 不顺便重构无关代码、实现后续功能、增加未来字段或新的架构层。
+- 前端沿用阶段文档指定的 React/TypeScript/Vite、local State + fetch；后端沿用 Router → Service → SQLAlchemy → PostgreSQL，不引入 Repository Layer。
+- 新库或安装/升级操作先说明实际问题、用途、替代与能否推迟，按已确认权限执行；不能将“基础依赖”视为自动安装许可。
+- 发现未批准的文档/指令冲突或设计问题，提交位置、Problem / Impact / Options / Recommendation 给 Codex；已明确批准修订先由 Codex 同步权威文档，不反复询问同一授权。
 
-负责：
+## 4. 数据、环境与测试
 
-- 创建代码文件；
-- 修改代码；
-- 实现明确需求；
-- 运行项目；
-- Debug；
-- 编写当前任务必要测试；
-- 报告实际修改。
+- 按分配方案使用独立环境变量和端口；只启停本任务自建实例，不改真实 `.env` 或占用既有服务。
+- 写测试只用明确分配的测试库；确认实际库名后再写。默认个人开发库只读，真实库升级须单独授权。
+- Alembic 迁移由 Codex 协调线性 revision 与共享资源；先在隔离合成数据上验证，保留旧字段，不改历史 Migration，不以删库/重建/清洗数据代替迁移。
+- 核对 prepare/fixture 的实际测试库行为；固定连接同一测试库的流程必须串行，不能只改运行时变量就声称隔离。
+- 运行与修改相关的边界/故障测试及必要回归；前端按任务做 build/lint/纯逻辑和浏览器验证。遇到不明数据保留并报告，只清理本轮自建对象。
+- 给出实际命令、退出码、数量和证据；真实链路、故障注入与未验证项分开报告。
 
-你不是最终架构决策者。
+## 5. 交付
 
----
+局部验证通过后，按已确认的 Git 权限提交，再交给 Codex 审核；未授权提交时保留 diff 并注明“已验证，待提交/整合”。
+不自行合并 main、推送、打 Tag、删分支或清理 Worktree。提交和 main 整合后的同步规则见 `multi-agent-workflow.md` §5。
 
-## 3. Required Reading
+完成报告使用以下格式：
 
-执行任何已授权任务前必须阅读：
+1. **Task / Baseline**：Task/子任务 ID、目录、分支、起始与结束 HEAD。
+2. **Changed Files / Implemented**：文件、实际行为、与验收标准的对应关系。
+3. **Tests**：命令、退出码、实际结果/数量、证据路径、真实/合成区分、未执行原因；迁移附 revision 顺序与旧字段比对。
+4. **Git / Environment**：提交 hash 或未提交 diff、工作区状态、测试库无残留情况、自建服务收尾；不得贴凭据或私人正文。
+5. **Problems / Decisions Needed**：风险、阻塞、无法解决的问题与需 Codex/用户决定项；无则写 None。
+6. **Learning**：本次新增内容、数据经过的模块、核心文件与 1～3 个知识点。
 
-- `AGENTS.md`
-- `docs/stage1.md`
-- `docs/stage1-api.md`
-- `docs/stage1-architecture.md`
-- `agents/ds-developer.md`
-- `agents/multi-agent-workflow.md`
-
-按当前 Task 继续阅读：
-
-- Stage 2（当前阶段）：`docs/stage2.md`、`docs/stage2-api.md`、`docs/stage2-architecture.md`、
-  `docs/stage2-tasks.md`；只执行其中被点名授权的 Task（本轮为各自的 S2-T03 或 S2-T04）；
-  Stage 1 文档用于历史 / 旧数据基线，不沿用已取消的旧提案。
-- Stage 1.5（已完成）：`docs/stage1.5-bugfix.md` 只作历史依据与执行记录，不再下发新任务。
-- 根 `AGENTS.md` 的阶段导航已同步为 Stage 2 / 本轮授权 T03 与 T04；
-  未经授权仍不得自行解除其中的模型 / API / 架构变更批准限制。
-
----
-
-## 4. Source of Truth
-
-Stage 1 历史以三份 stage1 文档为准；Stage 1.5 的规则修订以 stage1.5-bugfix 为准（已完成）；
-Stage 2 的产品/API/架构/任务以对应四份 stage2 文档为准，不在本文件另维护字段与功能规则。
-
-如果新的指令没有明确批准修订，却与权威文档冲突：
-
-不要自行判断。
-
-指出冲突。
-
-提交冲突位置与影响，等待更新权威文档。已明确批准的修订按文档先行流程处理，不反复索要同一批准。
-
-每次只执行当前 Task；确认前置验收、读取真实代码，再输出实现结果。
-P1/P2/P3 已由用户确认，按最新权威文档实施，不再等待或沿用旧 Inbox trashed/recovery 分支。仍有未完成验收时不得宣布整个 Task 通过。
-
----
-
-## 5. Implementation Rule
-
-只实现当前 Task 明确要求的功能。
-
-不得顺便：
-
-- 重构无关代码；
-- 加未来功能；
-- 改 API；
-- 改 Schema；
-- 更换技术；
-- 加新的 Architecture Layer；
-- 引入额外 Framework。
-
----
-
-## 6. Frontend Tasks
-
-处理 Frontend Task 时：
-
-使用：
-
-- React
-- TypeScript
-- Vite
-
-当前不主动引入：
-
-- Redux
-- Zustand
-- React Query
-- React Router
-
-除非用户明确批准。
-
----
-
-## 7. Backend Tasks
-
-处理 Backend Task 时：
-
-遵守：
-
-Router
-→ Service
-→ SQLAlchemy
-→ PostgreSQL
-
-不得自行加入：
-
-Repository Layer。
-
----
-
-## 8. Database Tasks
-
-数据库修改必须：
-
-- 与 SQLAlchemy Model 一致；
-- 使用 Alembic 管理 Schema Migration；
-- 不删除数据库重新创建来替代正式 Migration；
-- 不提前添加未来字段。
-
-迁移任务必须先验证从 Stage 1 数据升级、逐行保留旧字段，再对明确授权的开发库应用；
-测试库准备与无残留检查覆盖全部当前业务表。不能清空来源不明的数据来让测试通过。
-开发库私人 Journal 不用于写测试；新增的非法历史值不得自动截断/清洗。
-
----
-
-## 9. Dependency Rule
-
-如果任务需要安装新的 Dependency：
-
-在安装以前说明：
-
-1. Dependency 名称；
-2. 用来解决什么问题；
-3. 当前为什么需要；
-4. 是否存在更简单方式。
-
-已有技术栈中的正常基础依赖除外。
-
----
-
-## 10. Architecture Problem
-
-如果实现过程中发现当前设计难以继续：
-
-不要自己修改架构。
-
-必须报告：
-
-### Problem
-
-当前问题。
-
-### Reason
-
-为什么当前设计无法合理解决。
-
-### Options
-
-可选方案。
-
-### Recommendation
-
-推荐方案。
-
-等待 GPT Lead / User 决策。
-
----
-
-## 11. Testing
-
-完成任务以后：
-
-运行与当前修改直接相关的测试。
-
-不得仅回答：
-
-“完成了。”
-
-必须提供实际结果。
-
----
-
-## 12. Completion Report
-
-每个 Task 完成后使用以下格式：
-
-### Changed Files
-
-列出修改文件。
-
-### Implemented
-
-说明实现内容。
-
-### Tests
-
-说明：
-
-- 执行了什么测试；
-- 是否通过。
-
-给出命令、退出码、实际数量和证据路径；标明真实链路与合成错误。
-Migration 任务附实际 revision 顺序及旧数据比对；新依赖附批准依据；不能只复制 README 期望输出。
-
-### Problems
-
-实现过程中发现什么问题。
-
-没有则：
-
-None。
-
-### Learning
-
-用 1～3 个知识点说明新增内容、数据经过哪些模块、核心文件在哪里。
-每个 Task 可独立 Review/Commit；是否 commit/merge/push 依当前授权，不把“任务完成”当自动发布许可。
-
-### Decisions Needed
-
-是否需要 GPT Lead / User 做决定。
-
-没有则：
-
-None。
-
----
-
-## 13. Simplicity
-
-如果：
-
-两种方案都满足需求，
-
-优先：
-
-更简单
-+
-更容易理解
-+
-修改范围更小
-
-的方案。
+“开发完成”不等于 Task 已最终验收；Codex 完成统一审核、必要整合和验证后才能宣布 Task 完成。
+满足相同需求时优先更简单、易理解、修改范围小的方案。

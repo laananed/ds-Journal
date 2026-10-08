@@ -15,8 +15,9 @@ Stage 2 - 本地 Web 完整基础记录版（进行中）
   - API 契约 `docs/stage2-api.md`
   - 技术架构 `docs/stage2-architecture.md`
   - 任务计划 `docs/stage2-tasks.md`
-- S2-T01 / S2-T02 已完成；2026-10-08 用户明确授权 **S2-T03 前端与 S2-T04 Inbox 后端并行实施及独立验收**；
-  T03 限 `SeekJournal-T03`，T04 限 `SeekJournal-T04`；其他后续 Task 未授权。
+- 当前 Task 的范围、依赖与验收标准见 `docs/stage2-tasks.md`；实施授权以用户明确确认的任务分配方案为准。
+  文档中的 T03/T04 授权与执行限制是历史记录，不作为所有后续 Task 的授权范围。
+  当前尚未完成的 S2-T07 保持原任务范围、分支及既有授权，不因本次规范升级重分配或重新启动。
 - S2-T02 按已确认的 P3（动态编号）实现，不新增编号字段或 Migration；
 - 实施轮只在独立测试库上迁移；**真实开发库 `seekjournal` 的升级由用户单独授权后进行**。
 
@@ -48,19 +49,22 @@ Stage 1 已完成的能力：
 
 1. `docs/stage2.md`（产品需求）、`docs/stage2-api.md`（API 契约）、
    `docs/stage2-architecture.md`（技术架构）、`docs/stage2-tasks.md`（任务计划）；
-2. 只执行 `docs/stage2-tasks.md` 中被点名授权的 Task（本轮仅 **S2-T03 / S2-T04**）。
+2. 只执行 `docs/stage2-tasks.md` 中被点名授权的 Task 及已确认的子任务。
    未被授权的 Task 及其中的规划内容**不构成实施授权**。
 3. Stage 1.5 的输入规则修订以 `docs/stage1.5-bugfix.md` 为准（历史依据，已完成）。
 
 根据当前角色继续阅读：
 
-GPT Lead：
+Codex（Lead Agent + Developer）：
 
 - `agents/gpt-lead.md`
 
-DeepSeek Developer：
+WorkBuddy（Developer）：
 
 - `agents/ds-developer.md`
+
+保留既有文件名以兼容引用；`ds-developer.md` 现定义 WorkBuddy 职责，不再配置 DeepSeek。
+当前模型配置、任务分配与 Worktree 流程统一见 `agents/multi-agent-workflow.md`。
 
 涉及多 Agent 协作时：
 
@@ -108,7 +112,7 @@ DeepSeek Developer：
 
 1. 停止实现；
 2. 明确指出冲突位置；
-3. 等待用户决定；
+3. 未获明确批准的冲突等待用户决定；已批准修订由 Codex 先同步权威文档，不重复索要同一批准；
 4. 修改权威文档；
 5. 再继续开发。
 
@@ -236,7 +240,7 @@ psycopg 负责 SQLAlchemy 与 PostgreSQL 之间的实际连接。
 - 引入 Redux；
 - 引入 Zustand；
 - 引入 React Query；
-- 实现 Stage 2 及以后的功能；
+- 实现未获授权的当前阶段 Task 或未来阶段功能；
 - 为未来功能提前增加数据库字段。
 
 ---
@@ -319,13 +323,27 @@ Agent 不仅负责完成代码。
 
 - 当前任务要求的功能已经实现；
 - 必要测试通过；
+- Codex 已审核需求、架构、重复实现与回归风险，完成必要集成测试；
+- 文档已按需同步，Git 分支、工作树及约定整合状态已核对；
 - 没有擅自扩大 Scope；
 - 没有未经批准修改架构；
 - 没有无理由增加依赖；
 - 修改文件已经说明；
 - 测试结果已经说明；
 - 用户能够知道本次修改大致发生了什么。
-## 12. 本轮并行执行边界（2026-10-08）
+## 12. 协作与开发入口
+
+- Codex 兼任 Lead 与 Developer，负责方案、调度、直接开发、审核、整合与最终质量；WorkBuddy 按分配开发和测试，可承担完整 Task。
+- 新开发 Task 默认先只读检查，再输出任务分配表、串并行安排和每项 WorkBuddy 完整提示词；用户确认开始后才修改代码。已有明确实施授权继续有效。
+- 不按简单/复杂固定分工，不强制平均分配或拆分；分配因素、提示词模板、资源协调与统一验收按 `agents/multi-agent-workflow.md` 执行。
+- 当前最多两个并行开发 Agent；每项并行开发使用独立分支/工作目录，main 原则上用于集成。未来增加第三个 Agent 需用户明确配置。
+- Codex 统一维护共享 docs/、agents/ 和本文件；开发者只改分配范围，共享变更先协调，不能覆盖他人改动。
+- 局部验证后按已确认的 Git 权限提交，再由 Codex 审核和整合；未包含在授权中的 commit/merge/push/tag、删分支或清理 Worktree 不自动执行。
+- 本次规范修改仅限相关文档，不提交、不操作其他 Worktree，不改业务代码、环境、数据库或服务。
+
+## 13. T03/T04 历史并行执行边界（2026-10-08）
+
+以下保留原轮次的审计依据，仅适用于该轮；新任务使用已确认的分配方案，不能直接沿用旧路径/端口/库。
 
 - Lead 独占共享 docs/ 与 agents/、本文件的同步；产品决定只维护于 docs/stage2.md。
 - Agent A 仅修改 SeekJournal-T03 的前端；Agent B 仅修改 SeekJournal-T04 的 Inbox 后端、测试、新 M3 与必要运行说明。

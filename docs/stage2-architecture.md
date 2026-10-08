@@ -1,7 +1,7 @@
 # SeekJournal — Stage 2 Architecture
 
 > 2026-10-07。Stage 2 的技术设计依据 `stage2.md`，API 依据 `stage2-api.md`。
-> T01/T02已完成；本轮授权T03/T04，2026-10-08确认规则以 `stage2.md` §15为准。后续任务仍只规划。
+> 2026-10-08确认规则以 `stage2.md` §15为准。Task 范围/执行记录见 `stage2-tasks.md`，授权与协作流程见根 `AGENTS.md`、`agents/multi-agent-workflow.md`。
 
 ## 1. 保留现有边界
 
@@ -182,7 +182,10 @@ API 写测试用 seekjournal_test + 外层事务/savepoint；schema 迁移验证
 浏览器所有写请求指向测试库后端，先证明所连库名；仅清理自己创建的 (type,id)，恢复四表空白基线，不能整库清理。
 测试结果须记实际命令、退出码、数量，真实成功与合成错误状态分开，不把历史 232 或 README 预期当新证据。
 
-## 12. 本轮并行治理（2026-10-08）
+## 12. T03/T04 历史并行治理（2026-10-08）
+
+以下是该轮的起始状态与执行限制，保留历史依据；不用于推断当前进度或限制所有后续 Task。
+新任务的 Agent 分配、工作树、环境和数据库协调统一按 `agents/multi-agent-workflow.md`，具体资源在已确认分配方案中列明。
 
 T01/T02已完成，当前共同HEAD为01bf8a86a875332b590ef6e5c0f0d087ac44c50b。
 Lead独占主仓库与两个指定工作树的共享产品/API/架构/任务/Agent规则同步，实施者不维护另一个版本。

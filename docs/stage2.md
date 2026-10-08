@@ -1,7 +1,7 @@
 # SeekJournal — Stage 2 产品需求
 
 > 2026-10-07。依据用户本轮确认的产品规则编写；本文件是 Stage 2 产品规则的权威来源。
-> Stage 1 / Stage 1.5 / S2-T01 / S2-T02 已完成；2026-10-08 用户授权 T03/T04 并行实施。完整 Stage 2 尚未完成，后续 Task 不自动获得授权。
+> Stage 1 / Stage 1.5 已完成；Stage 2 进行中。Task 范围/执行记录见 `stage2-tasks.md`，实施授权按用户已确认的任务分配方案；完整 Stage 2 尚未验收。
 > Pending Product Decisions 只影响对应任务；任何建议都不能由 Developer 默认为已确认需求。
 
 ## 1. 阶段与目标
@@ -10,7 +10,7 @@
 |---|---|---|
 | Stage 1 | Journal 本地 Web 最小 Demo | 已完成，历史验收见 `stage1-acceptance.md` |
 | Stage 1.5 / Pre-Stage-2 | 修复编号、输入规则和列表预览 | 已完成；见 `stage1.5-bugfix.md` |
-| Stage 2 | 本地 Web 完整基础记录版 | T01/T02 已完成，本轮仅实施 T03/T04 |
+| Stage 2 | 本地 Web 完整基础记录版 | 进行中；具体 Task 见 `stage2-tasks.md`，不以规划代替验收 |
 | Stage 3 | AI 复盘，AI 开始参与 Insight | 未来阶段 |
 | Stage 4 | 云端 Web，可进行一轮明显 UI 优化 | 未来阶段 |
 | Stage 5 | Android | 未来阶段 |

@@ -3,20 +3,20 @@
 > 2026-10-07。Goal：把已确认的本地基础记录规则落实为可独立 Review/Test/Commit 的任务。
 > Architecture：保留三类独立文件表、一级 Folder、现有 Router → Service → SQLAlchemy；local State + fetch。
 > Tech Stack：React/TypeScript/Vite、FastAPI/Pydantic/SQLAlchemy/psycopg/PostgreSQL/Alembic、pytest。
-> T01/T02已完成；2026-10-08用户授权T03/T04并行实施。Lead负责共享规则与独立验收，后续任务未授权。
-> 本轮使用既有T03/T04工作树，分别由两个实施Agent执行，不递归派发；不自动commit/merge/push/tag或清理工作树。
+> Task 范围、前置依赖与 DoD 由本文维护；实施授权以用户已确认方案为准。T03/T04 的轮次限制及验收结果保留为历史记录。
+> 2026-10-08 协作规范升级：新 Task 按 `agents/multi-agent-workflow.md` 先规划/分配/输出 WorkBuddy 提示词，再由用户确认开始；当前未完成 S2-T07 不重分配、不重新启动、不改验收标准。本次仅改文档，不提交。
 
 ## 1. 阅读、范围与统一完成标准
 
-每次先读 `AGENTS.md`、`agents/ds-developer.md`、`agents/multi-agent-workflow.md`；按任务读 `stage2.md`、`stage2-api.md`、`stage2-architecture.md` 和本文。
+每次先读 `AGENTS.md`、自身角色文件（Codex：`agents/gpt-lead.md`；WorkBuddy：`agents/ds-developer.md`）、`agents/multi-agent-workflow.md`；按任务读 `stage2.md`、`stage2-api.md`、`stage2-architecture.md` 和本文。
 Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5 任务全部在该文件，不与以下任务混执行。
 
 - 先完成执行前检查清单、S1.5-T1→T2 的独立验收，再开始 S2-T01。
 - 只改当前 Task 点名模块及必要测试/运行说明；新 API/字段严格按本轮文档，不能扩大范围。
-- 每 Task 步骤：核对输入/输出与前置证据 → 最小失败/边界用例 → 最小实现 → 必要测试 → 人工演示 → 完成报告 → Lead Review/用户验收 → 可独立 Commit。
+- 每 Task 步骤：只读核对 → 方案/依赖/分配表/WorkBuddy 提示词 → 用户确认开始 → 最小失败/边界用例与实现 → 必要测试/人工演示 → 完成报告 → 获授权局部 Commit → Codex 审核/整合/集成测试 → 统一验收。未授权提交时先交 diff，标明待提交/整合；既有实施授权继续有效。
 - 所有写测试指向独立测试库。真实开发库迁移只在该 Task 明确授权后执行；禁止清库或截断旧正文。
 - Pending 的唯一登记处为 `stage2.md` §15；Developer 只停止相关分支，继续无依赖工作。建议不能自动变成需求。
-- 统一 DoD：目标可验证、测试实际通过、对应人工步骤通过、旧数据保护、无新增范围/未批准依赖、文件/结果/限制/学习点已报告、Lead Review 通过。
+- 统一 DoD：目标可验证、测试实际通过、对应人工步骤通过、旧数据保护、无新增范围/未批准依赖、文件/结果/限制/学习点已报告、Codex Review 与必要回归/集成通过、文档按需同步、Git/工作树及约定整合状态正确。具体清单见 `agents/multi-agent-workflow.md` §6。
 - 表结构 Task 可用数据库演示；API Task 可用请求演示。中间 Task 通过不等于整个阶段完成。
 - S2-T02 改列表/删除契约，T03 才配套旧 Journal UI；不要在二者之间宣布 Web 整体可用。合并或对外展示时将两者作为配套完成条件，仍可分别 Review/Commit。
 
@@ -352,8 +352,8 @@ Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5
   → S2-T14（独立整体验收）
 ```
 
-上图是推荐串行执行次序；每任务的前置依赖栏是最小依赖，不自动派并行 Agent。
-P1/P2已确认，T04不再等待；与T03分别在自己的工作树/数据库并行。共享规则由Lead同步，两个Agent不得同时维护。
+上图是推荐执行路线；每任务的前置依赖栏是最小依赖。Codex 按协作规范综合判断串并行，不强制拆分或平均分工；分配方案经用户确认后实施，不因依赖图自动派发。
+P1/P2已确认。T03/T04曾按该轮授权隔离并行，具体边界见末尾历史记录；新 Task 的工作树/数据库由分配方案指定。共享规则由 Codex 统一维护。
 P3 已于 2026-10-07 确认为**动态编号**：S2-T02 按「新增/软删/恢复不改其他现存记录编号」实现，
 永久删除/改日期/改标题允许重新编号，不新增永久编号字段或 Migration。
 
@@ -362,7 +362,7 @@ Migration当前计划只有T01的M1/M2与T04的M3。先建被引用Folder，再�
 
 ## 18. 验证命令与人工验收顺序
 
-PowerShell，各命令单独运行；按当前授权Task执行。T03只运行前端检查，T04与其独立验收独占seekjournal_test后端检查；不升级个人库。
+PowerShell，各命令单独运行；按当前已确认 Task 与资源安排执行。固定使用 seekjournal_test 的后端测试/迁移/验收流程必须串行；前端浏览器写入需核实独立测试后端与目标库，不升级个人库。T03/T04 的特定限制仅适用于原轮次。
 
 在backend/：
 
@@ -386,7 +386,7 @@ PowerShell，各命令单独运行；按当前授权Task执行。T03只运行前
 | T11 | `tests/test_search_api.py` |
 | T13 | `tests/test_link_api.py` |
 
-首次/已有新Migration后，在T01/T04获授权且隔离检查通过的前提下：
+首次/已有新Migration后，在对应迁移 Task 获授权且隔离检查通过的前提下：
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m scripts.prepare_test_db
@@ -438,11 +438,13 @@ node --experimental-strip-types src/utils/dirtyState.test.ts
 
 ## 20. 验收记录区
 
-当前状态：**Stage 2 尚未整体验收；T01/T02已完成，T03/T04在各自工作树实施完成且独立验收已通过，尚未提交/合并/集成。本轮个人库只读，起始已处M2，本轮未升级它。**
+以下是 T03/T04 验收轮结束时的历史状态，不代表当前 HEAD 或后续 Task 的完成情况。本次协作规范升级不补写业务验收、不将已有提交视为 Task 通过；当前尚未完成的 S2-T07 保持原范围与既有授权。
+
+该轮状态：**Stage 2 尚未整体验收；T01/T02已完成，T03/T04在各自工作树实施完成且独立验收已通过，尚未提交/合并/集成。本轮个人库只读，起始已处M2，本轮未升级它。**
 T14实际执行后在此追加日期、branch/HEAD、命令/退出码/实际数量、A01～A13证据、迁移与开发库保护结果、真实/合成区分、未验证项、用户学习/最终验收情况。
 不得提前填“全部通过”。
 
-## 本轮并行执行记录入口（2026-10-08，Lead维护）
+## T03/T04 历史并行执行记录入口（2026-10-08，Lead维护）
 
 - 共同起始HEAD：01bf8a86a875332b590ef6e5c0f0d087ac44c50b。
 - T03：SeekJournal-T03，task/s02-t03-journal-ui；只改前端；5175/8013，seekjournal_t03_ui_test；不得运行后端pytest。
@@ -453,7 +455,7 @@ T14实际执行后在此追加日期、branch/HEAD、命令/退出码/实际数�
 - helper/.env/.venv/node_modules/构建产物保持忽略；不启动Compose、不动原服务、不安装或升级依赖。
 - 本轮不自动commit/merge/push/tag、删分支、清理工作树；结束报告实际Git状态/服务收尾/数据保护，未集成前不宣称完整Web或Stage2完成。
 
-## S2-T03 / S2-T04 本轮验收结果（2026-10-08，Lead）
+## S2-T03 / S2-T04 历史轮次验收结果（2026-10-08，Lead）
 
 - T03：独立build/lint退出0，六份纯逻辑145项，独立浏览器171项；报告见 `s2-t03-acceptance.md`。
 - T04：独立指定105、全量481通过；heads/current/check一致；实际HTTP stdout39项；报告见 `s2-t04-acceptance.md`。
