@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { listJournals } from './api/journals'
 import JournalDetail from './components/JournalDetail'
 import JournalEditor from './components/JournalEditor'
 import JournalList from './components/JournalList'
 import Pagination from './components/Pagination'
+import FolderPage from './pages/FolderPage'
 import InboxPage from './pages/InboxPage'
 import InsightPage from './pages/InsightPage'
 import type { FileIdentity } from './types/file'
@@ -36,6 +37,9 @@ function App() {
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
   const confirmDialog = useRef<HTMLDialogElement>(null)
   const [notice, setNotice] = useState('')
+  // Folder 混合卡片的一次性打开请求：交给对应模块消费后清空。
+  const [crossOpen, setCrossOpen] = useState<{ file: FileIdentity; key: number } | null>(null)
+  const consumeCrossOpen = useCallback(() => setCrossOpen(null), [])
 
   useEffect(() => {
     if (module !== 'journal') return
@@ -143,6 +147,24 @@ function App() {
       setPage(value)
     })
   }
+  /** Folder 混合卡片按 (type, id) 打开真实详情；Journal 就地打开，Inbox/Insight 交给对应模块。 */
+  function openFileFromFolder(file: FileIdentity) {
+    navigate(() => {
+      dirtyRef.current = false
+      setNotice('')
+      showList()
+      const nextKey = editorKey + 1
+      setEditorKey(nextKey)
+      if (file.type === 'journal') {
+        beginLoading()
+        setModule('journal')
+        setPanel({ kind: 'detail', file, key: nextKey })
+        return
+      }
+      setModule(file.type)
+      setCrossOpen({ file, key: nextKey })
+    })
+  }
 
   return (
     <main className="app">
@@ -157,18 +179,26 @@ function App() {
         ))}
       </nav>
 
-      {module !== 'journal' && module !== 'inbox' && module !== 'insight' && (
+      {module !== 'journal' && module !== 'inbox' && module !== 'insight' && module !== 'folder' && (
         <section className="app-state" aria-label="尚未开放">
           <h2>{modules.find((item) => item.id === module)?.label}</h2>
           <p>该模块尚未开放。</p>
           <button type="button" onClick={() => changeModule('journal')}>返回 Journal</button>
         </section>
       )}
+      {module === 'folder' && (
+        <FolderPage onDirtyChange={setDirty} onBusyChange={setWriting}
+          onNavigate={navigate} onOpenFile={openFileFromFolder} />
+      )}
       {module === 'inbox' && (
-        <InboxPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate} />
+        <InboxPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate}
+          initialOpen={crossOpen?.file.type === 'inbox' ? { id: crossOpen.file.id, key: crossOpen.key } : null}
+          onOpenRequestConsumed={consumeCrossOpen} />
       )}
       {module === 'insight' && (
-        <InsightPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate} />
+        <InsightPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate}
+          initialOpen={crossOpen?.file.type === 'insight' ? { id: crossOpen.file.id, key: crossOpen.key } : null}
+          onOpenRequestConsumed={consumeCrossOpen} />
       )}
       {module === 'journal' && (
         <>

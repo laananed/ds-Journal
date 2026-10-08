@@ -9,7 +9,7 @@
  *   绝不把展示用的 `display_title` 回退值写回数据库；
  * - PATCH 省略字段表示不变，只提交真正改动的字段；清空标题显式提交 `null`。
  *
- * `folder_id` 的移动/选择属于后续任务，本文件不涉及。
+ * 创建和编辑均提交用户选择的 Folder；null 表示无 Folder。
  *
  * 本文件不依赖 React、不发请求，可用 `node --experimental-strip-types` 直接测试。
  */
@@ -17,15 +17,16 @@
 import type { Insight, InsightCreate, InsightUpdate } from '../types/insight.ts'
 import { draftTitleToValue } from './journalDetail.ts'
 
-/** 表单草稿；Insight 只有这两个可编辑字段。 */
+/** 创建与编辑共用的表单草稿；null 表示无 Folder。 */
 export interface InsightEditDraft {
   title: string
   content: string
+  folder_id: number | null
 }
 
 /** 把服务端记录转成表单草稿：`title` 为 `null` 时显示成空串，**不**回退成展示标题。 */
 export function toInsightDraft(insight: Insight): InsightEditDraft {
-  return { title: insight.title ?? '', content: insight.content }
+  return { title: insight.title ?? '', content: insight.content, folder_id: insight.folder_id }
 }
 
 /**
@@ -36,7 +37,7 @@ export function toInsightDraft(insight: Insight): InsightEditDraft {
  * 非空标题（含纯空白）原样提交，不 trim。
  */
 export function buildInsightCreate(draft: InsightEditDraft): InsightCreate {
-  return { content: draft.content, title: draftTitleToValue(draft.title) }
+  return { content: draft.content, title: draftTitleToValue(draft.title), folder_id: draft.folder_id }
 }
 
 /**
@@ -49,6 +50,8 @@ export function buildInsightUpdate(original: Insight, draft: InsightEditDraft): 
   const update: InsightUpdate = {}
   if (draft.title !== (original.title ?? '')) update.title = draftTitleToValue(draft.title)
   if (draft.content !== original.content) update.content = draft.content
+  // Folder 真实变化才进 PATCH：null 表示移出 Folder，未变化不制造更新。
+  if (draft.folder_id !== original.folder_id) update.folder_id = draft.folder_id
   return update
 }
 

@@ -5,6 +5,8 @@ export interface JournalEditDraft {
   title: string
   content: string
   journal_date: string
+  /** S2-T08：null 为「无 Folder」，与请求契约一致。 */
+  folder_id: number | null
 }
 /** 空输入清空已有标题；非空字符串原样保存，不trim。 */
 export function draftTitleToValue(title: string): string | null {
@@ -16,6 +18,8 @@ export function buildJournalUpdate(original: Journal, draft: JournalEditDraft): 
   if (draft.title !== (original.title ?? '')) update.title = draftTitleToValue(draft.title)
   if (draft.content !== original.content) update.content = draft.content
   if (draft.journal_date !== original.journal_date) update.journal_date = draft.journal_date
+  // Folder 真实变化才进 PATCH：null 表示移出 Folder，未变化不制造更新。
+  if (draft.folder_id !== original.folder_id) update.folder_id = draft.folder_id
   return update
 }
 export function isJournalUpdateEmpty(update: JournalUpdate): boolean {

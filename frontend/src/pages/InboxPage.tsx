@@ -9,6 +9,7 @@ import {
   updateInbox,
 } from '../api/inboxes'
 import FileCard from '../components/FileCard'
+import FolderSelect from '../components/FolderSelect'
 import Pagination from '../components/Pagination'
 import type { Inbox, InboxPage as InboxPageData } from '../types/inbox'
 import {
@@ -33,6 +34,9 @@ interface InboxPageProps {
   onDirtyChange: (dirty: boolean) => void
   onBusyChange: (busy: boolean) => void
   onNavigate: (action: () => void) => void
+  /** 其他模块（Folder 混合卡片）请求打开某条 Inbox；仅在挂载时生效一次。 */
+  initialOpen?: { id: number; key: number } | null
+  onOpenRequestConsumed?: () => void
 }
 
 type InboxPanelShape =
@@ -89,8 +93,8 @@ function InboxPanel({
   const [loadError, setLoadError] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
   const [mode, setMode] = useState<'view' | 'edit'>(isCreate ? 'edit' : 'view')
-  const [draft, setDraft] = useState<InboxEditDraft>({ title: '', content: '' })
-  const [initial, setInitial] = useState<InboxEditDraft>({ title: '', content: '' })
+  const [draft, setDraft] = useState<InboxEditDraft>({ title: '', content: '', folder_id: null })
+  const [initial, setInitial] = useState<InboxEditDraft>({ title: '', content: '', folder_id: null })
   const [titleEdited, setTitleEdited] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'invalid' | 'error'>('idle')
   const [saveError, setSaveError] = useState('')
@@ -141,6 +145,10 @@ function InboxPanel({
   }
   function changeContent(value: string) {
     setDraft((current) => ({ ...current, content: value }))
+    resetSaveState()
+  }
+  function changeFolder(folderId: number | null) {
+    setDraft((current) => ({ ...current, folder_id: folderId }))
     resetSaveState()
   }
   function startEditing() {
@@ -286,6 +294,8 @@ function InboxPanel({
           <form className="editor-form" onSubmit={submitCreate}>
             <InboxFields draft={draft} disabled={busy}
               onTitle={changeTitle} onContent={changeContent} />
+            <FolderSelect value={draft.folder_id} disabled={busy}
+              onChange={changeFolder} />
             <div className="editor-actions">
               <button type="submit" disabled={busy}>{busy ? '保存中……' : '保存'}</button>
               <button type="button" onClick={onClose} disabled={busy}>取消新建</button>
@@ -366,6 +376,8 @@ function InboxPanel({
           </p>
           <InboxFields draft={draft} disabled={busy}
             onTitle={changeTitle} onContent={changeContent} />
+          <FolderSelect value={draft.folder_id} disabled={busy}
+            onChange={changeFolder} />
           <div className="editor-actions">
             <button type="submit" disabled={busy}>{saveStatus === 'saving' ? '保存中……' : '保存修改'}</button>
             <button type="button" onClick={() => onNavigate(exitEditing)} disabled={busy}>取消</button>
@@ -383,9 +395,13 @@ function InboxPanel({
   )
 }
 
-function InboxPage({ onDirtyChange, onBusyChange, onNavigate }: InboxPageProps) {
-  const [panel, setPanel] = useState<InboxPanelShape | { kind: 'list' }>({ kind: 'list' })
-  const keyRef = useRef(0)
+function InboxPage({ onDirtyChange, onBusyChange, onNavigate, initialOpen = null, onOpenRequestConsumed }: InboxPageProps) {
+  // Folder 混合卡片的打开请求只在挂载时消费一次：初始即进入详情面板。
+  const [panel, setPanel] = useState<InboxPanelShape | { kind: 'list' }>(
+    initialOpen ? { kind: 'detail', id: initialOpen.id, key: initialOpen.key } : { kind: 'list' },
+  )
+  // 从外部初始打开的序号继续递增，避免首次模块内切换复用旧 Panel。
+  const keyRef = useRef(initialOpen?.key ?? 0)
   function nextKey() {
     keyRef.current += 1
     return keyRef.current
@@ -405,6 +421,12 @@ function InboxPage({ onDirtyChange, onBusyChange, onNavigate }: InboxPageProps) 
 
   const [busy, setBusy] = useState(false)
   const dailyToken = useRef(0)
+
+  // 打开请求已消费：通知 App 清空，避免下次挂载重复打开同一条记录。
+  useEffect(() => {
+    if (initialOpen === null) return
+    onOpenRequestConsumed?.()
+  }, [initialOpen, onOpenRequestConsumed])
 
   function updateBusy(value: boolean) {
     setBusy(value)

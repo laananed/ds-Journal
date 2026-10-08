@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { createJournal, listJournals } from '../api/journals'
 import JournalList from './JournalList'
+import FolderSelect from './FolderSelect'
 import Pagination from './Pagination'
 import type { Journal, JournalPage } from '../types/journal'
 import { formatContentValidationErrors, hasContentValidationErrors, validateCreateInput } from '../utils/contentValidation'
@@ -19,7 +20,7 @@ interface JournalEditorProps {
   onBusyChange: (busy: boolean) => void
 }
 function JournalEditor({ listFilterDate, onSaved, externalRevision, onOpen, onClose, onDirtyChange, onBusyChange }: JournalEditorProps) {
-  const [initial, setInitial] = useState<JournalEditDraft>(() => ({ title: '', content: '', journal_date: defaultJournalDate() }))
+  const [initial, setInitial] = useState<JournalEditDraft>(() => ({ title: '', content: '', journal_date: defaultJournalDate(), folder_id: null }))
   const [draft, setDraft] = useState(initial)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'invalid' | 'error'>('idle')
   const [saveError, setSaveError] = useState('')
@@ -78,7 +79,7 @@ function JournalEditor({ listFilterDate, onSaved, externalRevision, onOpen, onCl
       setSaveError('请先选择日期。')
       return
     }
-    const payload = { title: draft.title === '' ? null : draft.title, content: draft.content, journal_date: draft.journal_date }
+    const payload = { title: draft.title === '' ? null : draft.title, content: draft.content, journal_date: draft.journal_date, folder_id: draft.folder_id }
     const errors = validateCreateInput(payload)
     if (hasContentValidationErrors(errors)) {
       setSaveStatus('invalid')
@@ -93,7 +94,7 @@ function JournalEditor({ listFilterDate, onSaved, externalRevision, onOpen, onCl
       const created = await createJournal(payload)
       setLastSaved(created)
       // 成功后开始下一篇空表单，保留服务器回读日期作为新的默认基线。
-      const next = { title: '', content: '', journal_date: created.journal_date }
+      const next = { title: '', content: '', journal_date: created.journal_date, folder_id: null }
       setDraft(next)
       setInitial(next)
       onDirtyChange(false)
@@ -129,6 +130,8 @@ function JournalEditor({ listFilterDate, onSaved, externalRevision, onOpen, onCl
           <textarea value={draft.content} rows={6} disabled={isSaving}
             onChange={(event) => changeDraft({ content: event.target.value })} />
         </label>
+        <FolderSelect value={draft.folder_id} disabled={isSaving}
+          onChange={(folderId) => changeDraft({ folder_id: folderId })} />
         <div className="editor-actions">
           <button type="submit" disabled={isSaving}>{isSaving ? '保存中……' : '保存'}</button>
           <button type="button" onClick={onClose} disabled={isSaving}>取消新建</button>
