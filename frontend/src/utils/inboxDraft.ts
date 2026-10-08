@@ -16,15 +16,16 @@
 import type { DailyInboxState, Inbox, InboxCreate, InboxUpdate } from '../types/inbox.ts'
 import { draftTitleToValue } from './journalDetail.ts'
 
-/** 表单草稿；Inbox 只有这两个可编辑字段（Folder 选择器属后续任务）。 */
+/** 创建与编辑共用的表单草稿；null 表示无 Folder。 */
 export interface InboxEditDraft {
   title: string
   content: string
+  folder_id: number | null
 }
 
 /** 把服务端记录转成表单草稿：`title` 为 null 时显示成空串，但**不**回退成日期。 */
 export function toInboxDraft(inbox: Inbox): InboxEditDraft {
-  return { title: inbox.title ?? '', content: inbox.content }
+  return { title: inbox.title ?? '', content: inbox.content, folder_id: inbox.folder_id }
 }
 
 export interface InboxCreateContext {
@@ -45,6 +46,7 @@ export function buildInboxCreate(draft: InboxEditDraft, context: InboxCreateCont
     content: draft.content,
     inbox_date: context.inboxDate,
     is_daily: context.isDaily,
+    folder_id: draft.folder_id,
   }
   if (context.titleEdited) {
     payload.title = draftTitleToValue(draft.title)
@@ -62,6 +64,8 @@ export function buildInboxUpdate(original: Inbox, draft: InboxEditDraft): InboxU
   const update: InboxUpdate = {}
   if (draft.title !== (original.title ?? '')) update.title = draftTitleToValue(draft.title)
   if (draft.content !== original.content) update.content = draft.content
+  // Folder 真实变化才进 PATCH：null 表示移出 Folder，未变化不制造更新。
+  if (draft.folder_id !== original.folder_id) update.folder_id = draft.folder_id
   return update
 }
 

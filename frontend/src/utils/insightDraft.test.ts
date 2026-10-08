@@ -50,47 +50,55 @@ function insight(overrides: Partial<Insight> = {}): Insight {
 }
 
 function draft(overrides: Partial<InsightEditDraft> = {}): InsightEditDraft {
-  return { title: '原始标题', content: '原始正文', ...overrides }
+  return { title: '原始标题', content: '原始正文', folder_id: null, ...overrides }
 }
 
 // ---- toInsightDraft：把 null 标题显示成空串，绝不回退成展示标题 ----
 
-expectEqual(toInsightDraft(insight({ title: null })), { title: '', content: '原始正文' }, 'null 标题显示为空串')
-expectEqual(toInsightDraft(insight({ title: '' })), { title: '', content: '原始正文' }, '空串标题保持空串')
+expectEqual(toInsightDraft(insight({ title: null })), { title: '', content: '原始正文', folder_id: null }, 'null 标题显示为空串')
+expectEqual(toInsightDraft(insight({ title: '' })), { title: '', content: '原始正文', folder_id: null }, '空串标题保持空串')
 expectEqual(
   toInsightDraft(insight({ title: '  手工  ' })),
-  { title: '  手工  ', content: '原始正文' },
+  { title: '  手工  ', content: '原始正文', folder_id: null },
   '非空标题保留原始空白',
 )
 expectEqual(
   toInsightDraft(insight({ title: null, display_title: '未命名 Insight' })),
-  { title: '', content: '原始正文' },
+  { title: '', content: '原始正文', folder_id: null },
   '不回退展示标题（display_title）到编辑框',
+)
+expectEqual(
+  toInsightDraft(insight({ folder_id: 5 })),
+  { title: '原始标题', content: '原始正文', folder_id: 5 },
+  '草稿保留原始 folder_id',
 )
 
 // ---- buildInsightCreate：空标题显式 null，非空原样提交 ----
 
+expectEqual(buildInsightCreate(draft({ folder_id: 5 })).folder_id, 5, 'Insight 创建提交所选 Folder')
+expectEqual(buildInsightCreate(draft()).folder_id, null, 'Insight 创建可显式选择无 Folder')
+
 expectEqual(
-  buildInsightCreate({ title: '', content: '正文' }),
-  { content: '正文', title: null },
+  buildInsightCreate({ title: '', content: '正文', folder_id: null }),
+  { content: '正文', title: null, folder_id: null },
   '空标题创建请求显式提交 title=null',
 )
 expectEqual(
-  buildInsightCreate({ title: '原则一', content: '正文' }),
-  { content: '正文', title: '原则一' },
+  buildInsightCreate({ title: '原则一', content: '正文', folder_id: null }),
+  { content: '正文', title: '原则一', folder_id: null },
   '非空标题原样提交',
 )
 expectEqual(
-  buildInsightCreate({ title: '   ', content: '正文' }),
-  { content: '正文', title: '   ' },
+  buildInsightCreate({ title: '   ', content: '正文', folder_id: null }),
+  { content: '正文', title: '   ', folder_id: null },
   '纯空白手工标题不 trim、原样提交',
 )
 check(
-  !('folder_id' in buildInsightCreate({ title: '', content: '正文' })),
-  '创建请求不携带 folder_id（本轮无 Folder 选择）',
+  buildInsightCreate({ title: '', content: '正文', folder_id: null }).folder_id === null,
+  '无 Folder 创建请求显式携带 folder_id=null',
 )
 check(
-  !('journal_date' in buildInsightCreate({ title: '', content: '正文' })),
+  !('journal_date' in buildInsightCreate({ title: '', content: '正文', folder_id: null })),
   '创建请求不携带任何日期字段',
 )
 
@@ -126,6 +134,17 @@ check(!updateKeys.includes('inbox_date'), '更新请求不含 inbox_date')
 check(!updateKeys.includes('is_daily'), '更新请求不含 is_daily')
 check(!updateKeys.includes('id'), '更新请求不含 id')
 check(!updateKeys.includes('type'), '更新请求不含 type')
+
+// ---- buildInsightUpdate：Folder 差异（S2-T08）----
+
+expectEqual(buildInsightUpdate(insight({ folder_id: 3 }), draft({ folder_id: 5 })), { folder_id: 5 }, 'Folder 变化提交新 id')
+expectEqual(buildInsightUpdate(insight({ folder_id: 3 }), draft({ folder_id: null })), { folder_id: null }, '移出 Folder 显式提交 null')
+expectEqual(buildInsightUpdate(insight({ folder_id: null }), draft({ folder_id: 3 })), { folder_id: 3 }, '移入 Folder 提交目标 id')
+expectEqual(buildInsightUpdate(insight({ folder_id: 3 }), draft({ folder_id: 3 })), {}, 'Folder 未变化不制造 PATCH')
+check(
+  !isInsightUpdateEmpty(buildInsightUpdate(insight({ folder_id: 3 }), draft({ folder_id: null }))),
+  '仅移出 Folder 的更新不算空更新',
+)
 
 // ---- isInsightUpdateEmpty ----
 check(isInsightUpdateEmpty({}), '空对象判定为空更新')

@@ -68,10 +68,29 @@
 .inbox-identity { margin: 0; font-size: 14px; color: #4a4453; }
 .inbox-daily-status { margin: 0; font-size: 14px; color: #4a4453; }
 .insight-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.folder-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.folder-create { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.folder-layout { display: flex; flex-direction: column; gap: 16px; }
+.folder-list, .folder-content { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid #e5e2ea; border-radius: 10px; background: #faf9fc; min-width: 0; }
+.folder-section-title { margin: 0; font-size: 16px; }
+.folder-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.folder-item { border: 1px solid #e5e2ea; border-radius: 8px; background: #fff; padding: 6px; }
+.folder-item.selected { border-color: #9c8fb5; box-shadow: 0 0 0 1px #9c8fb5 inset; }
+.folder-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.folder-open { flex: 1 1 auto; text-align: left; border: none !important; background: transparent !important; overflow-wrap: anywhere; }
+.folder-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.folder-delete-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.folder-rename { display: flex; flex-direction: column; gap: 8px; }
+.folder-rename input { font: inherit; padding: 6px 8px; border: 1px solid #cfc9d6; border-radius: 6px; min-width: 0; }
+.editor-field select { font: inherit; padding: 6px 8px; border: 1px solid #cfc9d6; border-radius: 6px; background: #fff; min-width: 0; }
+@media (max-width: 720px) {
+  .folder-layout { gap: 12px; }
+}
 @media (max-width: 480px) {
   .app { padding: 20px 12px 40px; gap: 16px; }
   .journal-editor, .journal-detail, .app-toolbar { padding: 12px; }
   .app .file-card { padding: 12px; }
   .pagination { gap: 8px; }
   .inbox-page, .insight-page { gap: 12px; }
+  .folder-list, .folder-content { padding: 12px; }
 }

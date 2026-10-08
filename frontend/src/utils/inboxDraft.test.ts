@@ -52,52 +52,68 @@ function inbox(overrides: Partial<Inbox> = {}): Inbox {
 }
 
 function draft(overrides: Partial<InboxEditDraft> = {}): InboxEditDraft {
-  return { title: '原始标题', content: '原始正文', ...overrides }
+  return { title: '原始标题', content: '原始正文', folder_id: null, ...overrides }
 }
 
 // ---- toInboxDraft：把 null 标题显示成空串，绝不回退成日期 ----
 
-expectEqual(toInboxDraft(inbox({ title: null })), { title: '', content: '原始正文' }, 'null 标题显示为空串')
-expectEqual(toInboxDraft(inbox({ title: '' })), { title: '', content: '原始正文' }, '空串标题保持空串')
+expectEqual(toInboxDraft(inbox({ title: null })), { title: '', content: '原始正文', folder_id: null }, 'null 标题显示为空串')
+expectEqual(toInboxDraft(inbox({ title: '' })), { title: '', content: '原始正文', folder_id: null }, '空串标题保持空串')
 expectEqual(
   toInboxDraft(inbox({ title: '  手工  ' })),
-  { title: '  手工  ', content: '原始正文' },
+  { title: '  手工  ', content: '原始正文', folder_id: null },
   '非空标题保留原始空白',
+)
+expectEqual(
+  toInboxDraft(inbox({ folder_id: 5 })),
+  { title: '原始标题', content: '原始正文', folder_id: 5 },
+  '草稿保留原始 folder_id',
 )
 
 // ---- buildInboxCreate：省略 → 默认日期标题；主动清空 → 显式 null ----
 
 expectEqual(
-  buildInboxCreate({ title: '', content: '正文' }, { inboxDate: '2026-10-08', isDaily: true, titleEdited: false }),
-  { content: '正文', inbox_date: '2026-10-08', is_daily: true },
+  buildInboxCreate(draft({ folder_id: 5 }), { inboxDate: '2026-10-08', isDaily: false, titleEdited: false }).folder_id,
+  5,
+  '普通 Inbox 创建提交所选 Folder',
+)
+expectEqual(
+  buildInboxCreate(draft(), { inboxDate: '2026-10-08', isDaily: true, titleEdited: false }).folder_id,
+  null,
+  'Daily 创建可显式选择无 Folder',
+)
+
+expectEqual(
+  buildInboxCreate({ title: '', content: '正文', folder_id: null }, { inboxDate: '2026-10-08', isDaily: true, titleEdited: false }),
+  { content: '正文', inbox_date: '2026-10-08', is_daily: true, folder_id: null },
   '未编辑标题的创建请求不含 title（后端存日期默认标题）',
 )
 check(
-  !('title' in buildInboxCreate({ title: '', content: '正文' }, { inboxDate: '2026-10-08', isDaily: false, titleEdited: false })),
+  !('title' in buildInboxCreate({ title: '', content: '正文', folder_id: null }, { inboxDate: '2026-10-08', isDaily: false, titleEdited: false })),
   '未编辑标题时不携带 title 键',
 )
 expectEqual(
-  buildInboxCreate({ title: 'AI培训待办', content: 'x' }, { inboxDate: '2026-10-08', isDaily: false, titleEdited: true }),
-  { content: 'x', inbox_date: '2026-10-08', is_daily: false, title: 'AI培训待办' },
+  buildInboxCreate({ title: 'AI培训待办', content: 'x', folder_id: null }, { inboxDate: '2026-10-08', isDaily: false, titleEdited: true }),
+  { content: 'x', inbox_date: '2026-10-08', is_daily: false, folder_id: null, title: 'AI培训待办' },
   '编辑过的标题原样提交',
 )
 expectEqual(
-  buildInboxCreate({ title: '   ', content: 'x' }, { inboxDate: '2026-10-08', isDaily: false, titleEdited: true }),
-  { content: 'x', inbox_date: '2026-10-08', is_daily: false, title: '   ' },
+  buildInboxCreate({ title: '   ', content: 'x', folder_id: null }, { inboxDate: '2026-10-08', isDaily: false, titleEdited: true }),
+  { content: 'x', inbox_date: '2026-10-08', is_daily: false, folder_id: null, title: '   ' },
   '纯空白手工标题不 trim、原样提交',
 )
 expectEqual(
-  buildInboxCreate({ title: '', content: 'x' }, { inboxDate: '2026-10-08', isDaily: false, titleEdited: true }),
-  { content: 'x', inbox_date: '2026-10-08', is_daily: false, title: null },
+  buildInboxCreate({ title: '', content: 'x', folder_id: null }, { inboxDate: '2026-10-08', isDaily: false, titleEdited: true }),
+  { content: 'x', inbox_date: '2026-10-08', is_daily: false, folder_id: null, title: null },
   '编辑后清空的标题显式提交 null，不能省略成默认创建',
 )
 expectEqual(
-  buildInboxCreate({ title: '', content: '正文' }, { inboxDate: '2026-10-08', isDaily: true, titleEdited: false }).is_daily,
+  buildInboxCreate({ title: '', content: '正文', folder_id: null }, { inboxDate: '2026-10-08', isDaily: true, titleEdited: false }).is_daily,
   true,
   'Daily 创建携带 is_daily=true',
 )
 expectEqual(
-  buildInboxCreate({ title: '', content: '正文' }, { inboxDate: '2026-10-08', isDaily: false, titleEdited: false }).is_daily,
+  buildInboxCreate({ title: '', content: '正文', folder_id: null }, { inboxDate: '2026-10-08', isDaily: false, titleEdited: false }).is_daily,
   false,
   '普通 Inbox 创建携带 is_daily=false',
 )
@@ -125,6 +141,18 @@ expectEqual(
   buildInboxUpdate(inbox({ title: '  ' }), draft({ title: '  ' })),
   {},
   '纯空白标题未编辑时不算改动',
+)
+
+// ---- buildInboxUpdate：Folder 差异（S2-T08）----
+
+expectEqual(buildInboxUpdate(inbox({ folder_id: 3 }), draft({ folder_id: 5 })), { folder_id: 5 }, 'Folder 变化提交新 id')
+expectEqual(buildInboxUpdate(inbox({ folder_id: 3 }), draft({ folder_id: null })), { folder_id: null }, '移出 Folder 显式提交 null')
+expectEqual(buildInboxUpdate(inbox({ folder_id: null }), draft({ folder_id: 3 })), { folder_id: 3 }, '移入 Folder 提交目标 id')
+expectEqual(buildInboxUpdate(inbox({ folder_id: 3 }), draft({ folder_id: 3 })), {}, 'Folder 未变化不制造 PATCH')
+expectEqual(
+  buildInboxUpdate(inbox({ folder_id: 3 }), draft({ title: '新标题', folder_id: null })),
+  { title: '新标题', folder_id: null },
+  'Folder 变化与内容变化可同时提交',
 )
 
 // 更新请求永远不携带日期与 Daily 身份。

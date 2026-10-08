@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { JournalApiError, deleteJournal, getJournal, updateJournal } from '../api/journals'
+import FolderSelect from './FolderSelect'
 import { buildJournalUpdate, formatServerTimestamp, type JournalEditDraft } from '../utils/journalDetail'
 import { isDraftDirty } from '../utils/dirtyState'
 import { formatContentValidationErrors, hasContentValidationErrors, validateUpdateInput } from '../utils/contentValidation'
@@ -15,7 +16,7 @@ interface JournalDetailProps {
   onDeleted: () => void
 }
 function toDraft(journal: Journal): JournalEditDraft {
-  return { title: journal.title ?? '', content: journal.content, journal_date: journal.journal_date }
+  return { title: journal.title ?? '', content: journal.content, journal_date: journal.journal_date, folder_id: journal.folder_id }
 }
 function JournalDetail({ journalId, onBusyChange, onDirtyChange, onNavigate, onClose, onDataChanged, onDeleted }: JournalDetailProps) {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
@@ -24,7 +25,7 @@ function JournalDetail({ journalId, onBusyChange, onDirtyChange, onNavigate, onC
   const [loadError, setLoadError] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
   const [mode, setMode] = useState<'view' | 'edit'>('view')
-  const [draft, setDraft] = useState<JournalEditDraft>({ title: '', content: '', journal_date: '' })
+  const [draft, setDraft] = useState<JournalEditDraft>({ title: '', content: '', journal_date: '', folder_id: null })
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'invalid' | 'error'>('idle')
   const [saveError, setSaveError] = useState('')
   const [deleteStage, setDeleteStage] = useState<'idle' | 'confirming' | 'deleting'>('idle')
@@ -196,6 +197,8 @@ function JournalDetail({ journalId, onBusyChange, onDirtyChange, onNavigate, onC
             <textarea value={draft.content} rows={8} disabled={busy}
               onChange={(event) => changeDraft({ content: event.target.value })} />
           </label>
+          <FolderSelect value={draft.folder_id} disabled={busy}
+            onChange={(folderId) => changeDraft({ folder_id: folderId })} />
           <div className="editor-actions">
             <button type="submit" disabled={busy}>{saveStatus === 'saving' ? '保存中……' : '保存修改'}</button>
             <button type="button" onClick={() => onNavigate(exitEditing)} disabled={busy}>取消</button>

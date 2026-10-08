@@ -62,6 +62,7 @@ function draft(overrides: Partial<JournalEditDraft> = {}): JournalEditDraft {
     title: '原始标题',
     content: '原始正文',
     journal_date: '2026-10-02',
+    folder_id: null,
     ...overrides,
   }
 }
@@ -151,6 +152,38 @@ expectEqual(
   buildJournalUpdate(journal({ content: '' }), draft({ content: '' })),
   {},
   '原文正文本来就是空字符串时不算改动',
+)
+
+// ---- Folder 差异（S2-T08）----
+
+expectEqual(
+  buildJournalUpdate(journal({ folder_id: 3 }), draft({ folder_id: 5 })),
+  { folder_id: 5 },
+  'Folder 变化提交新 id',
+)
+expectEqual(
+  buildJournalUpdate(journal({ folder_id: 3 }), draft({ folder_id: null })),
+  { folder_id: null },
+  '移出 Folder 显式提交 folder_id=null',
+)
+expectEqual(
+  buildJournalUpdate(journal({ folder_id: null }), draft({ folder_id: 3 })),
+  { folder_id: 3 },
+  '移入 Folder 提交目标 id',
+)
+expectEqual(
+  buildJournalUpdate(journal({ folder_id: 3 }), draft({ folder_id: 3 })),
+  {},
+  'Folder 未变化不制造 PATCH',
+)
+check(
+  !isJournalUpdateEmpty(buildJournalUpdate(journal({ folder_id: 3 }), draft({ folder_id: null }))),
+  '仅移出 Folder 的更新不算空更新',
+)
+expectEqual(
+  buildJournalUpdate(journal(), draft({ title: '新标题', folder_id: 5 })),
+  { title: '新标题', folder_id: 5 },
+  'Folder 变化与标题变化可同时提交',
 )
 
 // ---- 时间字段永远不进入请求体 ----
