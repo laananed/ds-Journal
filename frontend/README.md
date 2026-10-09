@@ -4,7 +4,8 @@
 把 Insight 从「未开放」接入真实模块（手动管理的列表、真实详情、新建、编辑、**移入回收箱**）。
 产品/API/架构/任务分别以根目录 `docs/stage2*.md` 为准；Stage 1 历史验收见 `docs/stage1-acceptance.md`。
 仍**未开放**的模块：Search、Trash、Folder 管理、Inbox→Journal、AI 辅助、Insight 的来源/历史/阅读渲染。
-Markdown 本期按**原始源码**编辑与展示，不渲染。
+Markdown 编辑态仍用普通 textarea 编辑**原始源码**；阅读态自 S2-T12 起做最小渲染（见「最小 Markdown 阅读」一节），
+渲染只在内存里，绝不写回数据库。
 
 ## 已实现的流程
 
@@ -47,7 +48,25 @@ Markdown 本期按**原始源码**编辑与展示，不渲染。
   绝不把展示回退值写回 `title`；已有 `title=null/""` 打开编辑器不会被回退文案替换。
 - 保存中防重复提交；保存失败保留输入与 Dirty；写成功与后续列表刷新失败分别反馈，
   不会诱发重复创建；过期列表 / 详情响应不覆盖新视图。
-- 原始 Markdown 按现有源码方式编辑与展示，不提前实现 T12 阅读渲染。
+- 原始 Markdown 按现有源码方式编辑，阅读态由 S2-T12 的最小渲染组件呈现。
+
+### 最小 Markdown 阅读（S2-T12）
+
+- 新增 `components/MarkdownContent.tsx`（只读外壳）+ `utils/markdownReading.ts`（渲染配置，无 JSX），
+  Journal / Inbox / Insight 的正常详情与 Trash 详情**共用同一个组件**，替换原先的
+  `<p className="detail-content">{content}</p>`；只换「怎么显示」，不改各页面的保存、Dirty、busy、
+  请求与刷新逻辑。
+- 批准的依赖：`react-markdown@10.1.0` + `remark-gfm@4.0.1`（均 MIT，精确版本；
+  remark-gfm 只为 `- [ ]` / `- [x]` Checklist，标题与数字列表是 CommonMark 核心）。
+- 阅读支持 `#` / `##` / `###`、Checklist、数字列表；Checklist 渲染为
+  `<input type="checkbox" disabled>`，点击不产生任何请求，也不改写源码。
+- **不启用 `rehype-raw`**：原始 HTML 被降级成普通文本并由 React 转义，全程
+  **不使用 `dangerouslySetInnerHTML`**，raw HTML 不会执行。
+- 显式保留 `defaultUrlTransform`（协议白名单 https / http / irc / ircs / mailto / xmpp）：
+  普通与相对链接可读，`javascript:` 等危险协议被替换成空 `href`，不可执行。
+- 数据库仍存原始 Text Markdown，不存渲染 HTML；缩进 / 空行 / 前后空格 / 换行在源码往返中逐字保留。
+- `[[标题]]` 内部链接的扩展点在 `utils/markdownReading.ts` 的 `components.a`，
+  **本任务不实现**（留给 S2-T13），也不引入 AST 平台、富文本编辑器或图片上传链路。
 
 ### 交互（S2-T03 + T05 + T06 共用）
 
@@ -104,6 +123,7 @@ node --experimental-strip-types src/utils/dirtyState.test.ts
 node --experimental-strip-types src/utils/pagination.test.ts
 node --experimental-strip-types src/utils/inboxDraft.test.ts
 node --experimental-strip-types src/utils/insightDraft.test.ts
+node --experimental-strip-types src/utils/markdownReading.test.ts
 ```
 
 构建先运行 TypeScript 检查，再输出忽略的 `dist/`。
@@ -132,6 +152,9 @@ node --experimental-strip-types src/utils/insightDraft.test.ts
   与操作反馈文案纯逻辑。
 - `utils/dirtyState.ts` / `pagination.ts` / `journalDetail.ts` / `inboxDraft.ts` / `insightDraft.ts`：可脱离 React
   验证的比较、页码与 Inbox / Insight 草稿建造规则。
+- `components/MarkdownContent.tsx`（S2-T12）：只读正文外壳，四个详情位共用；
+  渲染配置在同名纯逻辑模块 `utils/markdownReading.ts` 里，因此渲染测试可以直接
+  渲染组件真正使用的那棵树（`react-dom/server` + 真实依赖，无测试框架）。
 
 当前最值得理解的是：`total` 与当前页 `items.length` 不同；
 `display_title` 是读取投影，原始 `title` 是可写字段；

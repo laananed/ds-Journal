@@ -59,6 +59,31 @@
 .detail-meta-row dt { min-width: 72px; color: #6b6375; }
 .detail-meta-row dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
 .detail-content { margin: 0; padding: 12px; border: 1px solid #e5e2ea; border-radius: 8px; background: #fff; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* S2-T12 最小 Markdown 阅读：只作用于 MarkdownContent 渲染的只读正文。
+   两处规则说明：
+   - `.detail-content.markdown-body` 两级选择器覆盖上面的 `white-space: pre-wrap`，
+     否则渲染出的块级元素之间的换行会被当成可见空行（不依赖规则先后顺序）；
+   - pre / table 用横向滚动而不是撑破卡片，窄屏（375px）仍可读。 */
+.detail-content.markdown-body { white-space: normal; }
+.markdown-body > :first-child { margin-top: 0; }
+.markdown-body > :last-child { margin-bottom: 0; }
+.markdown-body p { margin: 0 0 10px; }
+.markdown-body h1 { margin: 0 0 10px; font-size: 20px; line-height: 1.3; }
+.markdown-body h2 { margin: 16px 0 8px; font-size: 17px; line-height: 1.3; }
+.markdown-body h3 { margin: 14px 0 6px; font-size: 15px; line-height: 1.3; }
+.markdown-body ul, .markdown-body ol { margin: 0 0 10px; padding-left: 1.6em; }
+.markdown-body li + li { margin-top: 4px; }
+.markdown-body ul.contains-task-list { list-style: none; padding-left: 4px; }
+.markdown-body input[type='checkbox'] { margin: 0 6px 0 0; cursor: default; }
+.markdown-body code { padding: 1px 4px; border-radius: 4px; background: #f4f1f9; font-size: 0.92em; }
+.markdown-body pre { margin: 0 0 10px; padding: 10px; border: 1px solid #e5e2ea; border-radius: 6px; background: #faf9fc; overflow-x: auto; }
+.markdown-body pre code { padding: 0; background: transparent; }
+.markdown-body a { color: #695185; }
+.markdown-body blockquote { margin: 0 0 10px; padding: 2px 12px; border-left: 3px solid #d8d3de; color: #4a4453; }
+.markdown-body hr { margin: 14px 0; border: none; border-top: 1px solid #e5e2ea; }
+.markdown-body table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.markdown-body th, .markdown-body td { padding: 4px 8px; border: 1px solid #e5e2ea; }
+.markdown-body img { max-width: 100%; height: auto; }
 .detail-danger { border-color: #d9a3a3 !important; color: #8a2f2f; }
 .detail-state, .detail-hint { margin: 0; font-size: 14px; color: #4a4453; }
 .detail-hint { font-size: 13px; color: #6b6375; }
