@@ -291,6 +291,14 @@ Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5
 11. **执行步骤**：后端条件/排序用例 → 查询API → Search页面 → 回收箱/分页联动演示。
 12. **Definition of Done**：搜索规则和排序一致，没有额外搜索语法；不拿前端已加载内容作全库搜索。
 
+### S2-T11 本轮实施结果（2026-10-08，Codex）
+
+- 唯一主目录，分支 `codex/s02-t11-search`；实际起始/结束 HEAD `4fc9682669b3d57a060b032f897b7971ff437e99`，已包含 T10 页面及详情 GET404 刷新修复。
+- Search API/UI 已实现；全局参数化三类型分页，原始 title/content AND/OR 与字面通配符规则，完整日期编号；Dirty/真实详情/过期请求与失效结果刷新沿用既有边界。
+- 本轮自测：后端局部 46、全量 756；前端 build/lint 退出 0、10 份纯逻辑 235；实际 HTTP/DB 42、浏览器 31 条。两测试库四表恢复 0、个人库保护与原服务 PID 核对一致。
+- 未新增 Model/Migration/依赖，未修改生产 CORS/.env；未提交或整合，待 WorkBuddy 同目录独立测试及用户审核。历史验收不改写。
+- 详细命令/退出码、实际与注入故障、环境问题及收尾、可复跑脚本/交接绝对路径见 [s2-t11-implementation.md](s2-t11-implementation.md)。本记录不等于 Stage 2 整体验收。
+
 ## 14. S2-T12 — 最小 Markdown 阅读
 
 1. **Goal**：三类文件阅读时支持指定Markdown语法，编辑仍保留原源码。

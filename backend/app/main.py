@@ -12,6 +12,7 @@ from app.journal.router import router as journal_router
 from app.inbox.router import router as inbox_router
 from app.insight.router import router as insight_router
 from app.trash.router import router as trash_router
+from app.search.router import router as search_router
 
 app = FastAPI(title="SeekJournal API")
 
@@ -39,6 +40,7 @@ app.include_router(inbox_router)
 app.include_router(insight_router)
 app.include_router(folder_router)
 app.include_router(trash_router)
+app.include_router(search_router)
 
 
 @app.get("/api/health")

@@ -1262,3 +1262,21 @@ For an HTTP demo, set DATABASE_URL only in the demo process to seekjournal_test
 and bind to 127.0.0.1:8019. Do not edit .env, migrate seekjournal, or reuse a
 running personal backend. Clean up only demo-created typed IDs and stop only
 the demo server.
+## S2-T11 ordinary search
+
+`GET /api/search?q=AI%20培训&type=all&page=1` searches raw title/content.
+Each whitespace-separated word matches either field; all words must match.
+English matching ignores case, and `%`, `_`, and backslash are literal text.
+Omitted/blank q returns an empty page. Type is all/journal/inbox/insight.
+Journal/Insight soft-deleted rows are excluded; Inbox uses existing rows.
+Results are globally ordered by updated_at DESC, Journal/Inbox/Insight, id DESC,
+with 20 rows per page and full-date Journal display titles. GET never writes.
+
+From backend, run the isolated fixed-test-DB commands:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_search_api.py
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests
+```
+
+No migration or additional search dependency is required.

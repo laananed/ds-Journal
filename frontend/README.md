@@ -138,3 +138,13 @@ node --experimental-strip-types src/utils/insightDraft.test.ts
 Dirty 比较编辑基线，而写成功与后续读失败是两个独立结果；
 Daily 身份的创建与更新由「保存时是否携带真实 id」区分，入口本身只读、不写库；
 Insight 与 Inbox 的删除语义不同——前者软删除进回收箱，后者硬删除，但共用同一套 Dirty 与写锁。
+## S2-T11 Search
+
+Search queries the backend across Journal/Inbox/Insight with keyword, type and
+20-item pagination. Changing keyword/type returns to page 1; returning from a
+detail re-queries the retained search conditions. Blank input, no matches,
+loading and error/retry are distinct. Old list/target requests are aborted on
+condition changes or navigation. Cards use type+id and read a live ordinary
+target before existing module navigation; 404 clears and refreshes stale results.
+Module changes use the existing Dirty confirmation. No search state framework
+or Markdown rendering is added.

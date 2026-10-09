@@ -9,8 +9,10 @@ import FolderPage from './pages/FolderPage'
 import InboxPage from './pages/InboxPage'
 import InsightPage from './pages/InsightPage'
 import TrashPage from './pages/TrashPage'
+import SearchPage from './pages/SearchPage'
 import type { FileIdentity } from './types/file'
 import type { JournalPage } from './types/journal'
+import type { SearchConditions } from './types/search'
 import { nearestValidPage } from './utils/pagination'
 
 type Module = 'journal' | 'inbox' | 'insight' | 'search' | 'trash' | 'folder'
@@ -38,6 +40,7 @@ function App() {
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
   const confirmDialog = useRef<HTMLDialogElement>(null)
   const [notice, setNotice] = useState('')
+  const [searchConditions, setSearchConditions] = useState<SearchConditions>({ q: '', type: 'all', page: 1 })
   // Folder 混合卡片的一次性打开请求：交给对应模块消费后清空。
   const [crossOpen, setCrossOpen] = useState<{ file: FileIdentity; key: number } | null>(null)
   const consumeCrossOpen = useCallback(() => setCrossOpen(null), [])
@@ -148,8 +151,8 @@ function App() {
       setPage(value)
     })
   }
-  /** Folder 混合卡片按 (type, id) 打开真实详情；Journal 就地打开，Inbox/Insight 交给对应模块。 */
-  function openFileFromFolder(file: FileIdentity) {
+  /** Folder/Search 卡片共用按 (type, id) 打开的真实详情与 Dirty 导航。 */
+  function openFile(file: FileIdentity) {
     navigate(() => {
       dirtyRef.current = false
       setNotice('')
@@ -180,19 +183,16 @@ function App() {
         ))}
       </nav>
 
-      {module !== 'journal' && module !== 'inbox' && module !== 'insight' && module !== 'folder' && module !== 'trash' && (
-        <section className="app-state" aria-label="尚未开放">
-          <h2>{modules.find((item) => item.id === module)?.label}</h2>
-          <p>该模块尚未开放。</p>
-          <button type="button" onClick={() => changeModule('journal')}>返回 Journal</button>
-        </section>
+      {module === 'search' && (
+        <SearchPage conditions={searchConditions} onConditionsChange={setSearchConditions}
+          onNavigate={navigate} onOpenFile={openFile} />
       )}
       {module === 'trash' && (
         <TrashPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate} />
       )}
       {module === 'folder' && (
         <FolderPage onDirtyChange={setDirty} onBusyChange={setWriting}
-          onNavigate={navigate} onOpenFile={openFileFromFolder} />
+          onNavigate={navigate} onOpenFile={openFile} />
       )}
       {module === 'inbox' && (
         <InboxPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate}
