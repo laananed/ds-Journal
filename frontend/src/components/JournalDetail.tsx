@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { JournalApiError, deleteJournal, getJournal, updateJournal } from '../api/journals'
 import FolderSelect from './FolderSelect'
+import MarkdownContent from './MarkdownContent'
 import { buildJournalUpdate, formatServerTimestamp, type JournalEditDraft } from '../utils/journalDetail'
 import { isDraftDirty } from '../utils/dirtyState'
 import { formatContentValidationErrors, hasContentValidationErrors, validateUpdateInput } from '../utils/contentValidation'
@@ -163,7 +164,7 @@ function JournalDetail({ journalId, onBusyChange, onDirtyChange, onNavigate, onC
             <div className="detail-meta-row"><dt>创建时间</dt><dd>{formatServerTimestamp(detail.created_at)}</dd></div>
             <div className="detail-meta-row"><dt>修改时间</dt><dd>{formatServerTimestamp(detail.updated_at)}</dd></div>
           </dl>
-          <p className="detail-content">{detail.content}</p>
+          <MarkdownContent source={detail.content} />
           {saveStatus === 'saved' && <p className="detail-success" role="status">已保存。</p>}
           <div className="detail-actions">
             <button type="button" onClick={startEditing} disabled={busy}>修改</button>

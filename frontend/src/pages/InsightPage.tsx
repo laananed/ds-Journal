@@ -9,6 +9,7 @@ import {
 } from '../api/insights'
 import FileCard from '../components/FileCard'
 import FolderSelect from '../components/FolderSelect'
+import MarkdownContent from '../components/MarkdownContent'
 import Pagination from '../components/Pagination'
 import type { Insight, InsightPage as InsightPageData } from '../types/insight'
 import {
@@ -295,7 +296,7 @@ function InsightPanel({
             <div className="detail-meta-row"><dt>创建时间</dt><dd>{formatServerTimestamp(file.created_at)}</dd></div>
             <div className="detail-meta-row"><dt>修改时间</dt><dd>{formatServerTimestamp(file.updated_at)}</dd></div>
           </dl>
-          <p className="detail-content">{file.content}</p>
+          <MarkdownContent source={file.content} />
           {saveStatus === 'saved' && <p className="detail-success" role="status">已保存。</p>}
           <div className="detail-actions">
             <button type="button" onClick={startEditing} disabled={busy}>修改</button>
