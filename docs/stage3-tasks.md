@@ -234,3 +234,14 @@ Get-ChildItem .\src\utils -Filter *.test.ts | ForEach-Object { node --experiment
 - 指定三文件回归退出0（89 passed、12.91s）；完整 `pytest -q -p no:cacheprovider tests` 仅运行一次，退出0（873 passed、96.62s）。用户另行明确允许既有测试在seekjournal_test私有schema内做合成迁移验证；未独立运行prepare/迁移命令，未迁移public或个人库。
 - 本轮开始确认seekjournal_test实际S3、八表空、无其他会话，串行测试；个人库只读摘要。收尾摘要/原报告保护、修复diff及新57文件SHA256见 `.workbuddy/s3-t01-codex/if-match-fix/`；修复报告见 `.workbuddy/s3-t01-codex/if-match-fix-report.md`。
 - 状态：**最小修复与开发自测通过，待未参与修复的新Codex对话独立复测、待提交/整合及用户接受。** 本开发对话不能作为本次修复的独立测试者。停止修改，不进入T02、不调用其他Agent、无Git整合操作；Stage2历史未闭环状态保留，不宣布T01或Stage验收完成。
+
+### S3-T04 独立 HTTP/UI 测试库资源准备（2026-10-11，Codex，仅环境隔离）
+
+- 用户明确授权新建 `seekjournal_test_02`，仅在本轮新库执行当前已整合 Alembic 迁移；T05 继续独占 `seekjournal_test`，T04 独占 `seekjournal_test_02`，用途限后端服务与 HTTP/UI 测试。本记录不改变 T04/T05 功能授权、历史验收或完成状态。
+- 开始只读核对：main / `faf4c14ebad9422719ff7a96cd197326b5877c3e`，工作区干净；Work-01 / `wb/s03-t04`、Work-02 / `codex/s03-t05` 登记 HEAD 同 main。本轮没有修改两个 Worktree、切分支或 Git 提交/整合操作。
+- 复用既有 PostgreSQL 17.11，通过 `postgres` 管理库只读查询确认新库不存在后创建。迁移前实际连接证明 `current_database()=seekjournal_test_02` 且无表。Alembic 子进程沿用既有连接信息，仅替换 database；真实 `.env` 未修改，没有连接 `seekjournal_test` 或个人库 `seekjournal`。
+- 创建脚本退出 0；`alembic heads`、`upgrade head`、`current`、再次 `heads`、`check` 各退出 0。实际 revision/current/head 均 `3aa16300a58a`，无 schema 漂移；八表 `folders/journals/inboxes/insights/ai_requests/ai_checkpoints/ai_usage/ai_settings` 各 0 行，另有 `alembic_version`。main 与 Work-01 各自已有虚拟环境运行独立只读探针均退出 0，核对实际 app engine 的目标库、checkout head、revision 与表基线。
+- `Get-NetTCPConnection` 和 Docker 状态查询受权限限制，未启动 Compose；`netstat -ano -p tcp` 退出 0，8032/5182 无监听。T04 启动指令运行前再次检查端口，冲突时报告且不停止他人进程；后端使用 Work-01 已有 `.venv`，进程 DATABASE_URL 指向新库，前端进程 VITE_API_BASE_URL 指向 8032。既有 CORS 仅允许 5173，说明中提供运行时内存追加本地 5182 来源的临时包装，不改产品代码/真实配置；指令尚未启动服务或验证 HTTP/UI。
+- pytest 隔离仍未支持新库：`get_test_database_url()` 固定为 `seekjournal_test`，conftest 导入时覆盖 DATABASE_URL，迁移 fixture 同样固定库名。T04 不得运行加载此 conftest 的 pytest；本轮未执行 pytest 或 `prepare_test_db.py`，未改测试框架/固定库名守卫。
+- 收尾：新库保留给 T04，无业务数据写入、服务未启动、依赖未安装、无其他 Agent 调用；仅追加本资源记录，未提交/整合。此为本轮环境实测，非产品自测或独立验收，不宣布 T04/T05/Stage 完成。
+- 脱敏证据与可复制启动/核验指令：`C:\Programme\demo\SeekJournal\.workbuddy\s3-t04-db-isolation\`，包括 `database-evidence.json`（创建前后、列/约束、迁移输出与退出码）、`probe.py`、`T04-commands.md` 和收尾证据；不含凭据、连接串、Key 或正文。
