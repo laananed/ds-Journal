@@ -452,6 +452,37 @@ node --experimental-strip-types src/utils/dirtyState.test.ts
 T14实际执行后在此追加日期、branch/HEAD、命令/退出码/实际数量、A01～A13证据、迁移与开发库保护结果、真实/合成区分、未验证项、用户学习/最终验收情况。
 不得提前填“全部通过”。
 
+### S2-T14 独立技术验收记录（2026-10-10，Codex Lead）
+
+- 工作目录 `C:\Programme\demo\SeekJournal`；分支 `codex/s02-t14-acceptance`；起始/结束 HEAD 均为 `a1c317513c4a0ed0d892fe3027a20e497a7a604e`。进入本轮时 main 已干净且包含已提交的 T13，故未代用户提交/整合；从实际 main 建立验收分支。T01～T13按实际源码、当前测试和组合路径核对，T10详情GET404后刷新列表、本轮Search/Markdown/Link导航均实际运行。
+- T13残留按原manifest内容/时间/Folder及原请求记录逐行确认归属，精准清理36个自建对象，退出0；补原manifest的 `cleaned/ui_after/cleanup_closeout`。T13专属库四表0，不凭ID清空来源不明数据。
+- backend全量命令 `.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests` **仅运行一次，退出0，791 passed（44.84s）**。额外环境参数只输出JUnit。11个迁移测试实际通过：在seekjournal_test私有schema种8行Stage1合成旧数据并逐步升M1/M2/M3，六字段每步完全保留，schema与public保护断言通过。
+- Alembic heads/current/check在明确由 `get_test_database_url()` 指向seekjournal_test的进程环境执行，均退出0：单head/current均 `18ecf7e09da6`，check无漂移。未在个人库迁移。
+- frontend `npm run build` / `npm run lint` 均退出0；build转换299模块。按 `Get-ChildItem .\src\utils -Filter *.test.ts` 逐项运行node命令，12份纯逻辑共293项、退出0。真实8018 HTTP/DB脚本98个检查通过；CUA浏览器78个实际断言通过，另保留3个无效/过早探针，不把断言数当独立用例数。
+
+| 验收项 | 本轮技术/功能结果及证据要点 |
+|---|---|
+| A01 | 通过：三类80/50,000 Unicode、空白/越界、UI保留错误输入、实际标题/正文截断 |
+| A02 | 通过：当前迁移testcase与执行断言证明8行六字段逐步保留，库/schema隔离 |
+| A03 | 通过：同日23条分页、统一完整日期编号、软删/恢复保号和P3允许永删重编号 |
+| A04 | 通过：04:00确定性测试、真实Daily缺失零创建、有效保存持久化、标题清空与硬删同日重建 |
+| A05 | 通过：手动Insight API/UI生命周期与分页 |
+| A06 | 通过：三类Folder移入/移出/混合详情、Trash引用保护、无效Folder原子失败、最后页回退 |
+| A07 | 通过：全字段软删/恢复时间与Folder保持、永删物理行/204空体、Inbox排除、Trash详情GET404刷新 |
+| A08 | 通过：三类各23合并69全局分页、中文/大小写/AND/字面通配符/重复词/空查询、旧响应不覆盖新搜索 |
+| A09 | 通过，附已知限制：安全阅读、原始源码逐字往返、Checkbox真实点击前后四表零写；href空串点击重载见下 |
+| A10 | 通过：单/多/零候选、type+id真实目标、改名不改源/改回重解析、代码边界、候选404重查、500重试 |
+| A11 | 通过：六类列表20条与条件页码，实际Trash/Search/Folder失效末页回退，通用分页逻辑回归 |
+| A12 | 通过：统一busy/Dirty出口审核与代表路径、失败保留输入、写成功/刷新失败分开、390px/键盘/持久化 |
+| A13 | 通过：空/相同PATCH全字段不变、真实编辑更新时间、软删/恢复保时、GET零写及既有回滚测试 |
+
+- 专门in-flight证据：Inbox1真实PATCH延迟12秒期间模块/卡片/内部候选/Daily禁用，导航尝试期间其他请求0，保存200一次；随后列表500单独反馈，重试只刷新。另记录Folder45秒读取间移出5条后3→2页、搜索旧响应晚于新响应而未覆盖。
+- 已知限制 **S2-F01（建议另列修复Task，未实施）**：危险普通链接安全转换为 `href=""`，点击会重载应用并丢失导航状态，未执行危险协议、不影响已保存数据。最小修复建议仅T12阅读组件的无效链接表现及验证；由用户决定是否接受或授权修复。
+- 未验证：真实凌晨等待、所有浏览器/实体设备与完整无障碍、断电/关闭浏览器保存风险、每类对象×每个Dirty出口的穷举排列；04:00及数据库故障/Session回滚由确定性现有测试证明。真实成功、临时网络/延迟故障注入、DB快照分别保存；工具探针、编码/JUnit路径和临时清理顺序问题均透明记入报告，没有修改业务代码。
+- 收尾：seekjournal_test/T13 UI/T14 UI均M3四表0，迁移临时schema0；仅清理自建typed IDs。测试sequence正常前进未重置。个人库M3、18 Journal/1 Inbox、原六字段摘要/sequence1656均不变；环境/依赖指纹相同。自建8018/5178已停，用户8000/5173/5432原PID保持。未commit/merge/push/tag、清理Worktree或安装依赖。
+- 完整逐项绝对证据路径、实际命令/退出码、工具错误与收尾见 [本轮报告](C:/Programme/demo/SeekJournal/.workbuddy/s2-t14-acceptance-20261010/acceptance-report.md)；[WorkBuddy复核提示与重跑脚本入口](C:/Programme/demo/SeekJournal/.workbuddy/s2-t14-acceptance-20261010/workbuddy-handoff.md)。临时证据目录被Git忽略，本轮唯一跟踪变更为此验收记录追加，历史数量与结论保留原意。
+- **技术/功能验收按上表通过并附明确限制；用户最终接受、学习验收和WorkBuddy独立复核均待确认。** 核心学习点为type+id与动态投影、Markdown源码/解析/导航协作、busy和Dirty及写成功与刷新成功的区别。Codex交付后停止修改，未替用户宣布Stage2全部完成。
+
 ## T03/T04 历史并行执行记录入口（2026-10-08，Lead维护）
 
 - 共同起始HEAD：01bf8a86a875332b590ef6e5c0f0d087ac44c50b。
