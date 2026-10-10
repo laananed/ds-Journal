@@ -8,8 +8,8 @@
 
 ## 1. 阅读、范围与统一完成标准
 
-每次先读 `AGENTS.md`、自身角色文件（Codex：`agents/gpt-lead.md`；WorkBuddy：`agents/ds-developer.md`）、`agents/multi-agent-workflow.md`；按任务读 `stage2.md`、`stage2-api.md`、`stage2-architecture.md` 和本文。
-Stage 1.5 另读 `stage1.5-bugfix.md` 与 Stage 1 三份权威文档；Stage 1.5 任务全部在该文件，不与以下任务混执行。
+每次先读 `AGENTS.md`、自身角色文件（Codex：`agents/gpt-lead.md`；WorkBuddy：`agents/ds-developer.md`）、`agents/multi-agent-workflow.md`；按根 `AGENTS.md` §2 读取 `stage2.md`、`stage2-api.md`、`stage2-architecture.md` 和本文中当前任务相关章节，含通用规则、依赖、验收标准与引用条款，不要求每次完整读取。
+Stage 1 / Stage 1.5 已完成，仅在当前任务涉及历史行为、兼容性、迁移、回归或引用依据时，读取 `stage1.5-bugfix.md`、Stage 1 权威文档及所需验收记录的相关内容；历史任务不与以下任务混执行。按需读取不改变文档权威性，不允许跳过本任务需要的契约；未来阶段沿用根规则的读取机制，不因此宣布 Stage 2 完成或授权 Stage 3。
 
 - 先完成执行前检查清单、S1.5-T1→T2 的独立验收，再开始 S2-T01。
 - 只改当前 Task 点名模块及必要测试/运行说明；新 API/字段严格按本轮文档，不能扩大范围。

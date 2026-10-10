@@ -2,354 +2,84 @@
 
 ## 1. Project
 
-SeekJournal 是一个以个人认知成长为核心、生活与情感记录为辅的个人记录与复盘软件。
-
-当前开发阶段：
-
-Stage 2 - 本地 Web 完整基础记录版（进行中）
-
-- Stage 1 已完成并通过整体验收，功能与证据见 `docs/stage1-acceptance.md`；
-- Stage 1.5（Pre-Stage-2 Bug Fix）已完成，需求、契约修订与执行记录见 `docs/stage1.5-bugfix.md`；
-- 当前阶段（Stage 2）的权威文档：
-  - 产品需求 `docs/stage2.md`
-  - API 契约 `docs/stage2-api.md`
-  - 技术架构 `docs/stage2-architecture.md`
-  - 任务计划 `docs/stage2-tasks.md`
-- 当前 Task 的范围、依赖与验收标准见 `docs/stage2-tasks.md`；实施授权以用户明确确认的任务分配方案为准。
-  文档中的 T03/T04 授权与执行限制是历史记录，不作为所有后续 Task 的授权范围。
-  当前尚未完成的 S2-T07 保持原任务范围、分支及既有授权，不因本次规范升级重分配或重新启动。
-- S2-T02 按已确认的 P3（动态编号）实现，不新增编号字段或 Migration；
-- 实施轮只在独立测试库上迁移；**真实开发库 `seekjournal` 的升级由用户单独授权后进行**。
-
-Stage 1 - Journal Local Web Demo（已完成）
-
-Stage 1 的目标不是完成完整 SeekJournal 产品。
-
-Stage 1 已完成的能力：
-
-- Journal 创建
-- Journal 查看
-- Journal 修改
-- Journal 删除
-- 按日期查看
-- PostgreSQL 数据持久化
-- React → FastAPI → PostgreSQL 完整链路
-
----
+SeekJournal 是以个人认知成长为核心、生活与情感记录为辅的个人记录与复盘软件。
+当前为 **Stage 2：本地 Web 完整基础记录版（进行中）**；Stage 1 / 1.5 已完成。阶段文档入口见 §3，Task 完成不等于 Stage 整体验收，不提前创建或实施未来阶段。
 
 ## 2. Required Reading
 
-执行任何开发任务前，必须阅读：
-
-1. `docs/stage1.md`
-2. `docs/stage1-api.md`
-3. `docs/stage1-architecture.md`
-
-执行当前阶段（Stage 2）任务前，还必须阅读：
-
-1. `docs/stage2.md`（产品需求）、`docs/stage2-api.md`（API 契约）、
-   `docs/stage2-architecture.md`（技术架构）、`docs/stage2-tasks.md`（任务计划）；
-2. 只执行 `docs/stage2-tasks.md` 中被点名授权的 Task 及已确认的子任务。
-   未被授权的 Task 及其中的规划内容**不构成实施授权**。
-3. Stage 1.5 的输入规则修订以 `docs/stage1.5-bugfix.md` 为准（历史依据，已完成）。
-
-根据当前角色继续阅读：
-
-Codex（Lead Agent + Developer）：
-
-- `agents/gpt-lead.md`
-
-WorkBuddy（Developer）：
-
-- `agents/ds-developer.md`
-
-保留既有文件名以兼容引用；`ds-developer.md` 现定义 WorkBuddy 职责，不再配置 DeepSeek。
-当前模型配置、任务分配与 Worktree 流程统一见 `agents/multi-agent-workflow.md`。
-
-涉及多 Agent 协作时：
-
-- `agents/multi-agent-workflow.md`
-
----
+- 始终读取根 `AGENTS.md`、适用角色规范（Codex：`agents/gpt-lead.md`；WorkBuddy：`agents/ds-developer.md`；ZCode：`agents/zcode-developer.md`）及 `agents/multi-agent-workflow.md`，单 Agent 执行也适用。
+- 按当前 Task 选择性读取 §3 中相关产品需求、API、架构、任务计划章节及实际代码；包含适用的通用规则、范围、依赖、验收标准、执行记录与引用条款，不要求完整读取四份 Stage 2 文档。
+- 历史文档仅在追溯历史行为、兼容性或 Bug 时读取相关内容，包括任务所需的迁移、回归和引用依据；不默认完整读取 Stage 1 / 1.5 文档。
+- 已读且未变化、上下文仍可用的内容无需重复加载；范围不明或存在依赖引用时先检索、补读。按需读取不改变文档权威性，不得跳过本任务需要的契约。
+- 未来经用户确认进入后续阶段后，同样按任务读取当前阶段文档，已完成的 Stage 2 及更早阶段按历史依据读取。
 
 ## 3. Source of Truth
 
-同一个项目事实不得在多个 Agent 文件中分别维护多个版本。
+同一事实只在对应权威来源维护，角色文件和提示词引用它，不另建版本。
 
-当前权威来源：
+| 领域 | 当前 Stage 2 权威来源 |
+|---|---|
+| 产品需求 | `docs/stage2.md` |
+| API 契约 | `docs/stage2-api.md` |
+| 技术架构 | `docs/stage2-architecture.md` |
+| Task 范围、依赖、验收与执行记录 | `docs/stage2-tasks.md` |
+| Agent 行为与协作 | 本文件及适用的 `agents/*.md` |
 
-### 当前阶段（Stage 2）
+历史依据：`docs/stage1.md`、`docs/stage1-api.md`、`docs/stage1-architecture.md`、`docs/stage1-acceptance.md`；Stage 1.5 修订与执行记录见 `docs/stage1.5-bugfix.md`。当前 Stage 2 规则优先于历史规则，Stage 1.5 修订覆盖对应 Stage 1 旧规则。
 
-- 产品需求：`docs/stage2.md`
-- API：`docs/stage2-api.md`
-- 技术架构：`docs/stage2-architecture.md`
-- 任务计划：`docs/stage2-tasks.md`
+出现未明确解决的文档冲突时，停止受影响的实现，指出冲突位置并等待用户决定；已获批准的修订由 Codex 先同步权威文档，再继续，不重复索取同一批准，不自行选版本实施。
+T03/T04 的历史分工与资源边界见 `docs/stage2-tasks.md` 的历史记录及 `docs/s2-t03-acceptance.md`、`docs/s2-t04-acceptance.md`，不作为新 Task 授权。
 
-（Stage 2 的规则以上面四份文档为准；与下方 Stage 1 条目冲突时，以它们为准。
- Stage 1.5 的输入规则修订与执行记录保留在 `docs/stage1.5-bugfix.md`。）
+## 4. Technology Stack & Architecture
 
-### 产品需求
+- 前端：React、TypeScript、Vite；后端：Python、FastAPI、Pydantic、SQLAlchemy 2.x；数据库：PostgreSQL、psycopg、Alembic；接口：REST / JSON；测试：pytest。
+- React / FastAPI 在 Windows 本机运行，PostgreSQL 在 Docker 运行。
+- 保持前后端分离、后端模块化单体；调用链为 Router → Service → SQLAlchemy → PostgreSQL。Pydantic 负责验证与 Schema，psycopg 负责数据库连接。
 
-`docs/stage1.md`
+## 5. Simplicity Rule & Forbidden Without Approval
 
-### API
-
-`docs/stage1-api.md`
-
-### 技术架构
-
-`docs/stage1-architecture.md`
-
-### Agent 行为规则
-
-`AGENTS.md`
-
-以及：
-
-`agents/*.md`
-
-如果文档之间产生冲突：
-
-1. 停止实现；
-2. 明确指出冲突位置；
-3. 未获明确批准的冲突等待用户决定；已批准修订由 Codex 先同步权威文档，不重复索要同一批准；
-4. 修改权威文档；
-5. 再继续开发。
-
-不得自行选择其中一个版本继续实现。
-
----
-
-## 4. Current Technology Stack
-
-### Frontend
-
-- React
-- TypeScript
-- Vite
-
-### Backend
-
-- Python
-- FastAPI
-- Pydantic
-- SQLAlchemy 2.x
-
-### Database
-
-- PostgreSQL
-- psycopg
-- Alembic
-
-### API
-
-- REST
-- JSON
-
-### Testing
-
-- pytest
-
-### Local Development
-
-- React：Windows 本机运行
-- FastAPI：Windows 本机运行
-- PostgreSQL：Docker 运行
-
----
-
-## 5. Architecture
-
-项目采用：
-
-前后端分离。
-
-Backend 采用：
-
-模块化单体。
-
-Stage 1 后端主要调用关系：
-
-Router
-→ Service
-→ SQLAlchemy
-→ PostgreSQL
-
-Pydantic 负责 API 数据验证与 Schema。
-
-psycopg 负责 SQLAlchemy 与 PostgreSQL 之间的实际连接。
-
-不得引入微服务。
-
----
-
-## 6. Simplicity Rule
-
-本项目优先：
-
-“当前阶段最简单、开发者能够理解、同时不会明显阻碍下一阶段”的实现。
-
-不得单纯为了：
-
-- Future Proof
-- Enterprise Architecture
-- Scalability
-- Best Practice
-- 看起来更专业
-
-而增加当前阶段没有实际需求的复杂度。
-
-增加新的：
-
-- Library
-- Framework
-- Architecture Layer
-- Service
-- Abstraction
-
-之前必须回答：
-
-1. 当前存在什么实际问题？
-2. 这个技术解决什么问题？
-3. 如果不加入，会发生什么？
-4. 是否可以推迟到以后？
-
-如果没有明确问题：
-
-不要加入。
-
----
-
-## 7. Forbidden Without Approval
+优先当前阶段最简单、开发者能理解且不明显阻碍后续阶段的实现；不为未来扩展、规模或形式上的专业增加复杂度。
+新增库、框架、架构层、服务或抽象前，说明实际问题、解决方式、不引入的影响及能否推迟；没有实际需求就不加入。
 
 未经用户明确批准，不得：
+- 改变技术栈、API 契约、Journal 数据模型或架构；引入微服务、Repository Layer。
+- 引入 Redis、Celery、Kafka、RabbitMQ、GraphQL、LangChain、LangGraph、Redux、Zustand、React Query。
+- 实施未授权 Task 或未来阶段功能，或为未来功能提前增加数据库字段。
+- 安装或升级依赖、修改个人记忆；Git 操作按 §10 的授权边界执行。
 
-- 修改技术栈；
-- 修改 API Contract；
-- 修改 Journal 数据模型；
-- 改变前后端分离架构；
-- 引入微服务；
-- 引入 Repository Layer；
-- 引入 Redis；
-- 引入 Celery；
-- 引入 Kafka；
-- 引入 RabbitMQ；
-- 引入 GraphQL；
-- 引入 LangChain；
-- 引入 LangGraph；
-- 引入 Redux；
-- 引入 Zustand；
-- 引入 React Query；
-- 实现未获授权的当前阶段 Task 或未来阶段功能；
-- 为未来功能提前增加数据库字段。
+## 6. Scope Control & Database Safety
 
----
+- 仅执行用户已确认方案中点名授权的 Task / 子任务；文档中的规划和历史执行记录不构成实施授权。既有明确授权与分工保持有效，包括尚未完成的 S2-T07：保持原范围、分支与授权，不重分配、不重新启动。
+- 超出当前阶段的需求先记录；若获准纳入，先同步阶段权威文档，再实现（Documentation → Implementation）。不顺便重构或扩大范围。
+- 测试与实施轮迁移使用明确分配的隔离测试库，写入前核实实际目标库；真实开发数据库 `seekjournal` 默认只读，**升级必须由用户单独授权**。
+- 不清理不明数据，不以删库、重建或清洗旧数据代替迁移；只清理本轮自建对象。环境、服务和共享测试资源按协作规范协调，不擅自更改既有实例或暴露凭据。
 
-## 8. Scope Control
+## 7. Architecture Change Protocol
 
-如果用户提出的需求不属于当前阶段（现为 Stage 2）：
+认为设计需要架构级调整时，先提交 **Problem / Impact / Options / Recommendation**：问题、不改的影响、可选方案及推荐理由。用户确认后先修订权威文档，再修改实现。
 
-先记录需求。
+## 8. Learning Requirement
 
-不得直接实现。
+这是项目驱动学习项目。关键技术变化后，Agent 必须帮助用户理解新增了什么、为什么需要、数据经过哪里、修改了哪些核心文件，并保留最多 **1～3 个核心知识点**；常规文案和小修复不强制长篇学习说明，不讲解大量尚未使用的未来知识。
 
-如果需求确实需要进入当前阶段：
+## 9. Definition of Done
 
-先修改该阶段的权威文档。
+开发任务完成必须同时满足：
+- 授权功能与原 Task 验收标准落实，必要测试通过；无范围扩张、未经批准的架构变化或无理由依赖。
+- 开发者与独立测试者按协作规范完成需求、架构、重复实现、回归与必要集成验证及约定整合；常规任务可由双方完成技术交付，用户最终接受。需 Codex 审核的风险项必须显式列出，未完成前不得宣布验收完成；自测不替代独立测试，缺失证据标为未验证。
+- 文档按需同步；核对 Git 分支、HEAD、工作区、Worktree 与约定整合状态。
+- 开发与测试按 `agents/multi-agent-workflow.md` §6 的统一八项简报交付，默认约 300～500 字，复杂任务只增必要内容；落实适用的学习要求。完成结论基于实际代码与本轮证据，不以计划、历史数量或开发者声明代替验证，不因简报缩短减少测试或省略必要审核、用户接受条件。
 
-原则：
+## 10. 多 Agent 协作与开发入口
 
-Documentation
-→ Implementation
+- Agent / 模型配置及分配策略统一维护于 `agents/multi-agent-workflow.md`：Codex 为 Lead + Developer，承担重要决策、复杂实现、疑难调试与升级处理；WorkBuddy 和 ZCode 为同级 Developer，常规任务优先由一方开发、另一方独立测试，按上下文、能力适配和额度选择，可互换。此为项目策略，不是模型性能排名。
+- 新开发 Task 先只读检查，输出任务分配、串并行安排和每项开发 / 独立测试完整提示词，用户确认开始后实施；既有明确授权继续有效。
+- 已配置三个 Agent，默认最多两个同时开发，Codex 按需介入，不要求亲自开发或重复运行每个常规任务的完整测试；重要、高风险、跨模块架构任务及升级处理交 Codex，触发与证据要求见协作规范。
+- 三个同时开发须在具体方案中明确资源隔离并获用户确认；并行工作使用独立分支 / Worktree，同目录禁止同时写入，数据库与端口协调，main 原则上用于集成。不建立自动调度系统，不擅自调用或创建其他 Agent。
+- Codex 统一协调共享 `docs/`、`agents/` 和本文件；执行者只改分配范围，不覆盖他人修改，交叉变更先协调。
+- 局部验证后，仅按已确认 Git 权限提交、审核和整合；未授权的 commit / merge / push / tag、切换或清理他人 Worktree、删分支不自动执行。未获提交或整合授权时交付 diff，明确待提交 / 整合。
+- 详细分配、提示词模板、升级处理、资源隔离、Worktree 同步和统一验收执行 `agents/multi-agent-workflow.md`。本次用户已批准的协作分工与审核机制优先于任务文档中的旧通用协作流程；原 Task 的功能、测试、专项审核门禁和既有授权不因此改变，根文件不重复维护细节。
 
-而不是：
+## 11. Context Management
 
-Implementation
-→ 再补文档。
-
----
-
-## 9. Architecture Change Protocol
-
-如果 Agent 认为当前设计存在问题：
-
-不得直接进行架构级修改。
-
-必须先提交：
-
-### Problem
-
-当前问题是什么？
-
-### Impact
-
-不修改会出现什么？
-
-### Options
-
-有哪些可选方案？
-
-### Recommendation
-
-推荐哪个方案？
-
-为什么？
-
-等待用户确认后再修改。
-
----
-
-## 10. Learning Requirement
-
-这是一个项目驱动学习项目。
-
-Agent 不仅负责完成代码。
-
-关键技术变化以后，需要帮助用户理解：
-
-- 新增了什么；
-- 为什么需要；
-- 数据经过了哪里；
-- 修改了哪些核心文件；
-- 当前最值得理解的 1～3 个知识点。
-
-不要一次性讲解大量当前尚未使用的未来知识。
-
----
-
-## 11. Definition of Done
-
-一个开发任务只有满足以下条件才算完成：
-
-- 当前任务要求的功能已经实现；
-- 必要测试通过；
-- Codex 已审核需求、架构、重复实现与回归风险，完成必要集成测试；
-- 文档已按需同步，Git 分支、工作树及约定整合状态已核对；
-- 没有擅自扩大 Scope；
-- 没有未经批准修改架构；
-- 没有无理由增加依赖；
-- 修改文件已经说明；
-- 测试结果已经说明；
-- 用户能够知道本次修改大致发生了什么。
-## 12. 协作与开发入口
-
-- Codex 兼任 Lead 与 Developer，负责方案、调度、直接开发、审核、整合与最终质量；WorkBuddy 按分配开发和测试，可承担完整 Task。
-- 新开发 Task 默认先只读检查，再输出任务分配表、串并行安排和每项 WorkBuddy 完整提示词；用户确认开始后才修改代码。已有明确实施授权继续有效。
-- 不按简单/复杂固定分工，不强制平均分配或拆分；分配因素、提示词模板、资源协调与统一验收按 `agents/multi-agent-workflow.md` 执行。
-- 当前最多两个并行开发 Agent；每项并行开发使用独立分支/工作目录，main 原则上用于集成。未来增加第三个 Agent 需用户明确配置。
-- Codex 统一维护共享 docs/、agents/ 和本文件；开发者只改分配范围，共享变更先协调，不能覆盖他人改动。
-- 局部验证后按已确认的 Git 权限提交，再由 Codex 审核和整合；未包含在授权中的 commit/merge/push/tag、删分支或清理 Worktree 不自动执行。
-- 本次规范修改仅限相关文档，不提交、不操作其他 Worktree，不改业务代码、环境、数据库或服务。
-
-## 13. T03/T04 历史并行执行边界（2026-10-08）
-
-以下保留原轮次的审计依据，仅适用于该轮；新任务使用已确认的分配方案，不能直接沿用旧路径/端口/库。
-
-- Lead 独占共享 docs/ 与 agents/、本文件的同步；产品决定只维护于 docs/stage2.md。
-- Agent A 仅修改 SeekJournal-T03 的前端；Agent B 仅修改 SeekJournal-T04 的 Inbox 后端、测试、新 M3 与必要运行说明。
-- 不跨工作树覆盖他人文件，不递归启动子 Agent；共享文件需求先报告 Lead。
-- T03 浏览器写入只用 seekjournal_t03_ui_test（5175/8013）；不得运行会固定连接 seekjournal_test 的后端 pytest。
-- T04 后端测试与新迁移只用 seekjournal_test（8014）；个人库 seekjournal 只读。
-- 复用既有 PostgreSQL，不启动 Compose；不动 5173/8000/5432 服务。
-- 不自动 commit/merge/push/tag、删分支、清理工作树、安装或升级依赖；不修改个人记忆。
-- Inbox 硬删除、标题与 Daily 规则按四份 Stage 2 文档实施；不提前实现 Trash/Search/Insight/Folder 后续功能。
+同一功能、同一执行角色可连续推进；提示词的 Agent / 模型、用途、对话建议与原因，以及轮次判断、新对话自包含要求，统一执行 `agents/multi-agent-workflow.md` §4。独立测试使用未参与该次实现的新对话，不沿用开发者对话；用户指定例外时按共同流程如实说明独立性。交接保留授权、基线、决定、证据与待办，不为节省 Token 省略必要契约或验证。
