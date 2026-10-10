@@ -3,29 +3,29 @@
 ## 1. Project
 
 SeekJournal 是以个人认知成长为核心、生活与情感记录为辅的个人记录与复盘软件。
-当前为 **Stage 2：本地 Web 完整基础记录版（进行中）**；Stage 1 / 1.5 已完成。阶段文档入口见 §3，Task 完成不等于 Stage 整体验收，不提前创建或实施未来阶段。
+当前为 **Stage 3：AI 陪伴写作、复盘与 Insight 辅助提炼（规划，未授权开发）**；Stage 1 / 1.5 已完成。Stage 2 技术验收及用户接受/独立复核状态引用 `docs/stage2-tasks.md` §20，不因进入规划宣布整体验收完成。阶段路线唯一来源为 `docs/stage3.md` §1；Task 完成不等于 Stage 整体验收，不提前实施未来阶段。
 
 ## 2. Required Reading
 
 - 始终读取根 `AGENTS.md`、适用角色规范（Codex：`agents/gpt-lead.md`；WorkBuddy：`agents/ds-developer.md`；DSH：`agents/dsh-developer.md`）及 `agents/multi-agent-workflow.md`，单 Agent 执行也适用。
-- 按当前 Task 选择性读取 §3 中相关产品需求、API、架构、任务计划章节及实际代码；包含适用的通用规则、范围、依赖、验收标准、执行记录与引用条款，不要求完整读取四份 Stage 2 文档。
+- 按当前 Task 选择性读取 §3 中当前阶段相关产品需求、API、架构、任务计划章节及实际代码；包含适用的通用规则、范围、依赖、验收标准、执行记录与引用条款，不要求每次完整读取四份阶段文档。Stage 3 规划已获授权，只改文档；具体开发 Task 仍待确认开始。
 - 历史文档仅在追溯历史行为、兼容性或 Bug 时读取相关内容，包括任务所需的迁移、回归和引用依据；不默认完整读取 Stage 1 / 1.5 文档。
 - 已读且未变化、上下文仍可用的内容无需重复加载；范围不明或存在依赖引用时先检索、补读。按需读取不改变文档权威性，不得跳过本任务需要的契约。
-- 未来经用户确认进入后续阶段后，同样按任务读取当前阶段文档，已完成的 Stage 2 及更早阶段按历史依据读取。
+- 当前 Stage 3 任务涉及复用、兼容和回归时补读 Stage 2 对应契约/验收；后续经用户确认进入新阶段后沿用同一机制，不把未闭环验收视为已完成。
 
 ## 3. Source of Truth
 
 同一事实只在对应权威来源维护，角色文件和提示词引用它，不另建版本。
 
-| 领域 | 当前 Stage 2 权威来源 |
+| 领域 | 当前 Stage 3 权威来源 |
 |---|---|
-| 产品需求 | `docs/stage2.md` |
-| API 契约 | `docs/stage2-api.md` |
-| 技术架构 | `docs/stage2-architecture.md` |
-| Task 范围、依赖、验收与执行记录 | `docs/stage2-tasks.md` |
+| 产品需求及当前阶段路线 | `docs/stage3.md` |
+| API 契约 | `docs/stage3-api.md` |
+| 技术架构 | `docs/stage3-architecture.md` |
+| Task 范围、依赖、验收与执行记录 | `docs/stage3-tasks.md` |
 | Agent 行为与协作 | 本文件及适用的 `agents/*.md` |
 
-历史依据：`docs/stage1.md`、`docs/stage1-api.md`、`docs/stage1-architecture.md`、`docs/stage1-acceptance.md`；Stage 1.5 修订与执行记录见 `docs/stage1.5-bugfix.md`。当前 Stage 2 规则优先于历史规则，Stage 1.5 修订覆盖对应 Stage 1 旧规则。
+Stage 2 基础行为依据：`docs/stage2.md`、`docs/stage2-api.md`、`docs/stage2-architecture.md`、`docs/stage2-tasks.md` 及相关验收记录；Stage 3 仅覆盖明确升级项，其他既有行为保留。更早历史依据：`docs/stage1.md`、`docs/stage1-api.md`、`docs/stage1-architecture.md`、`docs/stage1-acceptance.md`；Stage 1.5 修订见 `docs/stage1.5-bugfix.md`。已授权的文档规划不自动授权 API/Model 变更实施。
 
 出现未明确解决的文档冲突时，停止受影响的实现，指出冲突位置并等待用户决定；已获批准的修订由 Codex 先同步权威文档，再继续，不重复索取同一批准，不自行选版本实施。
 T03/T04 的历史分工与资源边界见 `docs/stage2-tasks.md` 的历史记录及 `docs/s2-t03-acceptance.md`、`docs/s2-t04-acceptance.md`，不作为新 Task 授权。
@@ -74,7 +74,7 @@ T03/T04 的历史分工与资源边界见 `docs/stage2-tasks.md` 的历史记录
 
 - Agent / 模型配置及分配策略统一维护于 `agents/multi-agent-workflow.md`：Codex 为 Lead + Developer，承担重要决策、复杂实现、疑难调试与升级处理；WorkBuddy 和 DSH 为同级 Developer，常规任务优先由一方开发、另一方独立测试，按上下文、能力适配和额度选择，可互换。此为项目策略，不是模型性能排名。
 - 新开发 Task 先只读检查，输出任务分配、串并行安排和每项开发 / 独立测试完整提示词，用户确认开始后实施；既有明确授权继续有效。
-- 最多三个 Agent 同时开发，日常优先两个；有三个可独立执行的工作项且资源隔离满足时允许三路并发，无须重复申请已批准的并发人数。Codex 按需介入，不要求亲自开发或重复运行每个常规任务的完整测试；重要、高风险、跨模块架构任务及升级处理交 Codex，触发与证据要求见协作规范。
+- 通用并发配置引用协作规范；本次 Stage 3 按已确认规划要求默认最多两个 Agent 同时开发，具体波次见 `docs/stage3-tasks.md`。不因人数许可启动 Agent 或 Task。Codex 按需介入，不要求亲自开发或重复运行每个常规任务的完整测试；重要、高风险、跨模块架构任务及升级处理交 Codex，触发与证据要求见协作规范。
 - 每个具体 Task 仍须只读检查、依赖分析、明确资源分配和用户确认开始；并发人数批准不授权新 Task 或自动启动 Agent。每个同时写代码的 Agent 使用自己的分支和 Git Worktree，同目录单写者，无法隔离的资源串行，main 原则上用于集成。不引入任务调度服务、自动编排框架或新的运行依赖，不擅自调用或创建其他 Agent。
 - Codex 统一协调共享 `docs/`、`agents/` 和本文件；执行者只改分配范围，不覆盖他人修改，交叉变更先协调。
 - 局部验证后，仅按已确认 Git 权限提交、审核和整合；未授权的 commit / merge / push / tag、切换或清理他人 Worktree、删分支不自动执行。未获提交或整合授权时交付 diff，明确待提交 / 整合。

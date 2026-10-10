@@ -8,21 +8,23 @@
 | Agent / 执行端 | 模型与接入 | 职责入口 |
 |---|---|---|
 | Codex / Codex App 或 CLI | GPT-6.1-Sol | Lead、架构与重要决策、任务分析/拆分/分配、复杂实现、疑难接管、必要风险审核与 Git 整合协调；`gpt-lead.md` |
-| WorkBuddy / WorkBuddy 客户端 | 保留现行 DeepSeek V4.1 Flash 配置；客户端 ID `deepseek-v4.1-flash`，本地核对状态见下 | 常规开发与独立测试；`ds-developer.md` |
+| WorkBuddy / WorkBuddy 客户端 | GLM-5.3-Flash（Stage 3 本轮用户指定）；活动会话/客户端 ID 未验证，开始前只读核对 | 常规开发与独立测试；`ds-developer.md` |
 | DSH / DeepSeek Harness | DeepSeek V4.1 Flash，经 DeepSeek 官方 API；推荐官方 ID `deepseek-flash`，本地仍使用兼容 ID，见下 | 常规开发与独立测试，与 WorkBuddy 同级；`dsh-developer.md` |
 
 DSH 是 Agent 执行框架，DeepSeek V4.1 Flash 是其调用的模型；不能把执行框架名称当作模型名称。模型和执行端信息只在本节维护，角色文件与提示词引用它。
 
-### 本地配置核对（2026-10-10，只读）
+### 本地配置历史核对与 Stage 3 指定配置（2026-10-10）
 
 - DSH 的本地 web profile 配置入口 `C:\Users\Free\.dsh\profiles\web\cordis.patch.yml` 中 `agent-default-model` 为 `provider: deepseek-official`、`model: deepseek-v4-flash`；旧 `settings.yaml.imported` 同值。官方文档推荐 `deepseek-flash`，并说明旧 ID 的请求兼容路由到 V4.1 Flash（[官方 API 文档](https://api-docs.deepseek.com/)）。本轮不修改 DSH 配置或凭据，不做付费调用；配置值已核对，实际 API 连通性和运行时模型响应未验证，不能声称本地已切换新 ID。
-- WorkBuddy 现行项目配置为 DeepSeek V4.1 Flash，本地 `C:\Users\Free\.workbuddy\local_storage\entry_d43e96994f944cfb77961c2ea7d04605.info` 模型目录确认有 `deepseek-v4.1-flash`。模型可用目录不能证明当前会话选择；本轮未从 `settings.json` 与模型目录确认活动会话模型，保留现行项目配置，不改回历史值。执行提示词注明此核对限制，开始前由执行者核对当前会话选择，发现不符报告 Codex。
+- 前一轮 WorkBuddy 的项目配置记录为 DeepSeek V4.1 Flash，本地模型目录确认有 `deepseek-v4.1-flash`，但未证明活动会话模型。这是历史核对快照；本次 Stage 3 用户明确指定 GLM-5.3-Flash，当前分配采用此配置，未修改客户端配置、未核验活动会话或编造 GLM 客户端 ID。执行提示词注明开始前只读核对实际模型，发现不符报告 Codex；不能以文档更新宣称已完成客户端切换。
 - 后续任务只读核实必要模型/执行端字段，不输出 API Key、认证文件、连接串或整个私人配置；配置漂移由 Codex 在本节更新核对状态，不在多个角色文件复制配置快照。
 
 User 是 Product Owner，决定产品方向、批准重大变化和开始实施，并最终接受交付。
 这是项目角色与额度分配策略，不是未经验证的模型性能排名。Codex 被调用时负责 Lead 决策、必要审核、升级处理与整合协调，共享规范及权威文档仍由 Codex 维护；常规技术交付可由开发者与独立测试者完成。
 
 最多三个 Agent 同时开发，包含正在写代码的 Codex；日常优先两个。用户已批准三路并发能力，有三个可独立执行的工作项且文件、分支/Worktree、端口、数据库、进程及测试资源隔离满足时可安排三路，不重复申请人数许可。每个具体 Task 仍须 §3 的只读检查、依赖分析、资源分配与用户确认开始；本轮配置授权不启动额外 Agent、不授权新 Task。独立测试同样遵守资源隔离和同目录单写者规则；不引入任务调度服务、自动编排框架或新的运行依赖，不擅自调用或创建其他 Agent。
+
+Stage 3 本轮特定计划默认最多两个同时开发，波次/文件与测试资源见 `docs/stage3-tasks.md` §14～15；不自动使用通用三路能力。规划授权仅修改文档，不启动任务或 Agent。
 
 | 模式 | 安排与使用条件 |
 |---|---|

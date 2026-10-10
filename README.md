@@ -2,10 +2,9 @@
 
 SeekJournal 是一个以个人认知成长为核心、生活与情感记录为辅的个人记录与复盘软件。
 
-**Stage 1、Stage 1.5、S2-T01 与 S2-T02 已完成；本轮授权 T03 前端和 T04 Inbox 后端在指定工作树并行实施与独立验收。其他后续 Task 未授权。**
-主仓库共同基线为 `01bf8a86a875332b590ef6e5c0f0d087ac44c50b`，Journal 后端已提供分页、display_title 与软删除。
-T03/T04 实施代码仍在各自工作树、尚未提交或合并；主仓库旧前端需要 T03 配套，不能把单独的后端验收说成完整 Web 已可用。
-本轮不安装依赖、不自动 Git 发布、不升级个人库；Inbox 硬删除与其他最新产品决定以 `docs/stage2.md` 为准。
+**当前进入 Stage 3 正式规划，尚未授权功能开发。** 阶段路线与状态以 [stage3.md](docs/stage3.md) §1 为准；Stage 2 技术验收与待接受/复核项见 [stage2-tasks.md](docs/stage2-tasks.md) §20，历史记录不等于本轮实测。
+本地源码已有三类文件、Daily、Folder、搜索、回收箱、Markdown 和内部链接；AI/自动保存仍是规划。Stage 3 文档入口：[需求](docs/stage3.md)、[API](docs/stage3-api.md)、[架构](docs/stage3-architecture.md)、[Task/Agent/并行安排](docs/stage3-tasks.md)。
+以下运行章节含早期阶段快照（例如测试数量、数组列表和无搜索限制），请以对应阶段权威契约及实际代码为准；不得凭本页历史描述判定当前缺失或完成。本轮只更新规划入口，不安装依赖、不运行迁移、不自动 Git 发布。
 
 已跑通的开发链路：
 

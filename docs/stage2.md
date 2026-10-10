@@ -11,12 +11,8 @@
 | Stage 1 | Journal 本地 Web 最小 Demo | 已完成，历史验收见 `stage1-acceptance.md` |
 | Stage 1.5 / Pre-Stage-2 | 修复编号、输入规则和列表预览 | 已完成；见 `stage1.5-bugfix.md` |
 | Stage 2 | 本地 Web 完整基础记录版 | 进行中；具体 Task 见 `stage2-tasks.md`，不以规划代替验收 |
-| Stage 3 | AI 复盘，AI 开始参与 Insight | 未来阶段 |
-| Stage 4 | 云端 Web，可进行一轮明显 UI 优化 | 未来阶段 |
-| Stage 5 | Android | 未来阶段 |
-| Stage 6 | 登录、账号、同步、权限、备份、多设备一致性 | 未来阶段 |
-| Stage 7 | 语义搜索、长期复盘、认知演变、复杂链接、图片等 | 未来阶段 |
-| Stage 8 | 完整大肥鱼 UI、高级视觉与交互重构 | 未来阶段 |
+
+2026-10-10：Stage 3 及后续阶段路线已由用户重新确认，唯一维护于 `stage3.md` §1；本表只保留 Stage 2 及更早阶段，不继续维护已被替代的未来路线。Stage 2 的产品决定与历史验收记录不因此改变；Stage 3 当前只授权规划。
 
 Stage 2 将 Journal Demo 升级为以 Inbox、Journal、Insight 三类 Markdown 文件为核心，支持一级 Folder、普通搜索、回收箱、简单内部跳转、分页和基础卡片 UI 的本地个人记录软件。
 
