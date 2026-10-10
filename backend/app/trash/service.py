@@ -10,10 +10,12 @@ from app.insight.models import Insight
 from app.insight.schemas import InsightResponse
 from app.insight.service import build_insight_display_title, get_insight
 from app.journal.models import Journal
-from app.journal.schemas import JournalResponse
+from app.journal.schemas import JournalResponse, JournalDetail
 from app.journal.service import get_journal
 from app.journal.titles import build_display_title, numbered_subquery
 from app.trash.schemas import TrashFilter, TrashItem, TrashPage, TrashType
+
+from app.writing.service import require_revision, WriteConflict, cleanup_private_ai
 
 PAGE_SIZE = 20
 
@@ -23,7 +25,7 @@ def _deleted_statement(kind: TrashType):
     columns = [
         literal(kind).label('type'),
         literal(0 if kind == 'journal' else 1).label('type_order'),
-        model.id, model.title, model.content, model.folder_id,
+        model.id, model.revision, model.title, model.content, model.folder_id,
         model.created_at, model.updated_at, model.deleted_at,
     ]
     if kind == 'journal':
@@ -37,7 +39,7 @@ def _deleted_statement(kind: TrashType):
 
 def _to_response(row) -> TrashItem:
     fields = {key: getattr(row, key) for key in (
-        'type', 'id', 'title', 'content', 'folder_id', 'created_at', 'updated_at', 'deleted_at'
+        'type', 'id', 'revision', 'title', 'content', 'folder_id', 'created_at', 'updated_at', 'deleted_at'
     )}
     if row.type == 'journal':
         return JournalResponse(**fields, journal_date=row.business_date,
@@ -63,18 +65,28 @@ def get_trash(db: Session, type: TrashType, id: int) -> TrashItem | None:
     deleted = _deleted_statement(type).subquery('trash_detail')
     with db.no_autoflush:
         row = db.execute(select(deleted).where(deleted.c.id == id)).one_or_none()
-    return None if row is None else _to_response(row)
+    if row is None:
+        return None
+    response = _to_response(row)
+    if type == 'journal':
+        with db.no_autoflush:
+            blocks = db.scalar(select(Journal.content_blocks).where(Journal.id == id))
+        return JournalDetail(**response.model_dump(), content_blocks=blocks)
+    return response
 
 
-def restore_trash(db: Session, type: TrashType, id: int) -> TrashItem | None:
+def restore_trash(db: Session, type: TrashType, id: int, expected_revision: int | None = None) -> TrashItem | None:
+    require_revision(expected_revision)
     model = Journal if type == 'journal' else Insight
     # Explicit column self-assignment suppresses the existing Python onupdate.
-    statement = (update(model).where(model.id == id, model.deleted_at.is_not(None))
-                 .values(deleted_at=None, updated_at=model.updated_at)
+    statement = (update(model).where(model.id == id, model.deleted_at.is_not(None), model.revision == expected_revision)
+                 .values(deleted_at=None, updated_at=model.updated_at, revision=model.revision + 1)
                  .execution_options(synchronize_session=False))
     try:
         result = db.execute(statement)
         if result.rowcount == 0:
+            if get_trash(db, type, id) is not None:
+                raise WriteConflict('file revision has changed')
             return None
         db.commit()
     except Exception:
@@ -86,14 +98,18 @@ def restore_trash(db: Session, type: TrashType, id: int) -> TrashItem | None:
     return restored
 
 
-def purge_trash(db: Session, type: TrashType, id: int) -> bool:
+def purge_trash(db: Session, type: TrashType, id: int, expected_revision: int | None = None) -> bool:
+    require_revision(expected_revision)
     model = Journal if type == 'journal' else Insight
-    statement = (delete(model).where(model.id == id, model.deleted_at.is_not(None))
+    statement = (delete(model).where(model.id == id, model.deleted_at.is_not(None), model.revision == expected_revision)
                  .execution_options(synchronize_session=False))
     try:
         result = db.execute(statement)
         if result.rowcount == 0:
+            if get_trash(db, type, id) is not None:
+                raise WriteConflict('file revision has changed')
             return False
+        cleanup_private_ai(db, type, id)
         db.commit()
     except Exception:
         db.rollback()

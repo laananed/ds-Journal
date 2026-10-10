@@ -113,7 +113,7 @@ class TestDeleteWins:
         folder = create_folder(setup, FolderCreate(name="删除方赢"))
         registry.folders.append(folder.id)
         journal = _make_journal(setup, registry)
-        before = update_journal(setup, journal.id, JournalUpdate())  # 读取当前投影
+        before = update_journal(setup, journal.id, JournalUpdate(expected_revision=1))  # 读取当前投影
         setup.close()
 
         lock_session = _new_session()
@@ -132,7 +132,7 @@ class TestDeleteWins:
                 result["response"] = update_journal(
                     mover_session,
                     journal.id,
-                    JournalUpdate(content="竞争新正文", folder_id=folder.id),
+                    JournalUpdate(content="竞争新正文", folder_id=folder.id, expected_revision=1),
                 )
             except BaseException as error:  # noqa: BLE001
                 errors.append(error)
@@ -197,7 +197,7 @@ class TestDeleteWins:
         def move_in() -> None:
             try:
                 update_journal(
-                    mover_session, journal.id, JournalUpdate(folder_id=folder.id)
+                    mover_session, journal.id, JournalUpdate(folder_id=folder.id, expected_revision=1)
                 )
             except BaseException as error:  # noqa: BLE001
                 errors.append(error)
@@ -217,7 +217,7 @@ class TestDeleteWins:
 
         # 同一个 mover_session：FK 失败已经 rollback，可以直接做合法 PATCH。
         response = update_journal(
-            mover_session, journal.id, JournalUpdate(title="竞争后改名")
+            mover_session, journal.id, JournalUpdate(title="竞争后改名", expected_revision=1)
         )
         assert response.title == "竞争后改名"
         mover_session.close()
@@ -235,7 +235,7 @@ class TestRollbackWins:
         folder = create_folder(setup, FolderCreate(name="回滚方赢"))
         registry.folders.append(folder.id)
         journal = _make_journal(setup, registry)
-        before = update_journal(setup, journal.id, JournalUpdate())
+        before = update_journal(setup, journal.id, JournalUpdate(expected_revision=1))
         setup.close()
 
         lock_session = _new_session()
@@ -252,7 +252,7 @@ class TestRollbackWins:
                 result["response"] = update_journal(
                     mover_session,
                     journal.id,
-                    JournalUpdate(content="移入成功", folder_id=folder.id),
+                    JournalUpdate(content="移入成功", folder_id=folder.id, expected_revision=1),
                 )
             except BaseException as error:  # noqa: BLE001
                 errors.append(error)

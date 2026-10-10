@@ -127,3 +127,35 @@ def api():
     # 每个测试结束后都验证一次：四张业务表都回到测试前的状态。
     assert _table_baselines() == baseline, "测试数据残留"
     assert get_db not in app.dependency_overrides
+
+
+@pytest.fixture
+def stage3_schema():
+    """Own private schema; public and personal schemas never receive test rows."""
+    from uuid import uuid4
+    from sqlalchemy import create_engine
+    from test_stage2_migrations import (
+        _create_schema, _drop_schema, _schema_exists, _sqlalchemy_url, _public_snapshot,
+    )
+    schema = f"s2t04_migcheck_s3_{uuid4().hex}"
+    before = _public_snapshot()
+    _create_schema(schema)
+    private_engine = create_engine(_sqlalchemy_url(schema))
+    try:
+        with private_engine.connect() as connection:
+            assert connection.execute(text("select current_database(), current_schema()")).one() == (
+                "seekjournal_test", schema)
+        yield schema, private_engine
+    finally:
+        private_engine.dispose()
+        _drop_schema(schema)
+        assert not _schema_exists(schema)
+        assert _public_snapshot() == before
+
+
+@pytest.fixture
+def stage3_engine(stage3_schema):
+    from test_stage2_migrations import _run_alembic
+    schema, private_engine = stage3_schema
+    _run_alembic(schema, "upgrade", "head")
+    return private_engine

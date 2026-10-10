@@ -1,3 +1,4 @@
+from app.ai import models as _ai_models  # noqa: F401
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -33,7 +34,7 @@ app.add_middleware(
         "http://localhost:5173",
     ],
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "If-Match"],
 )
 
 app.include_router(journal_router)
@@ -48,3 +49,16 @@ app.include_router(link_router)
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+from fastapi.responses import JSONResponse
+from app.writing.service import WritingError
+from app.writing.router import router as writing_router
+
+
+@app.exception_handler(WritingError)
+async def writing_error_response(request, error):
+    return JSONResponse(status_code=error.status_code, content={"detail": str(error)})
+
+
+app.include_router(writing_router)

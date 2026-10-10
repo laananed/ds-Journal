@@ -84,7 +84,7 @@ def test_global_pagination_counts_stable_order_and_type_ids(api):
             assert actual == [(item[3], item[2]) for item in matches[(page-1)*20:page*20]]
             seen += actual
             for item in body['items']:
-                assert client.get(f"/api/{ROUTES[item['type']]}/{item['id']}").json() == item
+                assert client.get(f"/api/{ROUTES[item['type']]}/{item['id']}").json() == ({**item, "content_blocks": None} if item["type"] != "insight" else item)
         assert len(seen) == len(set(seen)) == len(matches)
 
 
@@ -95,20 +95,20 @@ def test_lifecycle_and_content_changes_refresh_matches(api, kind):
     db.commit()
     path = f'/api/{ROUTES[kind]}/{id}'
     assert search(client, 'lifecycle')['total'] == 1
-    assert client.patch(path, json={'content': 'different'}).status_code == 200
+    assert client.patch(path, json={"expected_revision": 1, **{'content': 'different'}}).status_code == 200
     assert search(client, 'lifecycle')['total'] == 0
-    assert client.patch(path, json={'title': 'lifecycle'}).status_code == 200
+    assert client.patch(path, json={"expected_revision": 2, **{'title': 'lifecycle'}}).status_code == 200
     assert search(client, 'lifecycle')['total'] == 1
-    assert client.delete(path).status_code == 204
+    assert client.delete(path, headers={"If-Match": '"3"'}).status_code == 204
     assert search(client, 'lifecycle')['total'] == 0
     if kind != 'inbox':
-        assert client.post(f'/api/trash/{kind}/{id}/restore').status_code == 200
+        assert client.post(f'/api/trash/{kind}/{id}/restore', headers={"If-Match": '"4"'}).status_code == 200
         assert search(client, 'lifecycle')['total'] == 1
-        assert client.delete(path).status_code == 204
-        assert client.delete(f'/api/trash/{kind}/{id}').status_code == 204
+        assert client.delete(path, headers={"If-Match": '"5"'}).status_code == 204
+        assert client.delete(f'/api/trash/{kind}/{id}', headers={"If-Match": '"6"'}).status_code == 204
         assert search(client, 'lifecycle')['total'] == 0
     else:
-        assert client.post(f'/api/trash/inbox/{id}/restore').status_code == 422
+        assert client.post(f'/api/trash/inbox/{id}/restore', headers={"If-Match": '"2"'}).status_code == 422
 
 
 def test_inbox_deleted_at_unused_and_journal_insight_excluded(api):
@@ -129,7 +129,7 @@ def test_numbering_uses_nonmatching_deleted_and_other_folder_rows(api):
                   folder_id=f.id if i < 24 else None, deleted_at=STAMP if i == 0 else None)
     item = search(client, 'needle')['items'][0]
     assert item['id'] == id and item['display_title'] == '2020-01-01 (25)'
-    assert client.get(f'/api/journals/{id}').json() == item
+    assert client.get(f'/api/journals/{id}').json() == ({**item, "content_blocks": None} if item["type"] != "insight" else item)
 
 
 def test_search_only_raw_title_content_not_projection_date_or_folder(api):

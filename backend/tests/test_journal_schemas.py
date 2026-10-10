@@ -32,7 +32,7 @@ DAY = date(2026, 10, 2)
 CREATED_AT = datetime(2026, 10, 2, 14, 30, tzinfo=timezone.utc)
 UPDATED_AT = datetime(2026, 10, 2, 15, 45, tzinfo=timezone.utc)
 
-CREATE_FIELDS = {"title", "content", "journal_date", "folder_id"}
+CREATE_FIELDS = {"title", "content", "journal_date", "folder_id", "client_create_id", "content_blocks"}
 
 # Stage 2 / S2-T02：完整响应为十个字段。
 RESPONSE_FIELDS = {
@@ -46,7 +46,7 @@ RESPONSE_FIELDS = {
     "created_at",
     "updated_at",
     "deleted_at",
-}
+"revision"}
 
 # 必填字段（没有默认值）：缺一个就必须报错。
 REQUIRED_RESPONSE_FIELDS = {
@@ -57,7 +57,7 @@ REQUIRED_RESPONSE_FIELDS = {
     "journal_date",
     "created_at",
     "updated_at",
-}
+"revision"}
 # 有默认值的字段：省略时使用默认值，而不是报错。
 DEFAULTED_RESPONSE_FIELDS = RESPONSE_FIELDS - REQUIRED_RESPONSE_FIELDS
 
@@ -80,7 +80,7 @@ def _response(**overrides) -> JournalResponse:
         "updated_at": UPDATED_AT,
     }
     payload.update(overrides)
-    return JournalResponse(**payload)
+    return JournalResponse(**payload, revision=1)
 
 
 # --------------------------------------------------------------------------
@@ -327,6 +327,8 @@ def test_create_dump_contains_only_the_contract_fields():
         "content": "正文",
         "journal_date": DAY,
         "folder_id": None,
+        "client_create_id": None,
+        "content_blocks": None,
     }
 
 
@@ -410,6 +412,7 @@ def test_response_display_title_is_independent_of_raw_title():
 def test_response_requires_every_required_field(missing):
     payload: dict[str, object] = {
         "id": 1,
+        "revision": 1,
         "title": None,
         "display_title": "2026-10-02",
         "content": "正文",
@@ -473,6 +476,7 @@ def test_response_from_plain_object():
     这里用 SimpleNamespace 模拟「Service 已经算好投影」的对象。
     """
     journal = SimpleNamespace(
+        revision=1,
         id=7,
         title=None,
         display_title="2026-10-02",

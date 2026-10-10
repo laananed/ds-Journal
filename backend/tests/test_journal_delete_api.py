@@ -83,7 +83,7 @@ def _delete_url(journal_id: object) -> str:
 
 
 def _delete(client: TestClient, journal_id: object):
-    return client.delete(_delete_url(journal_id))
+    return client.delete(_delete_url(journal_id), headers={"If-Match": '"1"'})
 
 
 def _make_journal(
@@ -467,7 +467,7 @@ def test_service_delete_commit_failure_rolls_back_and_restores_the_row(api, monk
     monkeypatch.setattr(Session, "commit", failing_commit)
 
     with pytest.raises(RuntimeError):
-        service.delete_journal(session, target_id)
+        service.delete_journal(session, target_id, expected_revision=1)
 
     # 没有半截软删除：目标行恢复（deleted_at 回到 NULL），且与失败前逐字段一致
     assert _row_if_any(session, target_id) == before
@@ -494,14 +494,14 @@ def test_service_normal_delete_succeeds_after_recovering_from_fault(api, monkeyp
 
     monkeypatch.setattr(Session, "commit", failing_commit)
     with pytest.raises(RuntimeError):
-        service.delete_journal(session, target_id)
+        service.delete_journal(session, target_id, expected_revision=1)
     # 失败后记录仍是有效的
     assert not _is_soft_deleted(session, target_id)
 
     # 恢复真实的 commit，再删一次：应当成功
     monkeypatch.setattr(Session, "commit", real_commit)
 
-    assert service.delete_journal(session, target_id) is True
+    assert service.delete_journal(session, target_id, expected_revision=1) is True
     # 软删除成功：行保留但已标记
     assert _is_soft_deleted(session, target_id)
 
@@ -637,7 +637,7 @@ def test_deleted_record_is_not_patchable(api):
     assert _delete(client, target.id).status_code == 204
 
     before = _row_if_any(session, target.id)
-    response = client.patch(_delete_url(target.id), json={"title": "改不动"})
+    response = client.patch(_delete_url(target.id), json={"expected_revision": 1, **{"title": "改不动"}})
 
     assert response.status_code == 404
     assert _row_if_any(session, target.id) == before

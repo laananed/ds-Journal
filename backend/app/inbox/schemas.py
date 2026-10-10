@@ -1,38 +1,35 @@
-"""Inbox request validation and read projections (Stage 2 / S2-T04)."""
+"""Inbox safe writing inputs and separate list/detail projections."""
 from datetime import date, datetime
 from typing import Literal
-
-from pydantic import BaseModel, field_validator
-
-# Reuse the exact Journal request rules without changing its business behavior.
+from uuid import UUID
+from pydantic import BaseModel, PrivateAttr, field_validator
 from app.journal.schemas import _validate_content, _validate_title
+from app.writing.schemas import Block, Revision, StructuredCreate, StructuredInput
 
 
-class InboxCreate(BaseModel):
+class InboxCreate(StructuredCreate):
     title: str | None = None
-    content: str
     inbox_date: date
     is_daily: bool = False
     folder_id: int | None = None
-
+    client_create_id: UUID | None = None
     _check_title = field_validator('title')(_validate_title)
     _check_content = field_validator('content')(_validate_content)
 
 
-class InboxUpdate(BaseModel):
-    """Only submitted title/content/folder_id are writable; extra fields are ignored."""
+class InboxUpdate(StructuredInput):
     title: str | None = None
-    # Omission is allowed; an explicitly submitted null still fails str validation.
-    content: str = None
     folder_id: int | None = None
-
+    expected_revision: Revision = None
     _check_title = field_validator('title')(_validate_title)
     _check_content = field_validator('content')(_validate_content)
 
 
 class InboxResponse(BaseModel):
+    _creation_replayed: bool = PrivateAttr(default=False)
     type: Literal['inbox'] = 'inbox'
     id: int
+    revision: Revision
     title: str | None
     display_title: str
     content: str
@@ -41,8 +38,11 @@ class InboxResponse(BaseModel):
     folder_id: int | None
     created_at: datetime
     updated_at: datetime
-    # M2's column is retained but unused. Inbox has no soft-delete response state.
     deleted_at: None = None
+
+
+class InboxDetail(InboxResponse):
+    content_blocks: list[Block] | None = None
 
 
 class InboxPage(BaseModel):
@@ -56,4 +56,4 @@ class InboxPage(BaseModel):
 class DailyInboxResponse(BaseModel):
     state: Literal['missing', 'active']
     id: int | None
-    file: InboxResponse | None
+    file: InboxDetail | None

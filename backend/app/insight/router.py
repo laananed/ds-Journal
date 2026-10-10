@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.writing.router import matched_revision
 from app.insight import service
 from app.insight.schemas import (
     InsightCreate,
@@ -39,6 +40,7 @@ _FOLDER_NOT_FOUND = "Folder not found"
 @router.post("", response_model=InsightResponse, status_code=status.HTTP_201_CREATED)
 def create_insight(
     payload: InsightCreate,
+    response: Response,
     db: Session = Depends(get_db),
 ) -> InsightResponse:
     """创建一条 Insight，返回 201 与创建后的完整记录。
@@ -49,7 +51,10 @@ def create_insight(
     - 请求体不合法时由 FastAPI / Pydantic 返回 422，不自定义错误格式。
     """
     try:
-        return service.create_insight(db, payload)
+        result = service.create_insight(db, payload)
+        if result._creation_replayed:
+            response.status_code = 200
+        return result
     except service.FolderNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -132,6 +137,7 @@ def update_insight(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_insight(
     id: int,
+    expected_revision: int = Depends(matched_revision),
     db: Session = Depends(get_db),
 ) -> Response:
     """**软删除**一条有效 Insight，成功返回 204 与空响应体。
@@ -143,7 +149,7 @@ def delete_insight(
     - 软删除：设置 `deleted_at`，数据库行保留，原 `updated_at` 不变；
       回收箱列表、恢复与永久删除属于 S2-T09。
     """
-    if not service.delete_insight(db, id):
+    if not service.delete_insight(db, id, expected_revision):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_NOT_FOUND,

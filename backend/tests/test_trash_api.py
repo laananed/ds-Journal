@@ -24,6 +24,8 @@ def seed(db, kind, **values):
               'updated_at': STAMP + timedelta(days=1), **values}
     if kind == 'journal':
         values.setdefault('journal_date', date(2020, 1, 1))
+    if values.get('deleted_at') is not None:
+        values.setdefault('revision', 2)
     row = MODELS[kind](**values)
     db.add(row)
     db.flush()
@@ -43,40 +45,40 @@ def test_lifecycle_preserves_every_column_and_folder(api, kind, title):
     base = f'/api/{ROUTES[kind]}/{id}'
     trash = f'/api/trash/{kind}/{id}'
     assert client.get(trash).status_code == 404
-    assert client.post(trash + '/restore').status_code == 404
-    assert client.delete(trash).status_code == 404
+    assert client.post(trash + '/restore', headers={"If-Match": '"2"'}).status_code == 404
+    assert client.delete(trash, headers={"If-Match": '"2"'}).status_code == 404
     assert dict(snapshot(db, kind, id)) == before
     normal = client.get(base).json()
-    deleted = client.delete(base)
+    deleted = client.delete(base, headers={"If-Match": '"1"'})
     assert deleted.status_code == 204 and deleted.content == b''
     after = dict(snapshot(db, kind, id))
     assert after['deleted_at'] is not None
-    assert {k: v for k, v in after.items() if k != 'deleted_at'} == {k: v for k, v in before.items() if k != 'deleted_at'}
+    assert {k: v for k, v in after.items() if k not in {'deleted_at', 'revision'}} == {k: v for k, v in before.items() if k not in {'deleted_at', 'revision'}}
     detail = client.get(trash)
     assert detail.status_code == 200
-    assert detail.json() == {**normal, 'deleted_at': detail.json()['deleted_at']}
-    assert client.get('/api/trash').json()['items'] == [detail.json()]
+    assert detail.json() == {**normal, 'revision': 2, 'deleted_at': detail.json()['deleted_at']}
+    assert client.get('/api/trash').json()['items'] == [{k: v for k, v in detail.json().items() if k != 'content_blocks'}]
     assert dict(snapshot(db, kind, id)) == after
     assert client.get(base).status_code == 404
-    assert client.patch(base, json={}).status_code == 404
-    assert client.delete(base).status_code == 404
+    assert client.patch(base, json={"expected_revision": 1, **{}}).status_code == 404
+    assert client.delete(base, headers={"If-Match": '"1"'}).status_code == 404
     assert client.get(f'/api/{ROUTES[kind]}').json()['total'] == 0
     assert client.get(f'/api/folders/{folder.id}/files').json()['total'] == 0
     assert client.delete(f'/api/folders/{folder.id}').status_code == 409
-    assert client.patch(trash, json={'content': 'forbidden'}).status_code == 405
-    restored = client.post(trash + '/restore', json={'content': 'ignored', 'folder_id': None})
-    assert restored.status_code == 200 and restored.json() == normal
-    assert dict(snapshot(db, kind, id)) == before
-    assert client.get(base).json() == normal
-    assert client.get(f'/api/folders/{folder.id}/files').json()['items'] == [normal]
-    assert client.post(trash + '/restore').status_code == 404
-    assert client.delete(trash).status_code == 404
+    assert client.patch(trash, json={"expected_revision": 1, **{'content': 'forbidden'}}).status_code == 405
+    restored = client.post(trash + '/restore', json={'content': 'ignored', 'folder_id': None}, headers={"If-Match": '"2"'})
+    assert restored.status_code == 200 and restored.json() == {**normal, 'revision': 3}
+    assert dict(snapshot(db, kind, id)) == {**before, 'revision': 3}
+    assert client.get(base).json() == {**normal, 'revision': 3}
+    assert client.get(f'/api/folders/{folder.id}/files').json()['items'] == [{k: v for k, v in {**normal, 'revision': 3}.items() if k != 'content_blocks'}]
+    assert client.post(trash + '/restore', headers={"If-Match": '"2"'}).status_code == 404
+    assert client.delete(trash, headers={"If-Match": '"2"'}).status_code == 404
     assert client.get('/api/trash').json()['total'] == 0
-    assert client.delete(base).status_code == 204
-    purged = client.delete(trash)
+    assert client.delete(base, headers={"If-Match": '"3"'}).status_code == 204
+    purged = client.delete(trash, headers={"If-Match": '"4"'})
     assert purged.status_code == 204 and purged.content == b''
     assert snapshot(db, kind, id) is None
-    for response in (client.get(base), client.get(trash), client.post(trash + '/restore'), client.delete(trash)):
+    for response in (client.get(base), client.get(trash), client.post(trash + '/restore', headers={"If-Match": '"2"'}), client.delete(trash, headers={"If-Match": '"2"'})):
         assert response.status_code == 404
     assert client.delete(f'/api/folders/{folder.id}').status_code == 204
 
@@ -104,13 +106,13 @@ def test_global_mixed_pagination_type_and_stable_sort(api, total):
             assert (body['page'], body['page_size'], body['total'], body['has_next']) == (page, 20, len(matches), page * 20 < len(matches))
             assert [(item['type'], item['id']) for item in body['items']] == [(row[3], row[2]) for row in matches[(page-1)*20:page*20]]
             for item in body['items']:
-                assert client.get(f"/api/trash/{item['type']}/{item['id']}").json() == item
+                assert client.get(f"/api/trash/{item['type']}/{item['id']}").json() == ({**item, "content_blocks": None} if item["type"] == "journal" else item)
 
 
 @pytest.mark.parametrize('kind', ['inbox', 'all', 'journals', 'other', 'JOURNAL'])
 def test_invalid_path_type_is_422(api, kind):
     client, _ = api
-    for response in (client.get(f'/api/trash/{kind}/1'), client.post(f'/api/trash/{kind}/1/restore'), client.delete(f'/api/trash/{kind}/1')):
+    for response in (client.get(f'/api/trash/{kind}/1'), client.post(f'/api/trash/{kind}/1/restore', headers={"If-Match": '"2"'}), client.delete(f'/api/trash/{kind}/1', headers={"If-Match": '"2"'})):
         assert response.status_code == 422
 
 
@@ -123,7 +125,7 @@ def test_invalid_list_query_is_422(api, params):
 @pytest.mark.parametrize('id,status', [('bad', 422), (1000000000, 404)])
 def test_missing_and_invalid_id(api, kind, id, status):
     client, _ = api
-    for response in (client.get(f'/api/trash/{kind}/{id}'), client.post(f'/api/trash/{kind}/{id}/restore'), client.delete(f'/api/trash/{kind}/{id}')):
+    for response in (client.get(f'/api/trash/{kind}/{id}'), client.post(f'/api/trash/{kind}/{id}/restore', headers={"If-Match": '"2"'}), client.delete(f'/api/trash/{kind}/{id}', headers={"If-Match": '"2"'})):
         assert response.status_code == status
 
 
@@ -134,10 +136,10 @@ def test_numbering_uses_full_date_and_purge_can_renumber(api):
     last = f'/api/journals/{ids[-1]}'
     assert client.get(last).json()['display_title'] == '2020-01-01 (23)'
     assert client.get(f'/api/trash/journal/{ids[0]}').json()['display_title'] == '2020-01-01'
-    assert client.post(f'/api/trash/journal/{ids[0]}/restore').json()['display_title'] == '2020-01-01'
+    assert client.post(f'/api/trash/journal/{ids[0]}/restore', headers={"If-Match": '"2"'}).json()['display_title'] == '2020-01-01'
     assert client.get(last).json()['display_title'] == '2020-01-01 (23)'
-    assert client.delete(f'/api/journals/{ids[0]}').status_code == 204
-    assert client.delete(f'/api/trash/journal/{ids[0]}').status_code == 204
+    assert client.delete(f'/api/journals/{ids[0]}', headers={"If-Match": '"3"'}).status_code == 204
+    assert client.delete(f'/api/trash/journal/{ids[0]}', headers={"If-Match": '"4"'}).status_code == 204
     assert client.get(last).json()['display_title'] == '2020-01-01 (22)'
 
 
@@ -183,12 +185,12 @@ def test_failure_rolls_back_real_changes_and_session_reusable(api, monkeypatch, 
         raise RuntimeError('T09 injected write failure')
     with monkeypatch.context() as patch:
         patch.setattr(db, failure, fail)
-        response = client.post(f'/api/trash/{kind}/{id}/restore') if action == 'restore' else client.delete(f'/api/trash/{kind}/{id}')
+        response = client.post(f'/api/trash/{kind}/{id}/restore', headers={"If-Match": '"2"'}) if action == 'restore' else client.delete(f'/api/trash/{kind}/{id}', headers={"If-Match": '"2"'})
         assert response.status_code == 500
     assert db.scalar(text('SELECT 1')) == 1
     assert dict(snapshot(db, kind, id)) == before
     assert dict(snapshot(db, kind, sibling)) == sibling_before
-    response = client.post(f'/api/trash/{kind}/{id}/restore') if action == 'restore' else client.delete(f'/api/trash/{kind}/{id}')
+    response = client.post(f'/api/trash/{kind}/{id}/restore', headers={"If-Match": '"2"'}) if action == 'restore' else client.delete(f'/api/trash/{kind}/{id}', headers={"If-Match": '"2"'})
     assert response.status_code == (200 if action == 'restore' else 204)
 
 @pytest.mark.parametrize('kind', MODELS)
@@ -204,11 +206,11 @@ def test_database_error_rolls_back_and_clears_failed_transaction(api, monkeypatc
         execute(text('SELECT 1 / 0'))
     with monkeypatch.context() as patch:
         patch.setattr(db, 'commit', fail_commit)
-        response = client.post(f'/api/trash/{kind}/{id}/restore') if action == 'restore' else client.delete(f'/api/trash/{kind}/{id}')
+        response = client.post(f'/api/trash/{kind}/{id}/restore', headers={"If-Match": '"2"'}) if action == 'restore' else client.delete(f'/api/trash/{kind}/{id}', headers={"If-Match": '"2"'})
         assert response.status_code == 500
     assert db.scalar(text('SELECT 1')) == 1
     assert dict(snapshot(db, kind, id)) == before
-    response = client.post(f'/api/trash/{kind}/{id}/restore') if action == 'restore' else client.delete(f'/api/trash/{kind}/{id}')
+    response = client.post(f'/api/trash/{kind}/{id}/restore', headers={"If-Match": '"2"'}) if action == 'restore' else client.delete(f'/api/trash/{kind}/{id}', headers={"If-Match": '"2"'})
     assert response.status_code == (200 if action == 'restore' else 204)
 
 
@@ -219,9 +221,9 @@ def test_same_numeric_id_is_distinct_by_type(api):
     db.commit()
     items = client.get('/api/trash').json()['items']
     assert [(item['type'], item['id']) for item in items] == [('journal', j), ('insight', i)]
-    assert client.delete(f'/api/trash/journal/{j}').status_code == 204
+    assert client.delete(f'/api/trash/journal/{j}', headers={"If-Match": '"2"'}).status_code == 204
     assert client.get(f'/api/trash/insight/{i}').json()['content'] == 'insight'
-    assert client.post(f'/api/trash/insight/{i}/restore').status_code == 200
+    assert client.post(f'/api/trash/insight/{i}/restore', headers={"If-Match": '"2"'}).status_code == 200
 
 
 def test_reads_do_not_autoflush_pending_state(api):
@@ -243,6 +245,6 @@ def test_legacy_content_read_restore_not_revalidated(api, kind):
     before = dict(snapshot(db, kind, id))
     detail = client.get(f'/api/trash/{kind}/{id}')
     assert detail.status_code == 200 and detail.json()['content'] == ' \n\t'
-    restored = client.post(f'/api/trash/{kind}/{id}/restore')
+    restored = client.post(f'/api/trash/{kind}/{id}/restore', headers={"If-Match": '"2"'})
     assert restored.status_code == 200 and restored.json()['title'] == 'x' * 81
-    assert dict(snapshot(db, kind, id)) == {**before, 'deleted_at': None}
+    assert dict(snapshot(db, kind, id)) == {**before, 'deleted_at': None, 'revision': before['revision'] + 1}

@@ -90,13 +90,13 @@ def test_generated_titles_complete_numbering_and_deleted_lifecycle(api):
     assert resolve(client, '2020-01-01')['total'] == 2
     assert resolve(client, '未命名 Insight')['items'][0]['id'] == insight
     assert [i['id'] for i in resolve(client, '2020-01-01 (25)')['items']] == [manual, ids[-1]]
-    assert client.delete(f'/api/journals/{ids[0]}').status_code == 204
+    assert client.delete(f'/api/journals/{ids[0]}', headers={"If-Match": '"1"'}).status_code == 204
     assert resolve(client, '2020-01-01')['items'][0]['id'] == inbox
     assert resolve(client, '2020-01-01 (25)')['total'] == 2
-    assert client.post(f'/api/trash/journal/{ids[0]}/restore').status_code == 200
+    assert client.post(f'/api/trash/journal/{ids[0]}/restore', headers={"If-Match": '"2"'}).status_code == 200
     assert resolve(client, '2020-01-01')['total'] == 2
-    assert client.delete(f'/api/journals/{ids[0]}').status_code == 204
-    assert client.delete(f'/api/trash/journal/{ids[0]}').status_code == 204
+    assert client.delete(f'/api/journals/{ids[0]}', headers={"If-Match": '"3"'}).status_code == 204
+    assert client.delete(f'/api/trash/journal/{ids[0]}', headers={"If-Match": '"4"'}).status_code == 204
     assert resolve(client, '2020-01-01 (25)')['items'][0]['id'] == manual
     assert resolve(client, '2020-01-01 (24)')['items'][0]['id'] == ids[-1]
 
@@ -107,16 +107,16 @@ def test_removal_other_duplicate_restore_and_stale_detail(api, kind):
     first = seed(db, kind, title='duplicate')
     second = seed(db, kind, title='duplicate')
     assert resolve(client, 'duplicate')['total'] == 2
-    assert client.delete(f'/api/{ROUTES[kind]}/{first}').status_code == 204
+    assert client.delete(f'/api/{ROUTES[kind]}/{first}', headers={"If-Match": '"1"'}).status_code == 204
     assert resolve(client, 'duplicate')['items'][0]['id'] == second
     assert client.get(f'/api/{ROUTES[kind]}/{first}').status_code == 404
     if kind != 'inbox':
-        assert client.post(f'/api/trash/{kind}/{first}/restore').status_code == 200
+        assert client.post(f'/api/trash/{kind}/{first}/restore', headers={"If-Match": '"2"'}).status_code == 200
         assert resolve(client, 'duplicate')['total'] == 2
-        assert client.delete(f'/api/{ROUTES[kind]}/{first}').status_code == 204
-        assert client.delete(f'/api/trash/{kind}/{first}').status_code == 204
+        assert client.delete(f'/api/{ROUTES[kind]}/{first}', headers={"If-Match": '"3"'}).status_code == 204
+        assert client.delete(f'/api/trash/{kind}/{first}', headers={"If-Match": '"4"'}).status_code == 204
     assert resolve(client, 'duplicate')['total'] == 1
-    assert client.patch(f'/api/{ROUTES[kind]}/{second}', json={'title': 'renamed'}).status_code == 200
+    assert client.patch(f'/api/{ROUTES[kind]}/{second}', json={"expected_revision": 1, **{'title': 'renamed'}}).status_code == 200
     assert resolve(client, 'duplicate')['total'] == 0
     assert resolve(client, 'renamed')['items'][0]['id'] == second
 
@@ -148,15 +148,15 @@ def test_numbering_date_title_changes_and_folder_projection(api):
     first = seed(db, 'journal', title='')
     second = seed(db, 'journal', created_at=STAMP + timedelta(seconds=1))
     assert resolve(client, '2020-01-01 (2)')['items'][0]['id'] == second
-    assert client.patch(f'/api/journals/{first}', json={'title': 'manual'}).status_code == 200
+    assert client.patch(f'/api/journals/{first}', json={"expected_revision": 1, **{'title': 'manual'}}).status_code == 200
     assert resolve(client, '2020-01-01 (2)')['total'] == 0
     assert resolve(client, '2020-01-01')['items'][0]['id'] == second
-    assert client.patch(f'/api/journals/{second}', json={'journal_date': '2020-02-01'}).status_code == 200
+    assert client.patch(f'/api/journals/{second}', json={"expected_revision": 1, **{'journal_date': '2020-02-01'}}).status_code == 200
     assert resolve(client, '2020-01-01')['total'] == 0
     item = resolve(client, '2020-02-01')['items'][0]
     assert item['id'] == second and item['journal_date'] == '2020-02-01'
     folder = client.post('/api/folders', json={'name': 'link folder'}).json()['id']
-    assert client.patch(f'/api/journals/{second}', json={'folder_id': folder}).status_code == 200
+    assert client.patch(f'/api/journals/{second}', json={"expected_revision": 2, **{'folder_id': folder}}).status_code == 200
     folder_item = client.get(f'/api/folders/{folder}/files').json()['items'][0]
     assert folder_item['display_title'] == item['display_title']
     assert resolve(client, '2020-02-01')['items'][0]['display_title'] == item['display_title']

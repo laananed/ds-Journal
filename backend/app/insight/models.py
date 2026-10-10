@@ -29,6 +29,9 @@ from datetime import datetime, timezone
 from sqlalchemy import DateTime, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from sqlalchemy import BigInteger
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from uuid import UUID as PythonUUID
 from app.database import Base
 
 
@@ -77,3 +80,8 @@ class Insight(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+
+    # Stage 3 safe writing foundation; old rows keep their original fields.
+    revision: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1, server_default="1")
+    client_create_id: Mapped[PythonUUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, unique=True)
+    create_payload_hash: Mapped[str | None] = mapped_column(Text, nullable=True)

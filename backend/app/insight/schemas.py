@@ -27,13 +27,16 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, PrivateAttr, field_validator
+from uuid import UUID
+from app.writing.schemas import Revision
 
 # 复用 Journal 的请求校验实现，保持三类文件的输入口径完全一致。
 from app.journal.schemas import _validate_content, _validate_title
 
 
 class InsightCreate(BaseModel):
+    client_create_id: UUID | None = None
     """创建 Insight 的请求体。
 
     - title：可省略 / 可显式传 null / 空字符串，默认 None；最多 80 个 Unicode 码点；
@@ -58,6 +61,7 @@ class InsightCreate(BaseModel):
 
 
 class InsightUpdate(BaseModel):
+    expected_revision: Revision = None
     """PATCH Insight 的请求体，只承载「本次提交的字段」。
 
     三个可更新字段都允许省略：
@@ -105,6 +109,8 @@ class InsightUpdate(BaseModel):
 
 
 class InsightResponse(BaseModel):
+    revision: Revision
+    _creation_replayed: bool = PrivateAttr(default=False)
     """Insight 的完整响应。
 
     - `type`：固定 `"insight"`，只读，用于跨类型列表区分文件种类；

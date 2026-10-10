@@ -13,7 +13,7 @@ from app.insight.models import Insight
 from app.journal.schemas import _WHITESPACE_CODE_POINTS
 
 MARKDOWN = '  # Heading\n\n- [ ] task  \n1. item\n    code  \n'
-FIELDS = {'type', 'id', 'title', 'display_title', 'content', 'folder_id', 'created_at', 'updated_at', 'deleted_at'}
+FIELDS = {'type', 'id', 'title', 'display_title', 'content', 'folder_id', 'created_at', 'updated_at', 'deleted_at', "revision"}
 
 
 def create(client, **values):
@@ -103,7 +103,7 @@ def test_empty_ignored_and_same_patch_do_not_write_or_change_time(api, changes):
 
     event.listen(session.bind, 'before_cursor_execute', capture)
     try:
-        response = client.patch(f"/api/insights/{original['id']}", json=changes)
+        response = client.patch(f"/api/insights/{original['id']}", json={"expected_revision": 1, **changes})
         assert response.status_code == 200
         assert response.json() == original
         assert not {'INSERT', 'UPDATE', 'DELETE'} & set(statements)
@@ -117,12 +117,12 @@ def test_patch_title_clear_content_and_folder_move(api):
     session.add(folder)
     session.flush()
     original = create(client).json()
-    moved = client.patch(f"/api/insights/{original['id']}", json={'title': '原则', 'content': 'changed', 'folder_id': folder.id}).json()
+    moved = client.patch(f"/api/insights/{original['id']}", json={"expected_revision": 1, **{'title': '原则', 'content': 'changed', 'folder_id': folder.id}}).json()
     assert moved['title'] == '原则' and moved['display_title'] == '原则'
     assert moved['content'] == 'changed' and moved['folder_id'] == folder.id
     assert moved['created_at'] == original['created_at'] and moved['updated_at'] != original['updated_at']
     assert client.get('/api/insights', params={'folder_id': folder.id}).json()['total'] == 1
-    cleared = client.patch(f"/api/insights/{original['id']}", json={'title': None, 'folder_id': None}).json()
+    cleared = client.patch(f"/api/insights/{original['id']}", json={"expected_revision": 2, **{'title': None, 'folder_id': None}}).json()
     assert cleared['title'] is None and cleared['display_title'] == '未命名 Insight'
     assert cleared['folder_id'] is None
     assert client.get('/api/insights', params={'folder_id': folder.id}).json()['total'] == 0
@@ -133,7 +133,7 @@ def test_invalid_patch_leaves_every_field_unchanged(api, changes):
     client, session = api
     original = create(client).json()
     before = snapshot(session, original['id'])
-    assert client.patch(f"/api/insights/{original['id']}", json=changes).status_code == 422
+    assert client.patch(f"/api/insights/{original['id']}", json={"expected_revision": 1, **changes}).status_code == 422
     assert snapshot(session, original['id']) == before
 
 
@@ -141,7 +141,7 @@ def test_missing_folder_patch_is_atomic_404(api):
     client, session = api
     original = create(client).json()
     before = snapshot(session, original['id'])
-    response = client.patch(f"/api/insights/{original['id']}", json={'folder_id': 10**9, 'content': 'should roll back'})
+    response = client.patch(f"/api/insights/{original['id']}", json={"expected_revision": 1, **{'folder_id': 10**9, 'content': 'should roll back'}})
     assert response.status_code == 404
     assert snapshot(session, original['id']) == before
     assert session.scalar(text('SELECT 1')) == 1
@@ -171,7 +171,7 @@ def test_real_edit_resorts_record_to_front(api):
     session.add_all([first, second])
     session.flush()
     assert [item['id'] for item in client.get('/api/insights').json()['items']] == [second.id, first.id]
-    assert client.patch(f'/api/insights/{first.id}', json={'content': 'S2T06 A edited'}).status_code == 200
+    assert client.patch(f'/api/insights/{first.id}', json={"expected_revision": 1, **{'content': 'S2T06 A edited'}}).status_code == 200
     assert [item['id'] for item in client.get('/api/insights').json()['items']] == [first.id, second.id]
 
 
@@ -185,15 +185,15 @@ def test_soft_delete_preserves_row_and_timestamps_then_404(api):
     client, session = api
     original = create(client).json()
     before = snapshot(session, original['id'])
-    response = client.delete(f"/api/insights/{original['id']}")
+    response = client.delete(f"/api/insights/{original['id']}", headers={"If-Match": '"1"'})
     assert response.status_code == 204 and response.content == b''
     after = snapshot(session, original['id'])
     assert after[0] == before[0] and after[1] == before[1] and after[2] == before[2]
     assert after[3] == before[3] and after[4] == before[4]
     assert before[5] is None and after[5] is not None
     assert client.get(f"/api/insights/{original['id']}").status_code == 404
-    assert client.patch(f"/api/insights/{original['id']}", json={}).status_code == 404
-    assert client.delete(f"/api/insights/{original['id']}").status_code == 404
+    assert client.patch(f"/api/insights/{original['id']}", json={"expected_revision": 1, **{}}).status_code == 404
+    assert client.delete(f"/api/insights/{original['id']}", headers={"If-Match": '"1"'}).status_code == 404
     assert client.get('/api/insights').json()['total'] == 0
 
 
@@ -208,6 +208,6 @@ def test_already_soft_deleted_rows_are_hidden_from_list_and_detail(api):
 
 def test_missing_ids_and_non_integer_paths(api):
     client, session = api
-    for method, kwargs in [(client.get, {}), (client.patch, {'json': {}}), (client.delete, {})]:
+    for method, kwargs in [(client.get, {}), (client.patch, {'json': {'expected_revision': 1}}), (client.delete, {'headers': {'If-Match': '"1"'}})]:
         assert method('/api/insights/1000000000', **kwargs).status_code == 404
         assert method('/api/insights/not-an-id', **kwargs).status_code == 422

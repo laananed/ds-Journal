@@ -225,7 +225,7 @@ class TestMixedOrdering:
             assert set(item) >= {
                 "type", "id", "title", "display_title", "content",
                 "folder_id", "created_at", "updated_at", "deleted_at",
-            }
+            "revision"}
             assert item["folder_id"] == folder["id"]
             assert item["deleted_at"] is None
 

@@ -3,12 +3,12 @@
 ## 1. Project
 
 SeekJournal 是以个人认知成长为核心、生活与情感记录为辅的个人记录与复盘软件。
-当前为 **Stage 3：AI 陪伴写作、复盘与 Insight 辅助提炼（规划，未授权开发）**；Stage 1 / 1.5 已完成。Stage 2 技术验收及用户接受/独立复核状态引用 `docs/stage2-tasks.md` §20，不因进入规划宣布整体验收完成。阶段路线唯一来源为 `docs/stage3.md` §1；Task 完成不等于 Stage 整体验收，不提前实施未来阶段。
+当前为 **Stage 3：AI 陪伴写作、复盘与 Insight 辅助提炼**；Task 授权与执行状态见 `docs/stage3-tasks.md` §17。Stage 1 / 1.5 已完成。Stage 2 技术验收及用户接受/独立复核状态引用 `docs/stage2-tasks.md` §20，不因进入规划宣布整体验收完成。阶段路线唯一来源为 `docs/stage3.md` §1；Task 完成不等于 Stage 整体验收，不提前实施未来阶段。
 
 ## 2. Required Reading
 
 - 始终读取根 `AGENTS.md`、适用角色规范（Codex：`agents/gpt-lead.md`；WorkBuddy：`agents/ds-developer.md`；DSH：`agents/dsh-developer.md`）及 `agents/multi-agent-workflow.md`，单 Agent 执行也适用。
-- 按当前 Task 选择性读取 §3 中当前阶段相关产品需求、API、架构、任务计划章节及实际代码；包含适用的通用规则、范围、依赖、验收标准、执行记录与引用条款，不要求每次完整读取四份阶段文档。Stage 3 规划已获授权，只改文档；具体开发 Task 仍待确认开始。
+- 按当前 Task 选择性读取 §3 中当前阶段相关产品需求、API、架构、任务计划章节及实际代码；包含适用的通用规则、范围、依赖、验收标准、执行记录与引用条款，不要求每次完整读取四份阶段文档。Stage 3 规划已获授权；具体开发 Task 按用户明确授权及 `docs/stage3-tasks.md` §17 执行，未授权任务不得开始。
 - 历史文档仅在追溯历史行为、兼容性或 Bug 时读取相关内容，包括任务所需的迁移、回归和引用依据；不默认完整读取 Stage 1 / 1.5 文档。
 - 已读且未变化、上下文仍可用的内容无需重复加载；范围不明或存在依赖引用时先检索、补读。按需读取不改变文档权威性，不得跳过本任务需要的契约。
 - 当前 Stage 3 任务涉及复用、兼容和回归时补读 Stage 2 对应契约/验收；后续经用户确认进入新阶段后沿用同一机制，不把未闭环验收视为已完成。

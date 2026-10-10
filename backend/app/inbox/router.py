@@ -5,16 +5,21 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.writing.router import matched_revision
 from app.inbox import service
+from app.inbox.schemas import InboxDetail
 from app.inbox.schemas import DailyInboxResponse, InboxCreate, InboxPage, InboxResponse, InboxUpdate
 
 router = APIRouter(prefix='/api/inboxes', tags=['inboxes'])
 
 
-@router.post('', response_model=InboxResponse, status_code=status.HTTP_201_CREATED)
-def create_inbox(payload: InboxCreate, db: Session = Depends(get_db)) -> InboxResponse:
+@router.post('', response_model=InboxDetail, status_code=status.HTTP_201_CREATED)
+def create_inbox(payload: InboxCreate, response: Response, db: Session = Depends(get_db)) -> InboxResponse:
     try:
-        return service.create_inbox(db, payload)
+        result = service.create_inbox(db, payload)
+        if result._creation_replayed:
+            response.status_code = 200
+        return result
     except service.FolderNotFoundError:
         raise HTTPException(status_code=404, detail='Folder not found')
     except service.DailyInboxConflictError:
@@ -33,7 +38,7 @@ def get_daily_inbox(inbox_date: date, db: Session = Depends(get_db)) -> DailyInb
     return service.get_daily_inbox(db, inbox_date)
 
 
-@router.get('/{id}', response_model=InboxResponse)
+@router.get('/{id}', response_model=InboxDetail)
 def get_inbox(id: int, db: Session = Depends(get_db)) -> InboxResponse:
     inbox = service.get_inbox(db, id)
     if inbox is None:
@@ -41,7 +46,7 @@ def get_inbox(id: int, db: Session = Depends(get_db)) -> InboxResponse:
     return inbox
 
 
-@router.patch('/{id}', response_model=InboxResponse)
+@router.patch('/{id}', response_model=InboxDetail)
 def update_inbox(id: int, payload: InboxUpdate, db: Session = Depends(get_db)) -> InboxResponse:
     try:
         inbox = service.update_inbox(db, id, payload)
@@ -53,7 +58,7 @@ def update_inbox(id: int, payload: InboxUpdate, db: Session = Depends(get_db)) -
 
 
 @router.delete('/{id}', status_code=status.HTTP_204_NO_CONTENT)
-def delete_inbox(id: int, db: Session = Depends(get_db)) -> Response:
-    if not service.delete_inbox(db, id):
+def delete_inbox(id: int, expected_revision: int = Depends(matched_revision), db: Session = Depends(get_db)) -> Response:
+    if not service.delete_inbox(db, id, expected_revision):
         raise HTTPException(status_code=404, detail='Inbox not found')
     return Response(status_code=status.HTTP_204_NO_CONTENT)

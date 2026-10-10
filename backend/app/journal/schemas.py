@@ -108,133 +108,35 @@ def _validate_content(value: str) -> str:
     return value
 
 
-class JournalCreate(BaseModel):
-    """创建 Journal 的请求体。
+from uuid import UUID
+from pydantic import PrivateAttr
+from app.writing.schemas import Block, Revision, StructuredCreate, StructuredInput
 
-    只声明客户端可以提供的三个字段：
 
-    - title：可省略，可显式传 null / 空字符串，默认 None；最多 80 个 Unicode 码点；
-      非空标题原样保存（不 trim）；
-    - content：必填；原始字符串最多 50,000 个 Unicode 码点，
-      且必须至少包含一个非空白字符（Stage 1.5 / S1.5-T2 新增）；
-    - journal_date：必填的 YYYY-MM-DD 日期；
-    - folder_id：可省略 / 可显式传 null，默认 None；表示文件所属的一级 Folder
-      （S2-T02 新增，Stage 2）。指定的 Folder 是否存在由 Service 校验，**不在这一层查库**。
-
-    id / created_at / updated_at / display_title / deleted_at 由系统生成或只读，
-    因此不在本 Schema 中声明，客户端也无法通过它决定这些字段。
-
-    额外字段沿用 Pydantic 默认的 extra="ignore"：
-    请求里多带的字段会被忽略，不会进入验证后的创建数据。
-
-    校验失败会抛 `ValidationError`，由 FastAPI 统一转成标准 422，
-    在进入 Router / Service 之前就结束，因此不会产生任何写入。
-    """
-
+class JournalCreate(StructuredCreate):
     title: str | None = None
-    content: str
     journal_date: date
     folder_id: int | None = None
-
-    @field_validator("title")
-    @classmethod
-    def _check_title(cls, value: str | None) -> str | None:
-        return _validate_title(value)
-
-    @field_validator("content")
-    @classmethod
-    def _check_content(cls, value: str) -> str:
-        return _validate_content(value)
+    client_create_id: UUID | None = None
+    _check_title = field_validator("title")(_validate_title)
+    _check_content = field_validator("content")(_validate_content)
 
 
-class JournalUpdate(BaseModel):
-    """PATCH Journal 的请求体，只承载「本次提交的字段」。
-
-    四个可更新字段都允许省略：
-
-    - 省略表示「不更新该字段」，**不表示**把该字段赋成 null；
-    - title：省略不更新；显式传 null 表示清空标题；
-      普通字符串与空字符串原样保留；
-    - content：省略不更新；一旦提交必须是字符串，显式传 null 会被拒绝
-      —— content 在数据库里是 NOT NULL，「允许省略」不能变成「允许清空」；
-    - journal_date：省略不更新；一旦提交必须是合法日期，显式传 null 会被拒绝；
-    - folder_id：省略不更新；显式传 null 表示**移出 Folder**（S2-T02 新增）；
-      提交整数时由 Service 校验该 Folder 是否存在。
-
-    id / created_at / updated_at / display_title / deleted_at 不允许修改，
-    因此不在本 Schema 中声明；
-    额外字段沿用 Pydantic 默认的 extra="ignore"，
-    客户端提交的系统字段或未知字段都不会进入更新数据。
-
-    更新数据必须用「本次提交了哪些字段」来表达，
-    也就是 `model_dump(exclude_unset=True)`（等价于看 `model_fields_set`）：
-
-    - `JournalUpdate()` → `{}`，表示没有任何字段需要更新；
-    - `JournalUpdate(title=None)` → `{"title": None}`，表示清空标题；
-    - `JournalUpdate(folder_id=None)` → `{"folder_id": None}`，表示移出 Folder。
-
-    **不要用 `exclude_none=True`**：它会连显式提交的 `title=None` / `folder_id=None`
-    一起丢掉，把「清空标题 / 移出 Folder」误判成「不更新」。
-
-    本 Schema 不额外禁止空请求 `{}`：
-    空更新在 API 层是否产生写操作，由更新 Service 决定，不在这一层规定。
-
-    Stage 1.5 / S1.5-T2 的长度与非空白校验**只作用于本次真正提交的字段**：
-    字段被省略时默认值不参与验证，因此不会触发校验——
-    这正是「旧记录正文超长 / 空白，但本次只改标题」依然能成功的原因。
-    """
-
+class JournalUpdate(StructuredInput):
     title: str | None = None
-
-    # 这两个字段刻意写成「非 Optional 注解 + None 默认值」：
-    # 默认值不参与验证，所以省略字段合法；
-    # 但显式提交 null 时仍按注解 str / date 验证，因此会被拒绝。
-    # 这比额外加一个 validator 更短，语义由测试逐条固定。
-    content: str = None
     journal_date: date = None
-
-    # folder_id 用普通可选字段：因为**显式 null 是有意义的**（移出 Folder），
-    # 不能写成「非 Optional 注解 + None 默认值」。
-    # 「省略」与「显式 null」的区别由 model_fields_set / exclude_unset 承担。
     folder_id: int | None = None
-
-    # field_validator 默认只在字段**被提交**时运行（默认值不校验），
-    # 因此下面的校验天然满足「省略字段不变、只校验实际提交字段」。
-    @field_validator("title")
-    @classmethod
-    def _check_title(cls, value: str | None) -> str | None:
-        return _validate_title(value)
-
-    @field_validator("content")
-    @classmethod
-    def _check_content(cls, value: str) -> str:
-        return _validate_content(value)
+    expected_revision: Revision = None
+    _check_title = field_validator("title")(_validate_title)
+    _check_content = field_validator("content")(_validate_content)
 
 
 class JournalResponse(BaseModel):
-    """Journal 的完整响应。
-
-    Stage 2 / S2-T02 起为十个字段：
-
-    - `type`：固定 `"journal"`，只读，用于跨类型列表区分文件种类；
-    - `id` / `created_at` / `updated_at` / `deleted_at`：系统字段，只读；
-    - `title`：数据库里的**原始标题**，可为 null，不含自动生成值；
-    - `display_title`：**只读显示标题投影**，由 Service 计算后填入，
-      不写入数据库、不新增字段（无标题时的日期与同日编号见 `titles.py`）；
-    - `content` / `journal_date` / `folder_id`：业务字段；
-    - 普通响应的 `deleted_at` 恒为 `null`（已删除记录不出现在普通入口）。
-
-    **本 Schema 不套用请求的长度 / 非空限制**：
-    数据库里的历史超长标题、超长或空白正文必须仍然读得出来。
-
-    from_attributes=True 允许用 model_validate() 读取带有同名属性的对象；
-    但 `type` 与 `display_title` 不是 ORM 属性，由 Service 显式构造。
-    """
-
     model_config = ConfigDict(from_attributes=True)
-
+    _creation_replayed: bool = PrivateAttr(default=False)
     type: Literal["journal"] = "journal"
     id: int
+    revision: Revision
     title: str | None
     display_title: str
     content: str
@@ -245,15 +147,11 @@ class JournalResponse(BaseModel):
     deleted_at: datetime | None = None
 
 
+class JournalDetail(JournalResponse):
+    content_blocks: list[Block] | None = None
+
+
 class JournalPage(BaseModel):
-    """Journal 列表的分页 envelope（Stage 2 / S2-T02）。
-
-    `page_size` 固定为 20，**不提供客户端自定义参数**；
-    `total` 是「有效状态 + 全部筛选条件」生效后的总数；
-    `has_next` 由全局总数计算（`page * page_size < total`），
-    不是「本页是否满 20 条」。
-    """
-
     items: list[JournalResponse]
     page: int
     page_size: int

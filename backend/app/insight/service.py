@@ -34,8 +34,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from app.writing.service import (require_revision, WriteConflict, create_hash, verify_create_replay, validate_blocks, writing_changes, cleanup_private_ai)
 
 from app.folder.models import Folder, folder_fk_violation
 from app.insight.models import Insight
@@ -92,6 +94,7 @@ def _to_response(insight: Insight) -> InsightResponse:
     return InsightResponse(
         type="insight",
         id=insight.id,
+        revision=insight.revision,
         title=insight.title,
         display_title=build_insight_display_title(insight.title),
         content=insight.content,
@@ -122,43 +125,50 @@ def _get_active_insight(db: Session, insight_id: int) -> Insight | None:
         Insight.id == insight_id,
         Insight.deleted_at.is_(None),
     )
-    return db.scalars(statement).one_or_none()
+    with db.no_autoflush:
+        return db.scalars(statement.execution_options(populate_existing=True)).one_or_none()
 
 
 def create_insight(db: Session, data: InsightCreate) -> InsightResponse:
-    """创建一条 Insight，成功返回已持久化的完整响应。
-
-    - title：原样保存，可以是 None；**没有**默认日期标题；
-    - content：必填，已由 InsightCreate 校验；
-    - folder_id：可空；**先校验目标 Folder 存在**，不存在则抛 `FolderNotFoundError`
-      （Router 转 404），此时还没有任何写入，不会留下半截记录。
-
-    id / created_at / updated_at / display_title / deleted_at 由系统决定，
-    这里不赋值，客户端多传这些字段也已被 InsightCreate 忽略。
-    """
-    if data.folder_id is not None and not _folder_exists(db, data.folder_id):
-        raise FolderNotFoundError(f"Folder {data.folder_id} 不存在")
-
-    insight = Insight(
-        title=data.title,
-        content=data.content,
-        folder_id=data.folder_id,
-    )
-
-    db.add(insight)
+    payload_hash = create_hash(data)
     try:
+        if data.client_create_id is not None:
+            row = db.scalar(select(Insight).where(Insight.client_create_id == data.client_create_id))
+            if row is not None:
+                verify_create_replay(row, payload_hash)
+                if row.deleted_at is not None:
+                    raise WriteConflict("creation key belongs to a deleted file")
+                response = _project_required(db, row.id)
+                response._creation_replayed = True
+                return response
+        if data.folder_id is not None and not _folder_exists(db, data.folder_id):
+            raise FolderNotFoundError(f"Folder {data.folder_id} does not exist")
+        content = data.content
+        row = Insight(title=data.title, content=content, folder_id=data.folder_id, client_create_id=data.client_create_id,
+                      create_payload_hash=payload_hash if data.client_create_id else None)
+        db.add(row)
         db.commit()
     except Exception as error:
-        # 写入失败必须回滚，否则该 Session 会停留在待回滚状态。
         db.rollback()
-        # S2-T07：与 Folder 真空删除竞争时，FK 仲裁失败（引用的 Folder
-        # 在校验之后、提交之前被删除）。只转换这种 Folder 引用冲突为 404，
-        # 其他数据库故障原样向上抛，不掩盖真实写入问题。
+        # PostgreSQL's unique constraint arbitrates concurrent inserts. After
+        # rollback read the committed winner, retaining the first payload hash.
+        if isinstance(error, IntegrityError) and data.client_create_id is not None:
+            row = db.scalar(select(Insight).where(Insight.client_create_id == data.client_create_id))
+            if row is not None:
+                try:
+                    verify_create_replay(row, payload_hash)
+                    if row.deleted_at is not None:
+                        raise WriteConflict("creation key belongs to a deleted file")
+                    response = _project_required(db, row.id)
+                    response._creation_replayed = True
+                    return response
+                except Exception:
+                    db.rollback()
+                    raise
         if folder_fk_violation(error):
-            raise FolderNotFoundError(f"Folder {data.folder_id} 不存在") from error
+            raise FolderNotFoundError(f"Folder {data.folder_id} does not exist") from error
         raise
-
-    return _project_required(db, insight.id)
+    return _project_required(db, row.id)
 
 
 def list_insights(
@@ -186,9 +196,10 @@ def list_insights(
     if folder_id is not None:
         conditions.append(Insight.folder_id == folder_id)
 
-    total = db.scalar(
-        select(func.count()).select_from(Insight).where(*conditions)
-    ) or 0
+    with db.no_autoflush:
+        total = db.scalar(
+            select(func.count()).select_from(Insight).where(*conditions)
+        ) or 0
 
     statement = (
         select(Insight)
@@ -197,7 +208,8 @@ def list_insights(
         .limit(PAGE_SIZE)
         .offset((page - 1) * PAGE_SIZE)
     )
-    rows = db.scalars(statement).all()
+    with db.no_autoflush:
+        rows = db.scalars(statement).all()
 
     return InsightPage(
         items=[_to_response(row) for row in rows],
@@ -223,110 +235,61 @@ def get_insight(db: Session, insight_id: int) -> InsightResponse | None:
     return _to_response(insight)
 
 
-def update_insight(
-    db: Session,
-    insight_id: int,
-    data: InsightUpdate,
-) -> InsightResponse | None:
-    """部分更新一条**有效** Insight；记录不存在或已软删除时返回 None。
-
-    「哪些字段要改」完全由请求的提交状态决定：
-
-    - `data.model_dump(exclude_unset=True)` 只给出本次**实际提交**的字段；
-    - 因此省略的字段不会被写回，`title` 显式提交 `null` 时也会被保留为 None
-      （这正是不使用 `exclude_none=True` 的原因）；
-    - `folder_id` 显式提交 `null` 表示移出 Folder。
-
-    Folder 校验发生在**任何赋值之前**：指定不存在的 Folder 直接抛
-    `FolderNotFoundError`（Router 转 404），此时没有任何写入，
-    因此不会出现「正文改了、Folder 没移成」的半截更新。
-
-    `updated_at` 复用 Model 现有的 `onupdate`：
-    只有真的产生了 UPDATE 才会刷新它。提交的字段值与当前值完全相同时，
-    SQLAlchemy 不发 UPDATE，因此 `updated_at` 保持原值。
-
-    空更新（验证后没有任何可更新字段）：记录存在时直接返回当前投影，
-    不 commit、不 flush。
-
-    写入失败时 rollback 并把异常继续抛给上层，
-    不吞异常、不返回伪成功，也不把数据库错误改写成 404。
-    """
-    insight = _get_active_insight(db, insight_id)
-    if insight is None:
-        return None
-
-    changes = data.model_dump(exclude_unset=True)
-    if not changes:
-        # 空更新：不产生任何写入，updated_at 保持不变。
-        return _to_response(insight)
-
-    target_folder = changes.get("folder_id")
-    if "folder_id" in changes and target_folder is not None:
-        if not _folder_exists(db, target_folder):
-            raise FolderNotFoundError(f"Folder {target_folder} 不存在")
-
-    for field, value in changes.items():
-        setattr(insight, field, value)
-
+def update_insight(db: Session, insight_id: int, data: InsightUpdate) -> InsightResponse | None:
+    require_revision(data.expected_revision)
     try:
+        row = _get_active_insight(db, insight_id)
+        if row is None:
+            return None
+        changes = writing_changes(row, data)
+        if not changes:
+            return _project_required(db, insight_id)
+        if row.revision != data.expected_revision:
+            raise WriteConflict("file revision has changed")
+        if "folder_id" in changes and changes["folder_id"] is not None:
+            if not _folder_exists(db, changes["folder_id"]):
+                raise FolderNotFoundError("Folder does not exist")
+        # CAS: every real mutation is conditional in PostgreSQL, never a blind ORM UPDATE.
+        result = db.execute(update(Insight).where(Insight.id == insight_id,
+            Insight.revision == data.expected_revision, Insight.deleted_at.is_(None))
+            .values(**changes, revision=Insight.revision + 1,
+                    updated_at=Insight.updated_at if changes.keys() == {"content_blocks"} else _utcnow())
+            .execution_options(synchronize_session=False))
+        if result.rowcount == 0:
+            db.expire_all()
+            row = _get_active_insight(db, insight_id)
+            if row is None:
+                return None
+            if not writing_changes(row, data):
+                return _project_required(db, insight_id)
+            raise WriteConflict("file revision has changed")
         db.commit()
     except Exception as error:
-        # 写入失败必须回滚，否则该 Session 会停留在待回滚状态；
-        # rollback 后标题、正文、Folder 都回到提交前的值，
-        # 不会留下「正文改了、Folder 没移成」的半截更新，
-        # 该 Session 也可以继续执行后续合法操作。
         db.rollback()
-        # S2-T07：与 Folder 真空删除竞争时，FK 仲裁失败
-        # （目标 Folder 在存在性检查之后、提交之前被并发删除）。
-        # 只转换这种 Folder 引用冲突为 404，其他数据库故障原样向上抛。
         if folder_fk_violation(error):
-            raise FolderNotFoundError(f"Folder {target_folder} 不存在") from error
+            raise FolderNotFoundError("Folder does not exist") from error
         raise
-
     return _project_required(db, insight_id)
 
 
-def delete_insight(db: Session, insight_id: int) -> bool:
-    """**软删除**一条有效 Insight；成功返回 True，未命中有效记录返回 False。
-
-    删除进入回收箱（`docs/stage2-api.md` §5）：
-
-    - 只把 `deleted_at` 设为当前时间，**数据库行保留**；
-    - `updated_at` 在**同一个 UPDATE** 里显式写回原值
-      （`SET updated_at = insights.updated_at`），抵消 Model 的 `onupdate`；
-      软删除不是内容修改，不能刷新 `updated_at`；
-    - `WHERE deleted_at IS NULL` 保证：不存在、或已软删除的目标都不会被再次改写，
-      重复删除返回 False（Router 转 404）；
-    - 删除条件在 SQL 里评估，不依赖 Session identity map。
-
-    失败时 rollback 并把异常继续抛给上层。
-
-    回收箱列表、恢复与永久删除属于 S2-T09，本任务不实现。
-
-    本函数不感知 HTTP，因此不导入 FastAPI 的 HTTPException。
-    """
-    statement = (
-        update(Insight)
-        .where(
-            Insight.id == insight_id,
-            Insight.deleted_at.is_(None),
-        )
-        .values(
-            deleted_at=_utcnow(),
-            updated_at=Insight.updated_at,
-        )
-        # 这条 SQL 不走 ORM 同步：避免 SQLAlchemy 把表达式值同步回内存对象。
-        .execution_options(synchronize_session=False)
-    )
-
+def delete_insight(db: Session, insight_id: int, expected_revision: int | None = None) -> bool:
+    require_revision(expected_revision)
     try:
-        result = db.execute(statement)
-        if result.rowcount == 0:
-            # 不存在或已软删除：没有有效目标，也不产生任何写入。
+        row = _get_active_insight(db, insight_id)
+        if row is None:
             return False
+        if row.revision != expected_revision:
+            raise WriteConflict("file revision has changed")
+        result = db.execute(update(Insight).where(Insight.id == insight_id,
+            Insight.revision == expected_revision, Insight.deleted_at.is_(None)).values(deleted_at=_utcnow(), revision=Insight.revision + 1, updated_at=Insight.updated_at)
+            .execution_options(synchronize_session=False))
+        if result.rowcount == 0:
+            db.expire_all()
+            if _get_active_insight(db, insight_id) is None:
+                return False
+            raise WriteConflict("file revision has changed")
         db.commit()
     except Exception:
         db.rollback()
         raise
-
     return True

@@ -1,4 +1,4 @@
-"""准备独立测试库：只创建 seekjournal_test，并运行已有 Alembic 迁移。
+"""检查已存在的 seekjournal_test 非空保护，再运行 Alembic 迁移。
 
 Stage 2 / S2-T01 起，本脚本的「非空拒绝」检查覆盖**所有已存在的业务表**，
 不再只看 journals。升级前部分新表可能还不存在，因此逐一用 `to_regclass`
@@ -21,7 +21,7 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 TEST_DATABASE_NAME = "seekjournal_test"
 
 # 当前阶段的全部业务表。新增业务表时同步这个元组。
-BUSINESS_TABLES = ("folders", "journals", "inboxes", "insights")
+BUSINESS_TABLES = ("folders", "journals", "inboxes", "insights", "ai_requests", "ai_checkpoints", "ai_usage", "ai_settings")
 
 
 def get_test_database_url() -> URL:
@@ -44,7 +44,7 @@ def _connection_url(url: URL, database: str) -> str:
 
 def main() -> int:
     test_url = get_test_database_url()
-    # CREATE DATABASE 不能处于事务内；只在 postgres 管理库创建固定名称的测试库。
+    # 仅只读核实固定测试库存在；缺失时不自动建库。
     with psycopg.connect(
         _connection_url(test_url, "postgres"), autocommit=True, connect_timeout=5
     ) as connection:
@@ -52,13 +52,20 @@ def main() -> int:
             "SELECT 1 FROM pg_database WHERE datname = %s", (TEST_DATABASE_NAME,)
         ).fetchone()
         if not exists:
-            connection.execute(
-                sql.SQL("CREATE DATABASE {}").format(sql.Identifier(TEST_DATABASE_NAME))
-            )
+            raise RuntimeError("seekjournal_test 不存在；本轮不自动新建数据库")
 
     with psycopg.connect(
         _connection_url(test_url, TEST_DATABASE_NAME), connect_timeout=5
     ) as connection:
+        actual = connection.execute("SELECT current_database()").fetchone()[0]
+        if actual != TEST_DATABASE_NAME:
+            raise RuntimeError("实际数据库不是 seekjournal_test")
+        others = connection.execute(
+            "SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() "
+            "AND pid<>pg_backend_pid()"
+        ).fetchone()[0]
+        if others:
+            raise RuntimeError("测试库还有其他连接；需要独占 prepare/迁移窗口")
         # 只检查「已经存在的业务表」是否有数据。
         # 升级前的新表还不存在时 to_regclass 返回 NULL，直接跳过；
         # 这里绝不 create_all / drop_all / 清空任何表。

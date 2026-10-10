@@ -3,8 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.writing.router import matched_revision
 from app.trash import service
-from app.trash.schemas import TrashFilter, TrashItem, TrashPage, TrashType
+from app.trash.schemas import TrashFilter, TrashItem, TrashDetail, TrashPage, TrashType
 
 router = APIRouter(prefix='/api/trash', tags=['trash'])
 
@@ -15,7 +16,7 @@ def list_trash(type: TrashFilter = 'all', page: int = Query(1, ge=1),
     return service.list_trash(db, type, page)
 
 
-@router.get('/{type}/{id}', response_model=TrashItem)
+@router.get('/{type}/{id}', response_model=TrashDetail)
 def get_trash(type: TrashType, id: int, db: Session = Depends(get_db)) -> TrashItem:
     item = service.get_trash(db, type, id)
     if item is None:
@@ -23,16 +24,16 @@ def get_trash(type: TrashType, id: int, db: Session = Depends(get_db)) -> TrashI
     return item
 
 
-@router.post('/{type}/{id}/restore', response_model=TrashItem)
-def restore_trash(type: TrashType, id: int, db: Session = Depends(get_db)) -> TrashItem:
-    item = service.restore_trash(db, type, id)
+@router.post('/{type}/{id}/restore', response_model=TrashDetail)
+def restore_trash(type: TrashType, id: int, expected_revision: int = Depends(matched_revision), db: Session = Depends(get_db)) -> TrashItem:
+    item = service.restore_trash(db, type, id, expected_revision)
     if item is None:
         raise HTTPException(status_code=404, detail='Deleted file not found')
     return item
 
 
 @router.delete('/{type}/{id}', status_code=204)
-def purge_trash(type: TrashType, id: int, db: Session = Depends(get_db)) -> Response:
-    if not service.purge_trash(db, type, id):
+def purge_trash(type: TrashType, id: int, expected_revision: int = Depends(matched_revision), db: Session = Depends(get_db)) -> Response:
+    if not service.purge_trash(db, type, id, expected_revision):
         raise HTTPException(status_code=404, detail='Deleted file not found')
     return Response(status_code=204)

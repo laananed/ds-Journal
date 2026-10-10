@@ -24,7 +24,7 @@ def _pattern(word: str) -> str:
 def _branch(kind: str, model, order: int, patterns: list[str]):
     columns = [
         literal(kind).label('type'), literal(order).label('type_order'),
-        model.id, model.title, model.content, model.folder_id,
+        model.id, model.revision, model.title, model.content, model.folder_id,
         model.created_at, model.updated_at,
         (literal(None, type_=Journal.deleted_at.type) if kind == 'inbox'
          else model.deleted_at).label('deleted_at'),
@@ -49,7 +49,7 @@ def _branch(kind: str, model, order: int, patterns: list[str]):
 
 def _to_response(row) -> SearchItem:
     fields = {key: getattr(row, key) for key in (
-        'type', 'id', 'title', 'content', 'folder_id', 'created_at', 'updated_at', 'deleted_at'
+        'type', 'id', 'revision', 'title', 'content', 'folder_id', 'created_at', 'updated_at', 'deleted_at'
     )}
     if row.type == 'journal':
         return JournalResponse(**fields, journal_date=row.business_date,

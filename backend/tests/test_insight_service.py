@@ -42,9 +42,9 @@ def test_write_failure_rolls_back_and_session_can_continue(api, monkeypatch, ope
     if operation == 'create':
         failed = client.post('/api/insights', json={'content': 'should rollback'})
     elif operation == 'update':
-        failed = client.patch(f"/api/insights/{original['id']}", json={'title': 'changed', 'content': 'changed'})
+        failed = client.patch(f"/api/insights/{original['id']}", json={"expected_revision": 1, **{'title': 'changed', 'content': 'changed'}})
     else:
-        failed = client.delete(f"/api/insights/{original['id']}")
+        failed = client.delete(f"/api/insights/{original['id']}", headers={"If-Match": '"1"'})
     assert failed.status_code == 500
 
     monkeypatch.setattr(session, 'commit', commit)
@@ -52,7 +52,7 @@ def test_write_failure_rolls_back_and_session_can_continue(api, monkeypatch, ope
     assert session.execute(text('SELECT * FROM insights WHERE id=:id'), {'id': original['id']}).one() == before
     assert session.scalar(select(Insight.id).where(Insight.content == 'should rollback')) is None
     assert client.get(f"/api/insights/{original['id']}").json() == original
-    assert client.patch(f"/api/insights/{original['id']}", json={'content': 'valid after failure'}).status_code == 200
+    assert client.patch(f"/api/insights/{original['id']}", json={"expected_revision": 1, **{'content': 'valid after failure'}}).status_code == 200
 
 
 def test_soft_deleted_object_in_identity_map_is_still_hidden(api):
@@ -73,8 +73,8 @@ def test_soft_deleted_object_in_identity_map_is_still_hidden(api):
     assert session.get(Insight, identity).deleted_at is None
     # The Service must not be fooled: it filters in SQL, not via the identity map.
     assert service.get_insight(session, identity) is None
-    assert service.update_insight(session, identity, InsightUpdate(content='resurrected')) is None
-    assert service.delete_insight(session, identity) is False
+    assert service.update_insight(session, identity, InsightUpdate(content='resurrected', expected_revision=1)) is None
+    assert service.delete_insight(session, identity, expected_revision=1) is False
 
 
 def test_soft_delete_keeps_created_and_updated_at_exactly(api):
@@ -86,7 +86,7 @@ def test_soft_delete_keeps_created_and_updated_at_exactly(api):
         {'id': identity},
     ).one()
 
-    assert service.delete_insight(session, identity) is True
+    assert service.delete_insight(session, identity, expected_revision=1) is True
 
     after = session.execute(
         text('SELECT created_at, updated_at, deleted_at FROM insights WHERE id=:id'),
@@ -102,7 +102,7 @@ def test_real_update_advances_updated_at_but_not_created_at(api):
     row = _seed(client, session)
     identity = row.id
     before = service.get_insight(session, identity)
-    assert service.update_insight(session, identity, InsightUpdate(content='S2T06 changed')) is not None
+    assert service.update_insight(session, identity, InsightUpdate(content='S2T06 changed', expected_revision=1)) is not None
     after = service.get_insight(session, identity)
     assert after.content == 'S2T06 changed'
     assert after.created_at == before.created_at

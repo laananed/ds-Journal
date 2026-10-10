@@ -62,7 +62,7 @@ RESPONSE_FIELDS = {
     "created_at",
     "updated_at",
     "deleted_at",
-}
+"revision"}
 PAGE_FIELDS = {"items", "page", "page_size", "total", "has_next"}
 
 # 只取固定列、按 id 排序的快照 SQL。

@@ -31,7 +31,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.writing.router import matched_revision
 from app.journal import service
+from app.journal.schemas import JournalDetail
 from app.journal.schemas import (
     JournalCreate,
     JournalPage,
@@ -45,9 +47,10 @@ _NOT_FOUND = "Journal not found"
 _FOLDER_NOT_FOUND = "Folder not found"
 
 
-@router.post("", response_model=JournalResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=JournalDetail, status_code=status.HTTP_201_CREATED)
 def create_journal(
     payload: JournalCreate,
+    response: Response,
     db: Session = Depends(get_db),
 ) -> JournalResponse:
     """创建一篇 Journal，返回 201 与创建后的完整记录。
@@ -57,7 +60,10 @@ def create_journal(
     - 请求体不合法时由 FastAPI / Pydantic 返回 422，不自定义错误格式。
     """
     try:
-        return service.create_journal(db, payload)
+        result = service.create_journal(db, payload)
+        if result._creation_replayed:
+            response.status_code = 200
+        return result
     except service.FolderNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -90,7 +96,7 @@ def list_journals(
     )
 
 
-@router.get("/{id}", response_model=JournalResponse, status_code=status.HTTP_200_OK)
+@router.get("/{id}", response_model=JournalDetail, status_code=status.HTTP_200_OK)
 def get_journal(
     id: int,
     db: Session = Depends(get_db),
@@ -115,7 +121,7 @@ def get_journal(
     return journal
 
 
-@router.patch("/{id}", response_model=JournalResponse, status_code=status.HTTP_200_OK)
+@router.patch("/{id}", response_model=JournalDetail, status_code=status.HTTP_200_OK)
 def update_journal(
     id: int,
     payload: JournalUpdate,
@@ -157,6 +163,7 @@ def update_journal(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_journal(
     id: int,
+    expected_revision: int = Depends(matched_revision),
     db: Session = Depends(get_db),
 ) -> Response:
     """**软删除**一篇有效 Journal，成功返回 204 与空响应体。
@@ -176,7 +183,7 @@ def delete_journal(
     不自定义错误包装、错误码或全局异常体系。
     删除成功不设置 `response_model`：204 本来就没有响应体。
     """
-    if not service.delete_journal(db, id):
+    if not service.delete_journal(db, id, expected_revision):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_NOT_FOUND,

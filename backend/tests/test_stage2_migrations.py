@@ -43,7 +43,7 @@ STAGE1_REVISION = "3a70890ddb10"
 SIX_FIELDS = ("id", "title", "content", "journal_date", "created_at", "updated_at")
 
 # 本阶段预期存在的业务表（外加 alembic_version）。
-EXPECTED_TABLES = {"journals", "folders", "inboxes", "insights"}
+EXPECTED_TABLES = {"journals", "folders", "inboxes", "insights", "ai_requests", "ai_checkpoints", "ai_usage", "ai_settings"}
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +85,7 @@ def _public_snapshot():
         rows = {}
         for table in sorted(EXPECTED_TABLES):
             # Digest only; never print user content.
-            result = connection.execute(sql.SQL('SELECT row_to_json(t)::text FROM public.{} t ORDER BY id').format(sql.Identifier(table))).fetchall()
+            result = connection.execute(sql.SQL('SELECT row_to_json(t)::text FROM public.{} t ORDER BY row_to_json(t)::text').format(sql.Identifier(table))).fetchall()
             rows[table] = hashlib.sha256(repr(result).encode()).hexdigest()
     return revision, rows
 
@@ -357,7 +357,7 @@ def test_revision_chain_is_single_head_and_unchanged_base(migration_check):
 
     assert chain[0] == STAGE1_REVISION, "初始迁移不能改，链的起点必须仍是 Stage 1 revision"
     # Stage 2 now contains base + M1 + M2 + M3.
-    assert len(chain) == 4, f"Expected base + M1 + M2 + M3, got {chain}"
+    assert len(chain) == 5, f"Expected base + M1 + M2 + M3, got {chain}"
 
 
 def test_only_expected_tables_exist(migration_check):
@@ -417,7 +417,7 @@ def test_journal_keeps_original_columns_and_adds_exactly_two(migration_check):
     names = [column["name"] for column in columns]
 
     assert tuple(names[:6]) == SIX_FIELDS, f"原六字段顺序被改变：{names}"
-    assert names[6:] == ["folder_id", "deleted_at"]
+    assert names[6:] == ["folder_id", "deleted_at", "revision", "client_create_id", "create_payload_hash", "content_blocks"]
 
     by_name = {column["name"]: column for column in columns}
     assert by_name["folder_id"]["nullable"] is True
@@ -461,7 +461,7 @@ def test_inboxes_and_insights_structure(migration_check):
         "folder_id",
         "created_at",
         "updated_at",
-        "deleted_at",
+        "deleted_at", "revision", "client_create_id", "create_payload_hash", "content_blocks",
     ]
     assert inbox_columns["title"]["nullable"] is True
     assert inbox_columns["content"]["nullable"] is False
@@ -480,7 +480,7 @@ def test_inboxes_and_insights_structure(migration_check):
         "folder_id",
         "created_at",
         "updated_at",
-        "deleted_at",
+        "deleted_at", "revision", "client_create_id", "create_payload_hash",
     ]
     assert insight_columns["title"]["nullable"] is True
     assert insight_columns["content"]["nullable"] is False
@@ -592,7 +592,8 @@ OLD_MIGRATION_HASHES = {
 
 def test_m3_extends_m2_and_original_migrations_are_byte_unchanged():
     chain = _linear_revision_chain()
-    assert len(chain) == 4 and chain[-2] == 'a8d98342e603'
+    assert chain[:4] == ['3a70890ddb10', '52c8e94a365c', 'a8d98342e603', '18ecf7e09da6']
+    assert len(chain) == 5 and chain[-1] != chain[-2]
     for filename, digest in OLD_MIGRATION_HASHES.items():
         assert hashlib.sha256((BACKEND_DIR / 'alembic' / 'versions' / filename).read_bytes()).hexdigest() == digest
 

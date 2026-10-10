@@ -67,7 +67,7 @@ RESPONSE_FIELDS = {
     "created_at",
     "updated_at",
     "deleted_at",
-}
+"revision"}
 
 PAGE_SIZE = 20
 
@@ -515,7 +515,7 @@ def test_soft_deleted_record_still_occupies_its_number(api):
     second = _add(session, content="二", journal_date=DELETE_DAY, created_at=_utc(15, 2))
     third = _add(session, content="三", journal_date=DELETE_DAY, created_at=_utc(15, 3))
 
-    assert client.delete(_detail_url(second.id)).status_code == 204
+    assert client.delete(_detail_url(second.id), headers={"If-Match": '"1"'}).status_code == 204
 
     page = _page(client, journal_date=day)
     by_id = {item["id"]: item["display_title"] for item in page["items"]}
@@ -564,7 +564,7 @@ def test_post_and_patch_display_titles_follow_the_same_projection(api):
     client.post(LIST_URL, json={"content": "无标题一", "journal_date": day})
     client.post(LIST_URL, json={"content": "无标题二", "journal_date": day})
 
-    patched = client.patch(_detail_url(manual["id"]), json={"title": None})
+    patched = client.patch(_detail_url(manual["id"]), json={"expected_revision": 1, **{"title": None}})
     assert patched.status_code == 200
     patched_body = patched.json()
     assert patched_body["title"] is None
@@ -606,7 +606,7 @@ def test_deleted_record_is_hidden_from_every_normal_entry(api):
         created_at=_utc(17, 2),
     )
 
-    assert client.delete(_detail_url(victim.id)).status_code == 204
+    assert client.delete(_detail_url(victim.id), headers={"If-Match": '"1"'}).status_code == 204
 
     # 列表 / 日期筛选 / Folder 筛选都不再包含它
     assert victim.id not in _ids_of(_page(client))
@@ -615,9 +615,9 @@ def test_deleted_record_is_hidden_from_every_normal_entry(api):
 
     # 详情、PATCH（含空 PATCH）、DELETE 一律 404
     assert client.get(_detail_url(victim.id)).status_code == 404
-    assert client.patch(_detail_url(victim.id), json={"title": "不该写进去"}).status_code == 404
-    assert client.patch(_detail_url(victim.id), json={}).status_code == 404
-    assert client.delete(_detail_url(victim.id)).status_code == 404
+    assert client.patch(_detail_url(victim.id), json={"expected_revision": 1, **{"title": "不该写进去"}}).status_code == 404
+    assert client.patch(_detail_url(victim.id), json={"expected_revision": 1, **{}}).status_code == 404
+    assert client.delete(_detail_url(victim.id), headers={"If-Match": '"1"'}).status_code == 404
 
     # 同 Folder 的另一篇仍然可读、仍在筛选结果里
     assert client.get(_detail_url(keeper.id)).status_code == 200
@@ -642,7 +642,7 @@ def test_soft_delete_preserves_every_field_and_updated_at(api):
     )
     before = _row(session, journal.id)
 
-    assert client.delete(_detail_url(journal.id)).status_code == 204
+    assert client.delete(_detail_url(journal.id), headers={"If-Match": '"1"'}).status_code == 204
 
     after = _row(session, journal.id)
 
@@ -661,11 +661,11 @@ def test_repeat_delete_returns_404_and_keeps_the_first_deleted_at(api):
     client, session = api
 
     journal = _add(session, content="只软删一次", journal_date=DELETE_DAY)
-    assert client.delete(_detail_url(journal.id)).status_code == 204
+    assert client.delete(_detail_url(journal.id), headers={"If-Match": '"1"'}).status_code == 204
     first_deleted_at = _row(session, journal.id)[7]
     assert first_deleted_at is not None
 
-    second = client.delete(_detail_url(journal.id))
+    second = client.delete(_detail_url(journal.id), headers={"If-Match": '"1"'})
 
     assert second.status_code == 404
     assert _row(session, journal.id)[7] == first_deleted_at
@@ -677,7 +677,7 @@ def test_delete_returns_204_with_empty_body(api):
 
     journal = _add(session, content="204 用例", journal_date=DELETE_DAY)
 
-    response = client.delete(_detail_url(journal.id))
+    response = client.delete(_detail_url(journal.id), headers={"If-Match": '"1"'})
 
     assert response.status_code == 204
     assert response.content == b""
@@ -689,7 +689,7 @@ def test_delete_of_absent_id_returns_404_without_writing(api):
     absent = _absent_journal_id(session)
     assert not _exists(session, absent)
 
-    response = client.delete(_detail_url(absent))
+    response = client.delete(_detail_url(absent), headers={"If-Match": '"1"'})
 
     assert response.status_code == 404
     assert not _exists(session, absent)
@@ -708,7 +708,7 @@ def test_empty_patch_does_not_write_or_refresh_updated_at(api):
     )
     before = _row(session, journal.id)
 
-    response = client.patch(_detail_url(journal.id), json={})
+    response = client.patch(_detail_url(journal.id), json={"expected_revision": 1, **{}})
 
     assert response.status_code == 200
     assert _row(session, journal.id) == before
@@ -729,7 +729,7 @@ def test_same_value_patch_does_not_force_a_timestamp_change(api):
     before = _row(session, journal.id)
 
     response = client.patch(
-        _detail_url(journal.id), json={"title": "一样的", "content": "一样的正文"}
+        _detail_url(journal.id), json={"expected_revision": 1, **{"title": "一样的", "content": "一样的正文"}}
     )
 
     assert response.status_code == 200
@@ -742,12 +742,12 @@ def test_patch_moves_a_journal_into_and_out_of_a_folder(api):
     folder = _add_folder(session, "移动目标")
     journal = _add(session, content="正文", journal_date=FOLDER_DAY)
 
-    moved = client.patch(_detail_url(journal.id), json={"folder_id": folder.id})
+    moved = client.patch(_detail_url(journal.id), json={"expected_revision": 1, **{"folder_id": folder.id}})
     assert moved.status_code == 200
     assert moved.json()["folder_id"] == folder.id
     assert journal.id in _ids_of(_page(client, folder_id=folder.id))
 
-    removed = client.patch(_detail_url(journal.id), json={"folder_id": None})
+    removed = client.patch(_detail_url(journal.id), json={"expected_revision": 2, **{"folder_id": None}})
     assert removed.status_code == 200
     assert removed.json()["folder_id"] is None
     assert journal.id not in _ids_of(_page(client, folder_id=folder.id))
@@ -760,12 +760,13 @@ def test_patch_with_missing_folder_is_atomic_404(api):
     journal = _add(
         session, title="原标题", content="原始正文", journal_date=FOLDER_DAY
     )
+    session.commit()  # Persist seed inside the fixture savepoint before testing rollback.
     before = _row(session, journal.id)
     absent_folder = _absent_folder_id(session)
 
     response = client.patch(
         _detail_url(journal.id),
-        json={"content": "不应写入的正文", "folder_id": absent_folder},
+        json={"expected_revision": 1, **{"content": "不应写入的正文", "folder_id": absent_folder}},
     )
 
     assert response.status_code == 404
@@ -827,7 +828,7 @@ def test_legacy_illegal_records_are_readable_in_the_new_envelope(api):
     for journal in (blank, oversized_title, oversized_content):
         detail = client.get(_detail_url(journal.id))
         assert detail.status_code == 200
-        assert set(detail.json()) == RESPONSE_FIELDS
+        assert set(detail.json()) == RESPONSE_FIELDS | {"content_blocks"}
 
 
 # ==========================================================================
@@ -853,7 +854,7 @@ def test_delete_commit_failure_rolls_back_and_session_stays_usable(api, monkeypa
     monkeypatch.setattr(Session, "commit", failing_commit)
 
     with pytest.raises(RuntimeError):
-        service.delete_journal(session, journal_id)
+        service.delete_journal(session, journal_id, expected_revision=1)
 
     after = _row(session, journal_id)
     assert after == before
@@ -878,7 +879,7 @@ def test_patch_commit_failure_rolls_back(api, monkeypatch):
 
     monkeypatch.setattr(Session, "commit", failing_commit)
 
-    response = client.patch(_detail_url(journal_id), json={"content": "不应留下"})
+    response = client.patch(_detail_url(journal_id), json={"expected_revision": 1, **{"content": "不应留下"}})
 
     assert response.status_code == 500
     assert _row(session, journal_id) == before

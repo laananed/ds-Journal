@@ -43,8 +43,8 @@ def test_daily_missing_read_is_zero_write_and_requires_date(api):
 def test_daily_identity_survives_rename_clear_and_ignored_identity_patch(api):
     client, session = api
     original = daily(client).json()
-    for title in ['renamed', None, '', '   ']:
-        response = client.patch(f"/api/inboxes/{original['id']}", json={'title': title, 'inbox_date': '2035-01-01', 'is_daily': False})
+    for revision, title in enumerate(['renamed', None, '', '   '], start=1):
+        response = client.patch(f"/api/inboxes/{original['id']}", json={"expected_revision": revision, **{'title': title, 'inbox_date': '2035-01-01', 'is_daily': False}})
         assert response.status_code == 200
         updated = response.json()
         state = client.get('/api/inboxes/daily', params={'inbox_date': DAY}).json()

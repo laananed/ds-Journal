@@ -34,8 +34,8 @@ from app.journal.schemas import JournalCreate, JournalResponse, JournalUpdate
 
 DAY = date(2026, 10, 2)
 # Stage 2 / S2-T02：可更新字段增加 folder_id。
-UPDATE_FIELDS = {"title", "content", "journal_date", "folder_id"}
-CREATE_FIELDS = {"title", "content", "journal_date", "folder_id"}
+UPDATE_FIELDS = {"title", "content", "journal_date", "folder_id", "expected_revision", "content_blocks"}
+CREATE_FIELDS = {"title", "content", "journal_date", "folder_id", "client_create_id", "content_blocks"}
 RESPONSE_FIELDS = {
     "type",
     "id",
@@ -47,7 +47,7 @@ RESPONSE_FIELDS = {
     "created_at",
     "updated_at",
     "deleted_at",
-}
+"revision"}
 SYSTEM_FIELDS = {
     "id": 999,
     "created_at": "2020-01-01T00:00:00Z",
@@ -134,7 +134,7 @@ def test_multiple_fields_submitted_together():
         folder_id=7,
     )
 
-    assert update.model_fields_set == UPDATE_FIELDS
+    assert update.model_fields_set == UPDATE_FIELDS - {"expected_revision", "content_blocks"}
     assert update.model_dump(exclude_unset=True) == {
         "title": "新的标题",
         "content": "新的内容",
@@ -154,6 +154,8 @@ def test_omitted_fields_are_not_carried_by_exclude_unset():
         "content": "新的正文",
         "journal_date": None,
         "folder_id": None,
+        "expected_revision": None,
+        "content_blocks": None,
     }
 
     assert data == {"content": "新的正文"}

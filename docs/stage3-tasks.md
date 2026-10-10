@@ -3,7 +3,7 @@
 > 2026-10-10。Goal：在现有基础记录上交付 AI 陪伴写作、复盘与 Insight 草稿。
 > Architecture：三表不合并；CAS 自动保存、可空 blocks、短事务检查点/幂等请求、官方模型与受限 Function Calling 搜索。
 > Tech Stack：沿用现有技术栈，无新增运行依赖的默认方案。
-> 状态：11 项均「规划，未授权开始」。本轮只改文档，不调用其他 Agent、不迁移、不安装、不提交。执行时按 `agents/multi-agent-workflow.md` 生成逐项开发/独立测试完整提示词；本计划不是启动指令。
+> 状态：S3-T01 已获用户明确开始授权，执行状态见 §17；T02～T11 仍「规划，未授权开始」。规划和历史记录不自动授权其他任务；具体资源及 Git 权限以本轮用户执行指令为准。
 
 ## 1. 基线、阶段入口与共同 DoD
 
@@ -18,7 +18,7 @@ S3-T01 开始前由 Lead 只读核对 Stage 2 实际集成基线、T14 用户接
 
 | Task | 可独立验收的目标 | 难度 | 开发 / 独立测试 | 前置 | Codex 审核 |
 |---|---|---:|---|---|---|
-| S3-T01 | 旧数据兼容、版本/创建幂等与 AI 数据基础 | 4 | Codex / WorkBuddy | Stage 2 入口闭环、规划审核 | 迁移/写冲突/删除隐私 |
+| S3-T01 | 旧数据兼容、版本/创建幂等与 AI 数据基础 | 4 | Codex / 新 Codex 对话（本次用户指定） | Stage 2 入口闭环、规划审核；本次用户明确授权开始，历史未闭环项保留 | 迁移/写冲突/删除隐私 |
 | S3-T02 | 三类稳定自动保存 | 4 | WorkBuddy / DSH | T01 | 乱序与导航防丢字 |
 | S3-T03 | 官方模型接入、持久设置、Token 账本 | 3 | DSH / WorkBuddy | T01 | Key/usage/未知计量 |
 | S3-T04 | 原生 textarea 与 AI 块编辑/阅读/删除 | 4 | WorkBuddy / DSH | T01、T02 | 作者身份与旧文投影 |
@@ -169,7 +169,7 @@ Codex 对自身开发项的设计自审不能替代独立测试，WorkBuddy/DSH 
 使用进程 `VITE_API_BASE_URL`/`DATABASE_URL`，不改真实.env，不占8000/5173/5432，不自动启动Compose。UI写入前查询实际current_database与revision；测试端口CORS若需要，只在授权fixture/临时包装处理，不放宽生产CORS。已有node_modules/.venv不假定跨树共享，缺环境报告，不擅自安装。
 当前 `get_test_database_url()` 强制seekjournal_test、conftest导入时覆盖DATABASE_URL：后端pytest/迁移/prepare同一时间仅一个Owner。不能设置新库环境就声称pytest隔离；纯Mock后端测试若加载conftest也需预约，不擅自新增配置层。迁移测试用已指定库内私有schema（执行前验证守卫），迁移链单写；独立UI库各自迁移需明确授权。只清自己manifest列出的typed IDs/schema，不清不明数据/重置sequence。
 
-本轮允许：文档改动、只读检查、已有无DB写纯逻辑验证。禁止：业务代码/迁移执行/依赖安装/启动开发Task、创建或调其他Agent、commit/merge/push/tag、切换/新建/清理Worktree或分支。后续「开始Task」只覆盖明确点名功能及当轮资源权限；创建Worktree、测试库迁移、真实付费测试、commit、main merge逐项写入授权表，未列即不执行。个人库seekjournal升级单独批准，push/tag/删除分支/工作树清理独立授权。
+本段记录规划轮权限：文档改动、只读检查、已有无DB写纯逻辑验证；规划轮禁止业务代码/迁移执行/依赖安装/启动开发Task、创建或调其他Agent、commit/merge/push/tag、切换/新建/清理Worktree或分支。后续 Task 的实际授权与执行见 §17，本次 S3-T01 以用户明确执行指令为准，不沿用规划轮禁止实施作为阻断。后续「开始Task」只覆盖明确点名功能及当轮资源权限；创建Worktree、测试库迁移、真实付费测试、commit、main merge逐项写入授权表，未列即不执行。个人库seekjournal升级单独批准，push/tag/删除分支/工作树清理独立授权。
 前置集成等待Git权限时，保留diff与证据，不偷偷把diff复制覆盖到别树来绕过授权。共享docs/agents/根由Codex维护，Main/App/CSS和API公共类型在每波明确单写者，交接停止写入后再合并；整合后各树由所有者显式同步并复核基线。
 
 ## 16. 测试命令与执行提示词交付
@@ -205,3 +205,32 @@ Get-ChildItem .\src\utils -Filter *.test.ts | ForEach-Object { node --experiment
 ## 17. 执行记录
 
 2026-10-10：完成 Stage 3 四份规划文档及阶段/Agent配置引用修订；所有S3 Task未实施，数据库/依赖/开发服务未变。实际本轮文档校验、Git状态与定向纯逻辑结果以规划交付报告为准；这里不预写开发验收结果。后续由Lead按任务追加基线、授权、开发/独立证据、风险审核、收尾、整合与用户接受，不覆盖Stage2历史。
+
+### S3-T01 开始授权与环境前置检查（2026-10-10，Codex 开发）
+
+- 用户粘贴的本轮执行指令已明确授权 S3-T01，单写者串行，当前目录/分支复用；独立测试改由未参与实现的新 Codex 对话执行。不启动 T02、不调用其他 Agent、不 commit/merge/push/tag 或变更 Worktree。
+- 实际基线：`C:\Programme\demo\SeekJournal`，`codex/s03-t01`，HEAD `45c0276f9661e9271a3d86f863f7673f2e19c3e4`，开始工作区干净。精确活动会话模型 ID 未获得可核验证据，不宣称已确认 GPT-6.1-Sol。
+- Stage 2 §20 的用户最终接受、学习验收及独立复核未闭环记录保留；本次开始授权不构成 Stage 2 整体验收，也不重启历史任务。
+- 环境失败：测试库只读 psycopg 探针 `connect_timeout=5` 超时，退出 1；沙箱外同一探针仍超时，退出 1。Docker 只读查询退出 0，确认现有 `seekjournal-postgres-1` 为 `Exited (255)`。测试库存在性、实际 revision、业务数据、独占条件和个人库保护基线均未验证。未启动/重启/重建容器，未运行 prepare、迁移或数据库写入。
+- 已先准备三份新增测试的无数据库入口用例；迁移保留、真实两 Session 并发、HTTP/隐私与完整回归尚待数据库恢复后补齐并执行，当前不是完整验收覆盖或产品实现交付。结果和交接证据存 `.workbuddy/s3-t01-codex/`（已核对被 Git 忽略）。
+- 初始 RED 实测：在 backend 执行 `.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests/test_stage3_migrations.py tests/test_file_revisions.py tests/test_file_create_idempotency.py --tb=short`，退出 1，31 failed。用例没有请求数据库；失败原因为源码尚无 S3 migration、expected_revision/client_create_id 被现有 Schema 忽略。属于预期 TDD 红阶段，不是修复失败或已完成实现的回归缺陷。数据库相关命令均未执行。
+
+### S3-T01 开发自测交付（2026-10-10，Codex）
+
+- 用户自行启动既有 PostgreSQL 后通知继续；本轮只读复核测试库实际为 M3、四张既有业务表空、无其他会话，再串行实施。用户另行明确授权 `backend/app/search/service.py` 与 `backend/app/folder/service.py` 仅补 revision 查询/响应投影；这两文件没有其他业务改动。
+- 分支/HEAD 保持 `codex/s03-t01` / `45c0276f9661e9271a3d86f863f7673f2e19c3e4`。新增线性 migration 为 Alembic 实际生成的 `3aa16300a58a_stage3_writing_ai.py`，接 M3 `18ecf7e09da6`，历史四份 migration 与 HEAD 完全一致。仅 seekjournal_test 升级；旧数据逐字段/sequence、M3 Inbox/Insight 及 downgrade 在本轮自建私有 schema 验证。
+- 实现：三类 revision/创建键/首次 payload 摘要；Journal/Inbox 可空 blocks 与同事务阅读投影；四张 AI 存储表及注册；原子 CAS、创建唯一约束重放、If-Match 删除/恢复/永删；块身份/顺序校验及专用删除；硬删清理多源私人请求/检查点、usage SET NULL 保留、独立已保存成果不级联删除。列表含真实 revision、不带 blocks；GET 不 flush/commit。旧 API 测试逐处显式补版本，fixture 不注入版本。
+- 本轮指定 T01 三文件测试退出 0（47 passed；后补软删创建键两用例已在完整回归验证）；Stage 2 指定三文件退出 0（60 passed）；最终完整 `.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider tests` 退出 0（855 passed，71.25s）。真实 8031 HTTP/DB 60 个检查退出 0，非独立验收；命令由忽略目录包装器在明确测试库进程环境中执行，完整命令/退出码见证据。
+- prepare、alembic heads/current/check 均退出 0；单 head/current 均 `3aa16300a58a`，check 无漂移。初次 prepare 子进程退出 0，但日志包装输出编码失败；修正包装器后收尾 prepare 退出 0。其余测试编辑/fixture 脚本错误、旧契约断言差异及实际产品边界失败均保留日志；软删创建键重放误返回 500 经 RED 复现后最小修复为 409，GREEN 两项及完整回归通过，不恢复已删文件。
+- 自审风险项：迁移旧数据、原子 CAS/创建并发、时钟、AI 块身份与删除私人数据/账本保留已按本轮实测核对；此为开发自审，不能代替新 Codex 对话独立测试。测试库收尾八表 0、临时 schema 0、其他会话 0；测试 sequence 正常前进未重置。8031 自建进程已停，用户 PostgreSQL 保持运行；个人库仍 M3、18 Journal/1 Inbox，数量/逐表 SHA256/sequence 与本轮起点一致。
+- 状态：**实现与开发自测通过，待新对话独立测试、待提交/整合及用户接受；不宣布 Task 或 Stage 整体验收完成。** 未安装依赖、改前端、调用模型/其他 Agent、提交或整合；不开始 T02。个人库升级仍需单独授权，旧前端写入还待 T02 配套，本分支不代表完整 Web 已可用。
+- 证据：`.workbuddy/s3-t01-codex/delivery-report.md`、`independent-test-handoff.md`、`commands.jsonl`、`db-closeout.json`、`http-db-evidence.json`、`changed-files-sha256.json`；目录已核对忽略。交接记录精确文件摘要及未提交 diff，开发者交付后停止写入。
+
+### S3-T01-IT-01 最小修复开发自测（2026-10-10，Codex）
+
+- 用户明确授权仅修复超长 If-Match 返回500；分支/HEAD仍 `codex/s03-t01` / `45c0276f9661e9271a3d86f863f7673f2e19c3e4`，保留全部既有未提交T01实现。仅修改 `backend/app/writing/router.py`、新增聚焦测试 `backend/tests/test_if_match_limits.py` 及本记录；不覆盖原独立失败报告。
+- 保留严格双引号/正整数正则，提取数字后在 `int()` 前拒绝超过19位，使用现有 WritingError 422；19位以内仍核对 bigint 上限。不改全局整数转换限制、依赖、数据库结构、API契约或其他业务。
+- TDD：新增回归修复前退出1（8 failed、10 passed），失败为原始ValueError及六入口500；最小修复后退出0（18 passed）。六类入口验证缺头428、非法422、20/4300/4301/4500位及max+1拒绝，并逐次比对八表全部行，正文/revision/删除状态/关联数据不变；合法小版本和bigint最大值保持解析。
+- 指定三文件回归退出0（89 passed、12.91s）；完整 `pytest -q -p no:cacheprovider tests` 仅运行一次，退出0（873 passed、96.62s）。用户另行明确允许既有测试在seekjournal_test私有schema内做合成迁移验证；未独立运行prepare/迁移命令，未迁移public或个人库。
+- 本轮开始确认seekjournal_test实际S3、八表空、无其他会话，串行测试；个人库只读摘要。收尾摘要/原报告保护、修复diff及新57文件SHA256见 `.workbuddy/s3-t01-codex/if-match-fix/`；修复报告见 `.workbuddy/s3-t01-codex/if-match-fix-report.md`。
+- 状态：**最小修复与开发自测通过，待未参与修复的新Codex对话独立复测、待提交/整合及用户接受。** 本开发对话不能作为本次修复的独立测试者。停止修改，不进入T02、不调用其他Agent、无Git整合操作；Stage2历史未闭环状态保留，不宣布T01或Stage验收完成。

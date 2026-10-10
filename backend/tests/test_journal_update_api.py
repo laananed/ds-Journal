@@ -68,7 +68,7 @@ RESPONSE_FIELDS = {
     "created_at",
     "updated_at",
     "deleted_at",
-}
+"revision", "content_blocks"}
 
 # 只取固定列、按 id 排序的快照 SQL：绕开 identity map，直接读数据库列值。
 _SNAPSHOT_SQL = text(
@@ -197,7 +197,7 @@ def _seed_via_api(client: TestClient, **payload) -> dict:
 
 
 def _patch(client: TestClient, journal_id: object, **payload):
-    return client.patch(_patch_url(journal_id), json=payload)
+    return client.patch(_patch_url(journal_id), json={"expected_revision": 1, **payload})
 
 
 def _list_ids(client: TestClient, **params) -> list[int]:
@@ -484,7 +484,7 @@ def test_empty_patch_returns_the_current_record_without_writing(api):
     before = _row_of(session, journal.id)
     snapshot_before = _snapshot(session)
 
-    response = client.patch(_patch_url(journal.id), json={})
+    response = client.patch(_patch_url(journal.id), json={"expected_revision": 1, **{}})
 
     assert response.status_code == 200
     body = response.json()
@@ -523,7 +523,7 @@ def test_payload_without_update_fields_is_an_empty_update(api, payload):
     )
     before = _row_of(session, journal.id)
 
-    response = client.patch(_patch_url(journal.id), json=payload)
+    response = client.patch(_patch_url(journal.id), json={"expected_revision": 1, **payload})
 
     assert response.status_code == 200
     body = response.json()
@@ -589,7 +589,7 @@ def test_absent_id_empty_patch_returns_404(api):
     absent = _id_not_present(session)
     snapshot_before = _snapshot(session)
 
-    response = client.patch(_patch_url(absent), json={})
+    response = client.patch(_patch_url(absent), json={"expected_revision": 1, **{}})
 
     assert response.status_code == 404
     assert absent not in _existing_ids(session)
@@ -599,7 +599,7 @@ def test_absent_id_empty_patch_returns_404(api):
 def test_404_body_is_plain(api):
     client, session = api
 
-    body = client.patch(_patch_url(_id_not_present(session)), json={}).json()
+    body = client.patch(_patch_url(_id_not_present(session)), json={"expected_revision": 1, **{}}).json()
 
     assert set(body) == {"detail"}
     assert isinstance(body["detail"], str)
@@ -613,7 +613,7 @@ def test_zero_and_negative_ids_return_404(api, raw_id):
     candidate = int(raw_id)
     assert candidate not in _existing_ids(session)
 
-    assert client.patch(_patch_url(candidate), json={}).status_code == 404
+    assert client.patch(_patch_url(candidate), json={"expected_revision": 1, **{}}).status_code == 404
 
 
 @pytest.mark.parametrize(
@@ -666,7 +666,7 @@ def test_invalid_payload_returns_422_without_writing(api, payload):
     )
     before = _row_of(session, journal.id)
 
-    response = client.patch(_patch_url(journal.id), json=payload)
+    response = client.patch(_patch_url(journal.id), json={"expected_revision": 1, **payload})
 
     assert response.status_code == 422
     assert _row_of(session, journal.id) == before
@@ -687,7 +687,7 @@ def test_404_and_422_leave_the_data_untouched(api):
     count_before = _count_rows_in(session)
     assert len(snapshot_before) >= 1
 
-    assert client.patch(_patch_url(_id_not_present(session)), json={}).status_code == 404
+    assert client.patch(_patch_url(_id_not_present(session)), json={"expected_revision": 1, **{}}).status_code == 404
     assert _patch(client, journal.id, content=None).status_code == 422
     assert _patch(client, "abc", title="x").status_code == 422
     assert _patch(client, journal.id, journal_date="2026-02-30").status_code == 422
@@ -718,7 +718,7 @@ def test_write_failure_rolls_back_and_restores_the_row(api):
     before = _row_of(session, journal_id)
     assert before[2] == "必须保留的正文"
 
-    invalid = JournalUpdate.model_construct(content=None)
+    invalid = JournalUpdate.model_construct(content=None, expected_revision=1)
 
     with pytest.raises(IntegrityError):
         service.update_journal(session, journal_id, invalid)
@@ -830,7 +830,7 @@ def test_patch_does_not_commit_anything_to_the_database(api):
     created_id = created.json()["id"]
 
     assert _patch(client, created_id, title="临时改过的").status_code == 200
-    assert _patch(client, created_id, title=None).status_code == 200
+    assert _patch(client, created_id, title=None, expected_revision=2).status_code == 200
 
     # 独立连接仍然看不到这条记录，也没有任何新增
     assert _count_rows_independently() == committed_before

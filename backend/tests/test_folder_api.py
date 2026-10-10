@@ -279,7 +279,7 @@ class TestDeleteFolder:
         client, session = api
         folder = _create_folder(client, "先清收件")
         inbox = _add_inbox(session, folder_id=folder["id"])
-        delete_response = client.delete(f"/api/inboxes/{inbox.id}")
+        delete_response = client.delete(f"/api/inboxes/{inbox.id}", headers={"If-Match": '"1"'})
         assert delete_response.status_code == 204
         assert client.delete(f"/api/folders/{folder['id']}").status_code == 204
 
@@ -288,7 +288,7 @@ class TestDeleteFolder:
         folder = _create_folder(client, "移出后可删")
         journal = _add_journal(session, title=None, folder_id=folder["id"])
         patch = client.patch(
-            f"/api/journals/{journal.id}", json={"folder_id": None}
+            f"/api/journals/{journal.id}", json={"expected_revision": 1, **{"folder_id": None}}
         )
         assert patch.status_code == 200
         assert client.delete(f"/api/folders/{folder['id']}").status_code == 204
@@ -327,9 +327,10 @@ class TestFileServicesValidateFolder:
     def test_journal_patch_missing_folder_keeps_other_fields(self, api):
         client, session = api
         journal = _add_journal(session, title="原标题", content="原正文")
+        session.commit()
         response = client.patch(
             f"/api/journals/{journal.id}",
-            json={"content": "新正文", "folder_id": 999999},
+            json={"expected_revision": 1, **{"content": "新正文", "folder_id": 999999}},
         )
         assert response.status_code == 404
         detail = client.get(f"/api/journals/{journal.id}").json()
@@ -358,7 +359,7 @@ class TestFileServicesValidateFolder:
         inbox_id = created.json()["id"]
         response = client.patch(
             f"/api/inboxes/{inbox_id}",
-            json={"content": "新收件", "folder_id": 999999},
+            json={"expected_revision": 1, **{"content": "新收件", "folder_id": 999999}},
         )
         assert response.status_code == 404
         detail = client.get(f"/api/inboxes/{inbox_id}").json()
@@ -376,9 +377,10 @@ class TestFileServicesValidateFolder:
     def test_insight_patch_missing_folder_keeps_content(self, api):
         client, session = api
         insight = _add_insight(session)
+        session.commit()
         response = client.patch(
             f"/api/insights/{insight.id}",
-            json={"content": "新洞察", "folder_id": 999999},
+            json={"expected_revision": 1, **{"content": "新洞察", "folder_id": 999999}},
         )
         assert response.status_code == 404
         detail = client.get(f"/api/insights/{insight.id}").json()
@@ -398,7 +400,7 @@ class TestFileMoveTimestamps:
         journal = _add_journal(session, title=None)
         before = client.get(f"/api/journals/{journal.id}").json()
         response = client.patch(
-            f"/api/journals/{journal.id}", json={"folder_id": folder["id"]}
+            f"/api/journals/{journal.id}", json={"expected_revision": 1, **{"folder_id": folder["id"]}}
         )
         assert response.status_code == 200
         after = response.json()
@@ -410,7 +412,7 @@ class TestFileMoveTimestamps:
         client, session = api
         folder = _create_folder(client, "临时")
         journal = _add_journal(session, title=None, folder_id=folder["id"])
-        response = client.patch(f"/api/journals/{journal.id}", json={"folder_id": None})
+        response = client.patch(f"/api/journals/{journal.id}", json={"expected_revision": 1, **{"folder_id": None}})
         assert response.status_code == 200
         assert response.json()["folder_id"] is None
 
@@ -420,7 +422,7 @@ class TestFileMoveTimestamps:
         journal = _add_journal(session, title=None, folder_id=folder["id"])
         before = client.get(f"/api/journals/{journal.id}").json()
         response = client.patch(
-            f"/api/journals/{journal.id}", json={"folder_id": folder["id"]}
+            f"/api/journals/{journal.id}", json={"expected_revision": 1, **{"folder_id": folder["id"]}}
         )
         assert response.status_code == 200
         assert response.json()["updated_at"] == before["updated_at"]
@@ -433,7 +435,7 @@ class TestFileMoveTimestamps:
         session.add(inbox)
         session.flush()
         response = client.patch(
-            f"/api/inboxes/{inbox.id}", json={"folder_id": folder["id"]}
+            f"/api/inboxes/{inbox.id}", json={"expected_revision": 1, **{"folder_id": folder["id"]}}
         )
         assert response.status_code == 200
         after = response.json()
@@ -447,7 +449,7 @@ class TestFileMoveTimestamps:
         insight = _add_insight(session)
         before = client.get(f"/api/insights/{insight.id}").json()
         response = client.patch(
-            f"/api/insights/{insight.id}", json={"folder_id": folder["id"]}
+            f"/api/insights/{insight.id}", json={"expected_revision": 1, **{"folder_id": folder["id"]}}
         )
         assert response.status_code == 200
         assert response.json()["updated_at"] > before["updated_at"]

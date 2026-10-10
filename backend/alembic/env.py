@@ -1,3 +1,4 @@
+from app.ai import models as _ai_models  # noqa: F401
 """Alembic 迁移环境。
 
 连接配置不在 alembic.ini 里重复一份，

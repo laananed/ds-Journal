@@ -25,7 +25,7 @@ def test_create_inbox_defaults_title_to_client_business_date(api):
     response = create(client)
     assert response.status_code == 201
     body = response.json()
-    assert set(body) == {'type', 'id', 'title', 'display_title', 'content', 'inbox_date', 'is_daily', 'folder_id', 'created_at', 'updated_at', 'deleted_at'}
+    assert set(body) == {'type', 'id', 'title', 'display_title', 'content', 'inbox_date', 'is_daily', 'folder_id', 'created_at', 'updated_at', 'deleted_at', "revision", "content_blocks"}
     assert body['title'] == body['display_title'] == DAY
     assert body['type'] == 'inbox' and body['is_daily'] is False
     assert body['deleted_at'] is None
@@ -82,7 +82,7 @@ def test_empty_ignored_and_same_patch_do_not_write_or_change_time(api, changes):
         statements.append(statement.lstrip().split()[0].upper())
     event.listen(session.bind, 'before_cursor_execute', capture)
     try:
-        response = client.patch(f"/api/inboxes/{original['id']}", json=changes)
+        response = client.patch(f"/api/inboxes/{original['id']}", json={"expected_revision": 1, **changes})
         assert response.status_code == 200
         assert response.json() == original
         assert not {'INSERT', 'UPDATE', 'DELETE'} & set(statements)
@@ -95,7 +95,7 @@ def test_patch_title_clear_and_original_content_roundtrip(api, title):
     client, session = api
     original = create(client).json()
     changes = {'title': title, 'content': MARKDOWN + '\n  changed  '}
-    response = client.patch(f"/api/inboxes/{original['id']}", json=changes)
+    response = client.patch(f"/api/inboxes/{original['id']}", json={"expected_revision": 1, **changes})
     assert response.status_code == 200
     updated = response.json()
     assert updated['title'] == title
@@ -104,7 +104,7 @@ def test_patch_title_clear_and_original_content_roundtrip(api, title):
     assert updated['updated_at'] != original['updated_at']
     assert updated['created_at'] == original['created_at']
     assert updated['id'] == original['id']
-    assert client.get('/api/inboxes', params={'inbox_date': DAY}).json()['items'][0] == updated
+    assert client.get('/api/inboxes', params={'inbox_date': DAY}).json()['items'][0] == {k: v for k, v in updated.items() if k != 'content_blocks'}
 
 
 @pytest.mark.parametrize('changes', [{'title': '🐟' * 81}, {'content': None}, {'content': ' \n\t\u3000\ufeff'}, {'content': 'x' * 50001}], ids=lambda value: str(value) if isinstance(value, (bool, int)) or value is None else f"{type(value).__name__}-{len(value)}")
@@ -112,7 +112,7 @@ def test_invalid_patch_leaves_every_field_unchanged(api, changes):
     client, session = api
     original = create(client).json()
     before = snapshot(session, original['id'])
-    assert client.patch(f"/api/inboxes/{original['id']}", json=changes).status_code == 422
+    assert client.patch(f"/api/inboxes/{original['id']}", json={"expected_revision": 1, **changes}).status_code == 422
     assert snapshot(session, original['id']) == before
 
 
@@ -162,11 +162,11 @@ def test_folder_create_move_clear_and_missing_folder_are_atomic(api):
     assert original['folder_id'] == folder.id
     assert create(client, folder_id=10**9).status_code == 404
     before = snapshot(session, original['id'])
-    response = client.patch(f"/api/inboxes/{original['id']}", json={'folder_id': 10**9, 'content': 'should roll back'})
+    response = client.patch(f"/api/inboxes/{original['id']}", json={"expected_revision": 1, **{'folder_id': 10**9, 'content': 'should roll back'}})
     assert response.status_code == 404
     assert snapshot(session, original['id']) == before
     assert session.scalar(text('SELECT 1')) == 1
-    cleared = client.patch(f"/api/inboxes/{original['id']}", json={'folder_id': None}).json()
+    cleared = client.patch(f"/api/inboxes/{original['id']}", json={"expected_revision": 1, **{'folder_id': None}}).json()
     assert cleared['folder_id'] is None and cleared['updated_at'] != original['updated_at']
     assert client.get('/api/inboxes', params={'folder_id': folder.id}).json()['total'] == 0
 
@@ -185,13 +185,13 @@ def test_all_inbox_kinds_are_physically_deleted_and_then_404(api, is_daily, day)
     client, session = api
     original = create(client, inbox_date=day, is_daily=is_daily).json()
     sibling = create(client, inbox_date=day).json()
-    response = client.delete(f"/api/inboxes/{original['id']}")
+    response = client.delete(f"/api/inboxes/{original['id']}", headers={"If-Match": '"1"'})
     assert response.status_code == 204 and response.content == b''
     assert session.scalar(select(Inbox.id).where(Inbox.id == original['id'])) is None
     assert client.get(f"/api/inboxes/{sibling['id']}").status_code == 200
     assert client.get(f"/api/inboxes/{original['id']}").status_code == 404
-    assert client.patch(f"/api/inboxes/{original['id']}", json={}).status_code == 404
-    assert client.delete(f"/api/inboxes/{original['id']}").status_code == 404
+    assert client.patch(f"/api/inboxes/{original['id']}", json={"expected_revision": 1, **{}}).status_code == 404
+    assert client.delete(f"/api/inboxes/{original['id']}", headers={"If-Match": '"1"'}).status_code == 404
     if is_daily:
         assert client.get('/api/inboxes/daily', params={'inbox_date': day}).json() == {'state': 'missing', 'id': None, 'file': None}
         recreated = create(client, inbox_date=day, is_daily=True)
@@ -200,7 +200,7 @@ def test_all_inbox_kinds_are_physically_deleted_and_then_404(api, is_daily, day)
 
 def test_missing_ids_and_non_integer_paths(api):
     client, session = api
-    for method, kwargs in [(client.get, {}), (client.patch, {'json': {}}), (client.delete, {})]:
+    for method, kwargs in [(client.get, {}), (client.patch, {'json': {'expected_revision': 1}}), (client.delete, {'headers': {'If-Match': '"1"'}})]:
         assert method('/api/inboxes/1000000000', **kwargs).status_code == 404
         assert method('/api/inboxes/not-an-id', **kwargs).status_code == 422
 

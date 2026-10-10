@@ -214,6 +214,7 @@ def _mixed_file_statement(folder_id: int):
             literal(_TYPE_ORDER_JOURNAL).label("type_order"),
             literal("journal").label("type"),
             Journal.id.label("id"),
+            Journal.revision.label("revision"),
             Journal.title.label("title"),
             Journal.content.label("content"),
             Journal.folder_id.label("folder_id"),
@@ -236,6 +237,7 @@ def _mixed_file_statement(folder_id: int):
             literal(_TYPE_ORDER_INBOX).label("type_order"),
             literal("inbox").label("type"),
             Inbox.id.label("id"),
+            Inbox.revision.label("revision"),
             Inbox.title.label("title"),
             Inbox.content.label("content"),
             Inbox.folder_id.label("folder_id"),
@@ -254,6 +256,7 @@ def _mixed_file_statement(folder_id: int):
             literal(_TYPE_ORDER_INSIGHT).label("type_order"),
             literal("insight").label("type"),
             Insight.id.label("id"),
+            Insight.revision.label("revision"),
             Insight.title.label("title"),
             Insight.content.label("content"),
             Insight.folder_id.label("folder_id"),
@@ -284,6 +287,7 @@ def _row_to_response(row) -> FolderFileItem:
         return JournalResponse(
             type="journal",
             id=row.id,
+            revision=row.revision,
             title=row.title,
             display_title=build_display_title(
                 row.title, row.business_date, row.seq
@@ -299,6 +303,7 @@ def _row_to_response(row) -> FolderFileItem:
         return InboxResponse(
             type="inbox",
             id=row.id,
+            revision=row.revision,
             title=row.title,
             display_title=row.title or row.business_date.isoformat(),
             content=row.content,
@@ -311,6 +316,7 @@ def _row_to_response(row) -> FolderFileItem:
     return InsightResponse(
         type="insight",
         id=row.id,
+        revision=row.revision,
         title=row.title,
         display_title=build_insight_display_title(row.title),
         content=row.content,
