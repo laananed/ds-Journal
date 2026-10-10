@@ -18,7 +18,21 @@ from app.link.router import router as link_router
 from app.ai.router import files_router as ai_files_router
 from app.ai.router import router as ai_router
 
-app = FastAPI(title="SeekJournal API")
+from contextlib import asynccontextmanager
+from app.database import SessionLocal
+from app.ai.requests import recover_pending
+
+
+@asynccontextmanager
+async def lifespan(app):
+    # Runtime-only recovery in the explicitly configured database. Importing
+    # main never connects or writes. No background queue/timer is installed.
+    with SessionLocal() as db:
+        recover_pending(db, restart=True)
+    yield
+
+
+app = FastAPI(title="SeekJournal API", lifespan=lifespan)
 
 # 本地开发时，前端由 Vite 在 5173 端口提供，与后端 8000 端口属于不同来源，
 # 需要 CORS 才允许浏览器读取响应，并发起写请求。这里只放开本机的两个开发来源：
@@ -46,8 +60,7 @@ app.include_router(folder_router)
 app.include_router(trash_router)
 app.include_router(search_router)
 app.include_router(link_router)
-# S3-T03 adds the AI settings/metering router and the per-file call listing.
-# Model generation routes belong to S3-T05/S3-T06 and are not registered here.
+# AI settings/metering and T05 local generation/recovery; no search/review yet.
 app.include_router(ai_router)
 app.include_router(ai_files_router)
 

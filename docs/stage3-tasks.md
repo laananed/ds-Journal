@@ -234,3 +234,13 @@ Get-ChildItem .\src\utils -Filter *.test.ts | ForEach-Object { node --experiment
 - 指定三文件回归退出0（89 passed、12.91s）；完整 `pytest -q -p no:cacheprovider tests` 仅运行一次，退出0（873 passed、96.62s）。用户另行明确允许既有测试在seekjournal_test私有schema内做合成迁移验证；未独立运行prepare/迁移命令，未迁移public或个人库。
 - 本轮开始确认seekjournal_test实际S3、八表空、无其他会话，串行测试；个人库只读摘要。收尾摘要/原报告保护、修复diff及新57文件SHA256见 `.workbuddy/s3-t01-codex/if-match-fix/`；修复报告见 `.workbuddy/s3-t01-codex/if-match-fix-report.md`。
 - 状态：**最小修复与开发自测通过，待未参与修复的新Codex对话独立复测、待提交/整合及用户接受。** 本开发对话不能作为本次修复的独立测试者。停止修改，不进入T02、不调用其他Agent、无Git整合操作；Stage2历史未闭环状态保留，不宣布T01或Stage验收完成。
+
+
+### S3-T05 开发自测交付（2026-10-11，Codex）
+
+- 用户明确授权 T05 与 Work-01 的 T04 并行；本轮只执行 T05，无其他 Agent 调用。用户确认实际干净起始基线 `codex/s03-t05` / `faf4c14ebad9422719ff7a96cd197326b5877c3e`（相较提示词旧基线仅清理 T03 临时调试测试）；T02/T03 通过并整合依据本轮用户确认，未重新宣布历史或 Stage 验收完成。
+- 实现 POST `/api/ai/local`、GET `/api/ai/requests/{request_id}`、user-only Unicode 增量/修订与有限问题上下文、同键恢复/源 pending 排他、独立计量事务与正文/C 原子附着、运行期过期/重启 unknown、迟到结果保护和基础提示词。T03 client 仅补无效 completion 的已知 usage 元数据；无前端、迁移、依赖、真实 .env 或未来 T06/T07/T08 实施。
+- 开发自测：专项 34 passed、T03/blocks 聚焦回归 98 passed、后端全量 1001 passed，三个指定命令退出 0。真实 8033 TCP HTTP/DB + Mock 主轮与主动断线补充轮退出 0；上游等待时另一 Session 源写约 0.016s 提交，冲突/失败不推进 C。全量迁移测试只走已有私有 schema 守卫。
+- 已记录产品反例、脚本错误和资源变化。资源竞争期间暂停并向用户协调；一次未通过连接守卫却误执行证据脚本的门禁疏漏单独保留，不将污染轮作为通过。重新验证独占后成功轮恢复八表零基线，仅清自建对象；最终 revision=3aa16300a58a、其他连接=0、8033关闭、无私有测试 schema。已发布“已释放seekjournal_test”，发布后不再连库测试。
+- 待测状态为未提交 diff/新文件，未 commit/merge/push/tag、切分支或整合 T04。开发者已停止产品写入，交 WorkBuddy 未参与实现的新对话独立测试，六项风险仍待独立复核、Git整合与用户接受。真实模型连通性/风格、联网、前端集成未验证；Task/Stage 不宣告验收完成。
+- 脱敏证据与文件 SHA256：`.workbuddy/s3-t05/development-report.md`、`handoff.md`、`file-sha256.json`、命令/退出码、实际 HTTP/DB/Mock 消息、状态及释放记录。核心学习点为用户文本检查点、不可回滚付费与正文事务边界、幂等/unknown 查询恢复。

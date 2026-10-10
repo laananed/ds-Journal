@@ -401,4 +401,13 @@ def invoke(
         # original text is not reused: it can carry local paths or proxy detail.
         raise UpstreamUnavailable("model endpoint is unreachable") from error
     _raise_for_status(response)
-    return parse_completion(_decode_body(response))
+    payload = _decode_body(response)
+    try:
+        return parse_completion(payload)
+    except UpstreamResponseError as error:
+        # T05 must retain already spent metering even when answer validation
+        # fails. Only these safe fields escape; never attach the provider body.
+        error.usage = parse_usage(payload)
+        response_id = payload.get("id")
+        error.response_id = response_id if isinstance(response_id, str) else None
+        raise
