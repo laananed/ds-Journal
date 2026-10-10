@@ -27,4 +27,10 @@ check(render('<script>alert(1)</script>').includes('&lt;script&gt;'), 'HTML stil
 check(active(render('<span>[[HTML]]</span> [[正常]]')) === 1, 'skip inline HTML but resume outside')
 check(active(render('\\[\\[同名\\]\\] [[同名]]')) === 1, 'escaped and active identical titles stay distinct')
 check(active(render('ordinary \\* text [[正常]]')) === 1, 'other escapes do not disable a valid link')
+// S2-F01 回归保护：内部链接必须是按钮而不是 <a>，普通非空链接仍是锚点。
+const buttonHtml = render('[[标题]]')
+check(buttonHtml.includes('<button') && buttonHtml.includes('class="internal-link"'), 'internal link keeps its button form')
+check(!buttonHtml.includes('<a'), 'internal link never degrades into an anchor')
+const anchorHtml = render('[safe](https://example.com)')
+check((anchorHtml.match(/<a /g) ?? []).length === 1 && anchorHtml.includes('href="https://example.com"'), 'ordinary non-empty links stay anchors')
 console.log(`internalLinks: ${passed} passed`)

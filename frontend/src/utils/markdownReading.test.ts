@@ -69,24 +69,39 @@ check(!rawHtml.includes('<b>'), `b element from raw HTML must not be created: ${
 check(rawHtml.includes('&lt;script&gt;alert(1)&lt;/script&gt;'), `raw HTML must appear escaped: ${rawHtml}`)
 check(!/<[a-z][^>]*\sonerror=/i.test(rawHtml), `no real tag may carry onerror: ${rawHtml}`)
 
-// F. 危险协议不可执行；普通链接与相对链接保留
+// F. 危险协议与空目标（S2-F01）：只显示文字，不生成可导航锚点——
+//    defaultUrlTransform 把危险协议转成空串后，旧实现仍输出 <a href="">，
+//    点击会重载应用、丢失导航状态；现在空 href 一律渲染为纯文字。
 const unsafeLinks = render(
-  '[点我](javascript:alert(1))\n\n[数据](data:text/html;base64,PHNjcmlwdD4=)\n\n[旧式](vbscript:msgbox)\n',
+  '[点我](javascript:alert(1))\n\n[数据](data:text/html;base64,PHNjcmlwdD4=)\n\n[旧式](vbscript:msgbox)\n\n[大小写](JaVaScRiPt:alert(1))\n',
 )
 check(
   !/href="(?:javascript|data|vbscript):/i.test(unsafeLinks),
   `dangerous protocols must not survive in href: ${unsafeLinks}`,
 )
+check(!unsafeLinks.includes('<a'), `dangerous links must not render as anchors: ${unsafeLinks}`)
+check(!unsafeLinks.includes('href=""'), `no empty href may remain: ${unsafeLinks}`)
 check(
-  (unsafeLinks.match(/href=""/g) ?? []).length === 3,
-  `all three dangerous links must end up with an empty href: ${unsafeLinks}`,
+  unsafeLinks.includes('点我') && unsafeLinks.includes('数据') && unsafeLinks.includes('旧式') && unsafeLinks.includes('大小写'),
+  `dangerous link text must still display: ${unsafeLinks}`,
 )
+const emptyTarget = render('[空目标]()\n')
+check(!emptyTarget.includes('<a'), `empty-target link must not render as an anchor: ${emptyTarget}`)
+check(emptyTarget.includes('空目标'), `empty-target text must still display: ${emptyTarget}`)
+const mixed = render('[坏](javascript:alert(1)) 和 [好](https://example.com)\n')
+check((mixed.match(/<a /g) ?? []).length === 1, `only the legal link may stay an anchor: ${mixed}`)
+check(mixed.includes('href="https://example.com"'), `legal link must keep its href: ${mixed}`)
 const safeLinks = render(
   '[开放](https://example.com/a?b=1)\n\n[邮件](mailto:someone@example.com)\n\n[相对](/local/path)\n',
 )
 check(safeLinks.includes('href="https://example.com/a?b=1"'), `https href must be kept: ${safeLinks}`)
 check(safeLinks.includes('href="mailto:someone@example.com"'), `mailto href must be kept: ${safeLinks}`)
 check(safeLinks.includes('href="/local/path"'), `relative href must be kept: ${safeLinks}`)
+// F2. 内部链接保持 T13 按钮行为：S2-F01 只针对普通锚点，不得影响内部链接。
+const internal = render('[[标题]]\n')
+check(internal.includes('<button'), `internal link must stay a button: ${internal}`)
+check(internal.includes('class="internal-link"'), `internal link button class kept: ${internal}`)
+check(!internal.includes('<a'), `internal link must not render an anchor: ${internal}`)
 // 文本中的特殊字符仍由 React 转义（说明渲染器没有绕过 React 输出原始 HTML）
 check(render('a & b < c\n').includes('a &amp; b &lt; c'), 'text must be escaped by React')
 
