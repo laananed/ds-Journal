@@ -31,8 +31,9 @@ import { nearestValidPage } from '../utils/pagination'
 interface InsightPageProps {
   onDirtyChange: (dirty: boolean) => void
   onBusyChange: (busy: boolean) => void
+  onResolveLink: (title: string) => void
   onNavigate: (action: () => void) => void
-  /** 其他模块（Folder 混合卡片）请求打开某条 Insight；仅在挂载时生效一次。 */
+  /** 其他模块（Folder 混合卡片）请求打开某条 Insight；同模块后续请求也消费。 */
   initialOpen?: { id: number; key: number } | null
   onOpenRequestConsumed?: () => void
 }
@@ -66,6 +67,7 @@ interface InsightPanelProps {
   panel: InsightPanelShape
   onDirtyChange: (dirty: boolean) => void
   onBusyChange: (busy: boolean) => void
+  onResolveLink: (title: string) => void
   onNavigate: (action: () => void) => void
   onCreated: (insight: Insight) => void
   onChanged: (insight: Insight) => void
@@ -74,7 +76,7 @@ interface InsightPanelProps {
 }
 
 function InsightPanel({
-  panel, onDirtyChange, onBusyChange, onNavigate, onCreated, onChanged, onDeleted, onClose,
+  panel, onDirtyChange, onBusyChange, onResolveLink, onNavigate, onCreated, onChanged, onDeleted, onClose,
 }: InsightPanelProps) {
   const isCreate = panel.kind === 'create'
   const insightId = panel.kind === 'detail' ? panel.id : null
@@ -296,7 +298,7 @@ function InsightPanel({
             <div className="detail-meta-row"><dt>创建时间</dt><dd>{formatServerTimestamp(file.created_at)}</dd></div>
             <div className="detail-meta-row"><dt>修改时间</dt><dd>{formatServerTimestamp(file.updated_at)}</dd></div>
           </dl>
-          <MarkdownContent source={file.content} />
+          <MarkdownContent source={file.content} onLink={onResolveLink} disabled={busy} />
           {saveStatus === 'saved' && <p className="detail-success" role="status">已保存。</p>}
           <div className="detail-actions">
             <button type="button" onClick={startEditing} disabled={busy}>修改</button>
@@ -343,13 +345,14 @@ function InsightPanel({
   )
 }
 
-function InsightPage({ onDirtyChange, onBusyChange, onNavigate, initialOpen = null, onOpenRequestConsumed }: InsightPageProps) {
-  // Folder 混合卡片的打开请求只在挂载时消费一次：初始即进入详情面板。
+function InsightPage({ onDirtyChange, onBusyChange, onResolveLink, onNavigate, initialOpen = null, onOpenRequestConsumed }: InsightPageProps) {
+  // 初始外部请求直接进入详情；后续同模块链接由下面的 effect 消费。
   const [panel, setPanel] = useState<InsightPanelShape | { kind: 'list' }>(
     initialOpen ? { kind: 'detail', id: initialOpen.id, key: initialOpen.key } : { kind: 'list' },
   )
   // 从外部初始打开的序号继续递增，避免首次模块内切换复用旧 Panel。
   const keyRef = useRef(initialOpen?.key ?? 0)
+  const consumedOpenKey = useRef(initialOpen?.key)
   function nextKey() {
     keyRef.current += 1
     return keyRef.current
@@ -374,6 +377,11 @@ function InsightPage({ onDirtyChange, onBusyChange, onNavigate, initialOpen = nu
   // 打开请求已消费：通知 App 清空，避免下次挂载重复打开同一条记录。
   useEffect(() => {
     if (initialOpen === null) return
+    if (consumedOpenKey.current !== initialOpen.key) {
+      consumedOpenKey.current = initialOpen.key
+      keyRef.current = Math.max(keyRef.current, initialOpen.key) + 1
+      setPanel({ kind: 'detail', id: initialOpen.id, key: keyRef.current })
+    }
     onOpenRequestConsumed?.()
   }, [initialOpen, onOpenRequestConsumed])
 
@@ -465,13 +473,13 @@ function InsightPage({ onDirtyChange, onBusyChange, onNavigate, initialOpen = nu
 
       {panel.kind === 'create' && (
         <InsightPanel key={`create-${panel.key}`} panel={panel}
-          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onNavigate={onNavigate}
+          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onNavigate={onNavigate} onResolveLink={onResolveLink}
           onCreated={handleCreated} onChanged={handleChanged} onDeleted={handleDeleted}
           onClose={() => onNavigate(showList)} />
       )}
       {panel.kind === 'detail' && (
         <InsightPanel key={`detail-${panel.key}`} panel={panel}
-          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onNavigate={onNavigate}
+          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onNavigate={onNavigate} onResolveLink={onResolveLink}
           onCreated={handleCreated} onChanged={handleChanged} onDeleted={handleDeleted}
           onClose={() => onNavigate(showList)} />
       )}

@@ -3,6 +3,8 @@ import { buildMarkdownReadingElement } from '../utils/markdownReading'
 interface MarkdownContentProps {
   /** 数据库里的原始 Markdown 源码。只读展现，绝不写回。 */
   source: string
+  onLink?: (title: string) => void
+  disabled?: boolean
 }
 
 /**
@@ -15,10 +17,10 @@ interface MarkdownContentProps {
  * - 渲染配置全部在 `utils/markdownReading.ts`（无 JSX，便于用既有 node 测试机制断言）；
  * - 外层保留 `detail-content` 原有的卡片样式，另加 `markdown-body` 阅读排版。
  */
-function MarkdownContent({ source }: MarkdownContentProps) {
+function MarkdownContent({ source, onLink, disabled }: MarkdownContentProps) {
   return (
     <div className="detail-content markdown-body">
-      {buildMarkdownReadingElement(source)}
+      {buildMarkdownReadingElement(source, onLink, disabled)}
     </div>
   )
 }

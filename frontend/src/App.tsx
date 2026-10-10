@@ -5,6 +5,7 @@ import JournalDetail from './components/JournalDetail'
 import JournalEditor from './components/JournalEditor'
 import JournalList from './components/JournalList'
 import Pagination from './components/Pagination'
+import LinkCandidates from './components/LinkCandidates'
 import FolderPage from './pages/FolderPage'
 import InboxPage from './pages/InboxPage'
 import InsightPage from './pages/InsightPage'
@@ -40,6 +41,8 @@ function App() {
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
   const confirmDialog = useRef<HTMLDialogElement>(null)
   const [notice, setNotice] = useState('')
+  const [linkRequest, setLinkRequest] = useState<{ title: string; key: number } | null>(null)
+  const linkKey = useRef(0)
   const [searchConditions, setSearchConditions] = useState<SearchConditions>({ q: '', type: 'all', page: 1 })
   // Folder 混合卡片的一次性打开请求：交给对应模块消费后清空。
   const [crossOpen, setCrossOpen] = useState<{ file: FileIdentity; key: number } | null>(null)
@@ -82,11 +85,18 @@ function App() {
   /** 每个离开出口只提交动作；真正导航前在这里统一检查。 */
   function navigate(action: () => void) {
     if (busyRef.current) return
+    const run = () => {
+      setLinkRequest(null)
+      action()
+    }
     if (dirtyRef.current) {
-      setPendingNavigation(() => action)
+      setPendingNavigation(() => run)
       return
     }
-    action()
+    run()
+  }
+  function resolveLink(title: string) {
+    navigate(() => setLinkRequest({ title, key: ++linkKey.current }))
   }
   function confirmLeave() {
     const action = pendingNavigation
@@ -160,7 +170,7 @@ function App() {
       const nextKey = editorKey + 1
       setEditorKey(nextKey)
       if (file.type === 'journal') {
-        beginLoading()
+        if (module !== 'journal') beginLoading()
         setModule('journal')
         setPanel({ kind: 'detail', file, key: nextKey })
         return
@@ -188,7 +198,7 @@ function App() {
           onNavigate={navigate} onOpenFile={openFile} />
       )}
       {module === 'trash' && (
-        <TrashPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate} />
+        <TrashPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate} onResolveLink={resolveLink} />
       )}
       {module === 'folder' && (
         <FolderPage onDirtyChange={setDirty} onBusyChange={setWriting}
@@ -196,11 +206,13 @@ function App() {
       )}
       {module === 'inbox' && (
         <InboxPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate}
+          onResolveLink={resolveLink}
           initialOpen={crossOpen?.file.type === 'inbox' ? { id: crossOpen.file.id, key: crossOpen.key } : null}
           onOpenRequestConsumed={consumeCrossOpen} />
       )}
       {module === 'insight' && (
         <InsightPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate}
+          onResolveLink={resolveLink}
           initialOpen={crossOpen?.file.type === 'insight' ? { id: crossOpen.file.id, key: crossOpen.key } : null}
           onOpenRequestConsumed={consumeCrossOpen} />
       )}
@@ -224,6 +236,7 @@ function App() {
           )}
           {panel.kind === 'detail' && (
             <JournalDetail key={`${panel.file.type}:${panel.file.id}:${panel.key}`} journalId={panel.file.id}
+              onResolveLink={resolveLink}
               onBusyChange={setWriting} onDirtyChange={setDirty} onNavigate={navigate}
               onClose={() => navigate(showList)} onDataChanged={refreshData}
               onDeleted={() => {
@@ -253,6 +266,10 @@ function App() {
           </section>
         </>
       )}
+
+      {linkRequest && <LinkCandidates key={linkRequest.key} title={linkRequest.title} disabled={busy}
+        onOpen={openFile}
+        onClose={() => setLinkRequest(null)} />}
 
       <dialog ref={confirmDialog} className="leave-dialog" aria-labelledby="leave-title"
         onCancel={(event) => { event.preventDefault(); setPendingNavigation(null) }}>

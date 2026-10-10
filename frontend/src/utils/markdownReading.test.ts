@@ -93,7 +93,7 @@ check(render('a & b < c\n').includes('a &amp; b &lt; c'), 'text must be escaped 
 // G. 结构保证：元素树里不存在 dangerouslySetInnerHTML；只启用获批的一个插件
 const element = buildMarkdownReadingElement('# 标题\n')
 check(!JSON.stringify(element).includes('dangerouslySetInnerHTML'), 'element tree must not use dangerouslySetInnerHTML')
-check(markdownReadingRemarkPlugins.length === 1, 'only the approved remark-gfm plugin may be enabled')
+check(markdownReadingRemarkPlugins.length === 2, 'remark-gfm and the local internal-link transform are enabled')
 
 // H. 纯空白 / 空源码不抛错、不产生元素
 check(render('   \n\n  \n').replace(/\s/g, '') === '', 'whitespace-only source must render no elements')

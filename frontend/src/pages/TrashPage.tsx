@@ -22,6 +22,7 @@ import {
 interface TrashPageProps {
   onDirtyChange: (dirty: boolean) => void
   onBusyChange: (busy: boolean) => void
+  onResolveLink: (title: string) => void
   onNavigate: (action: () => void) => void
 }
 
@@ -46,12 +47,13 @@ function emptyMessage(filter: TrashFilter): string {
  * - 404 表示目标已被其他操作恢复或删除，不谎报本次动作成功；
  * - 永久删除取消/关闭确认框时不发任何请求。
  */
-function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, onTargetGone }: {
+function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, onTargetGone, onResolveLink }: {
   trashType: TrashType
   trashId: number
   onBusyChange: (busy: boolean) => void
   onClose: () => void
   onActionDone: (action: TrashAction, item: TrashItem) => void
+  onResolveLink: (title: string) => void
   onTargetGone: () => void
 }) {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
@@ -181,7 +183,7 @@ function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, 
             <div className="detail-meta-row"><dt>修改时间</dt><dd>{formatServerTimestamp(item.updated_at)}</dd></div>
             <div className="detail-meta-row"><dt>移入回收箱时间</dt><dd>{formatServerTimestamp(item.deleted_at ?? '')}</dd></div>
           </dl>
-          <MarkdownContent source={item.content} />
+          <MarkdownContent source={item.content} onLink={onResolveLink} disabled={busy} />
           <p className="detail-hint">回收箱中的记录只读，不能编辑或修改 Folder；恢复后回到原来的位置。</p>
           <div className="detail-actions">
             <button type="button" onClick={confirmRestore} disabled={busy}>
@@ -219,7 +221,7 @@ function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, 
  * - 卡片按 (type, id) 打开真实详情；恢复/永久删除成功后刷新列表；
  * - 写成功与列表刷新失败分开反馈；写入中禁止切换与重复动作。
  */
-function TrashPage({ onDirtyChange, onBusyChange, onNavigate }: TrashPageProps) {
+function TrashPage({ onDirtyChange, onBusyChange, onNavigate, onResolveLink }: TrashPageProps) {
   const [filter, setFilter] = useState<TrashFilter>('all')
   const [page, setPage] = useState(1)
   const [listResult, setListResult] = useState<TrashPageData | null>(null)
@@ -325,7 +327,7 @@ function TrashPage({ onDirtyChange, onBusyChange, onNavigate }: TrashPageProps) 
       {notice && <p className="detail-success" role="status">{notice}</p>}
 
       {panel.kind === 'detail' && (
-        <TrashDetail key={`${panel.type}:${panel.id}:${panel.key}`}
+        <TrashDetail onResolveLink={onResolveLink} key={`${panel.type}:${panel.id}:${panel.key}`}
           trashType={panel.type} trashId={panel.id}
           onBusyChange={onBusyChange}
           onClose={() => onNavigate(() => { setNotice(''); showList() })}

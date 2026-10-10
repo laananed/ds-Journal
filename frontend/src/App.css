@@ -122,3 +122,17 @@
   .inbox-page, .insight-page { gap: 12px; }
   .folder-list, .folder-content { padding: 12px; }
 }
+.internal-link {
+  color: #245fa6;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.internal-link:disabled { cursor: default; opacity: .6; }
+.link-candidates { margin: 1rem 0; padding: 1rem; border: 1px solid #bcc9da; border-radius: .5rem; }
+.link-candidates li { margin: .5rem 0; }
+.link-candidates li button { text-align: left; overflow-wrap: anywhere; max-width: 100%; }

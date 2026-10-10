@@ -15,11 +15,12 @@ interface JournalDetailProps {
   onClose: () => void
   onDataChanged: () => void
   onDeleted: () => void
+  onResolveLink: (title: string) => void
 }
 function toDraft(journal: Journal): JournalEditDraft {
   return { title: journal.title ?? '', content: journal.content, journal_date: journal.journal_date, folder_id: journal.folder_id }
 }
-function JournalDetail({ journalId, onBusyChange, onDirtyChange, onNavigate, onClose, onDataChanged, onDeleted }: JournalDetailProps) {
+function JournalDetail({ journalId, onBusyChange, onDirtyChange, onNavigate, onClose, onDataChanged, onDeleted, onResolveLink }: JournalDetailProps) {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [detail, setDetail] = useState<Journal | null>(null)
   const [notFound, setNotFound] = useState(false)
@@ -164,7 +165,7 @@ function JournalDetail({ journalId, onBusyChange, onDirtyChange, onNavigate, onC
             <div className="detail-meta-row"><dt>创建时间</dt><dd>{formatServerTimestamp(detail.created_at)}</dd></div>
             <div className="detail-meta-row"><dt>修改时间</dt><dd>{formatServerTimestamp(detail.updated_at)}</dd></div>
           </dl>
-          <MarkdownContent source={detail.content} />
+          <MarkdownContent source={detail.content} onLink={onResolveLink} disabled={busy} />
           {saveStatus === 'saved' && <p className="detail-success" role="status">已保存。</p>}
           <div className="detail-actions">
             <button type="button" onClick={startEditing} disabled={busy}>修改</button>

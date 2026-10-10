@@ -34,8 +34,9 @@ import { nearestValidPage } from '../utils/pagination'
 interface InboxPageProps {
   onDirtyChange: (dirty: boolean) => void
   onBusyChange: (busy: boolean) => void
+  onResolveLink: (title: string) => void
   onNavigate: (action: () => void) => void
-  /** 其他模块（Folder 混合卡片）请求打开某条 Inbox；仅在挂载时生效一次。 */
+  /** Folder/Search/内部链接请求打开真实 Inbox；也支持同模块的新请求。 */
   initialOpen?: { id: number; key: number } | null
   onOpenRequestConsumed?: () => void
 }
@@ -74,6 +75,7 @@ interface InboxPanelProps {
   panel: InboxPanelShape
   onDirtyChange: (dirty: boolean) => void
   onBusyChange: (busy: boolean) => void
+  onResolveLink: (title: string) => void
   onNavigate: (action: () => void) => void
   onCreated: (inbox: Inbox) => void
   onChanged: (inbox: Inbox) => void
@@ -83,7 +85,7 @@ interface InboxPanelProps {
 }
 
 function InboxPanel({
-  panel, onDirtyChange, onBusyChange, onNavigate, onCreated, onChanged, onDeleted, onClose, onOpenRecord,
+  panel, onDirtyChange, onBusyChange, onResolveLink, onNavigate, onCreated, onChanged, onDeleted, onClose, onOpenRecord,
 }: InboxPanelProps) {
   const isCreate = panel.kind === 'create'
   const inboxId = panel.kind === 'detail' ? panel.id : null
@@ -347,7 +349,7 @@ function InboxPanel({
             <div className="detail-meta-row"><dt>创建时间</dt><dd>{formatServerTimestamp(file.created_at)}</dd></div>
             <div className="detail-meta-row"><dt>修改时间</dt><dd>{formatServerTimestamp(file.updated_at)}</dd></div>
           </dl>
-          <MarkdownContent source={file.content} />
+          <MarkdownContent source={file.content} onLink={onResolveLink} disabled={busy} />
           {saveStatus === 'saved' && <p className="detail-success" role="status">已保存。</p>}
           <div className="detail-actions">
             <button type="button" onClick={startEditing} disabled={busy}>修改</button>
@@ -396,13 +398,14 @@ function InboxPanel({
   )
 }
 
-function InboxPage({ onDirtyChange, onBusyChange, onNavigate, initialOpen = null, onOpenRequestConsumed }: InboxPageProps) {
-  // Folder 混合卡片的打开请求只在挂载时消费一次：初始即进入详情面板。
+function InboxPage({ onDirtyChange, onBusyChange, onResolveLink, onNavigate, initialOpen = null, onOpenRequestConsumed }: InboxPageProps) {
+  // 初始外部请求直接进入详情；后续同模块链接由下面的 effect 消费。
   const [panel, setPanel] = useState<InboxPanelShape | { kind: 'list' }>(
     initialOpen ? { kind: 'detail', id: initialOpen.id, key: initialOpen.key } : { kind: 'list' },
   )
   // 从外部初始打开的序号继续递增，避免首次模块内切换复用旧 Panel。
   const keyRef = useRef(initialOpen?.key ?? 0)
+  const consumedOpenKey = useRef(initialOpen?.key)
   function nextKey() {
     keyRef.current += 1
     return keyRef.current
@@ -426,6 +429,11 @@ function InboxPage({ onDirtyChange, onBusyChange, onNavigate, initialOpen = null
   // 打开请求已消费：通知 App 清空，避免下次挂载重复打开同一条记录。
   useEffect(() => {
     if (initialOpen === null) return
+    if (consumedOpenKey.current !== initialOpen.key) {
+      consumedOpenKey.current = initialOpen.key
+      keyRef.current = Math.max(keyRef.current, initialOpen.key) + 1
+      setPanel({ kind: 'detail', id: initialOpen.id, key: keyRef.current })
+    }
     onOpenRequestConsumed?.()
   }, [initialOpen, onOpenRequestConsumed])
 
@@ -589,13 +597,13 @@ function InboxPage({ onDirtyChange, onBusyChange, onNavigate, initialOpen = null
 
       {panel.kind === 'create' && (
         <InboxPanel key={`create-${panel.key}`} panel={panel}
-          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onNavigate={onNavigate}
+          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onNavigate={onNavigate} onResolveLink={onResolveLink}
           onCreated={handleCreated} onChanged={handleChanged} onDeleted={handleDeleted}
           onClose={() => onNavigate(showList)} onOpenRecord={openInbox} />
       )}
       {panel.kind === 'detail' && (
         <InboxPanel key={`detail-${panel.key}`} panel={panel}
-          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onNavigate={onNavigate}
+          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onNavigate={onNavigate} onResolveLink={onResolveLink}
           onCreated={handleCreated} onChanged={handleChanged} onDeleted={handleDeleted}
           onClose={() => onNavigate(showList)} onOpenRecord={openInbox} />
       )}
