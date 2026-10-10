@@ -74,10 +74,11 @@ export async function getTrashItem(
   return await response.json() as TrashItem
 }
 
-/** 恢复：200 返回恢复后的完整有效文件（原 ID / 日期 / Folder 关系保留）。 */
-export async function restoreTrashItem(type: TrashType, id: number): Promise<TrashItem> {
+/** 恢复：200 返回恢复后的完整有效文件（原 ID / 日期 / Folder 关系保留）。Stage 3 起必须携带 If-Match。 */
+export async function restoreTrashItem(type: TrashType, id: number, expectedRevision: number): Promise<TrashItem> {
   const response = await fetch(`${getApiBaseUrl()}/api/trash/${type}/${id}/restore`, {
     method: 'POST',
+    headers: { 'If-Match': `"${expectedRevision}"` },
   })
   if (!response.ok) {
     throw new TrashApiError(response.status, await readErrorMessage(response))
@@ -85,9 +86,12 @@ export async function restoreTrashItem(type: TrashType, id: number): Promise<Tra
   return await response.json() as TrashItem
 }
 
-/** 永久删除：204 空体，不能解析 JSON；404 = 记录已不在回收箱。 */
-export async function purgeTrashItem(type: TrashType, id: number): Promise<void> {
-  const response = await fetch(`${getApiBaseUrl()}/api/trash/${type}/${id}`, { method: 'DELETE' })
+/** 永久删除：204 空体，不能解析 JSON；404 = 记录已不在回收箱。Stage 3 起必须携带 If-Match。 */
+export async function purgeTrashItem(type: TrashType, id: number, expectedRevision: number): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/api/trash/${type}/${id}`, {
+    method: 'DELETE',
+    headers: { 'If-Match': `"${expectedRevision}"` },
+  })
   if (!response.ok) {
     throw new TrashApiError(response.status, await readErrorMessage(response))
   }

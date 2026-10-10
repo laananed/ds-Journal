@@ -41,6 +41,7 @@ function insight(overrides: Partial<Insight> = {}): Insight {
     title: '原始标题',
     display_title: '原始标题',
     content: '原始正文',
+    revision: 1,
     folder_id: null,
     created_at: '2026-10-08T09:33:15.123456Z',
     updated_at: '2026-10-08T09:33:15.123456Z',

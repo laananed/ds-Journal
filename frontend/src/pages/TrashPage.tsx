@@ -100,18 +100,23 @@ function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, 
 
 
   async function confirmRestore() {
-    if (writing.current) return
+    if (writing.current || item === null) return
     writing.current = true
     onBusyChange(true)
     setRestoreStage('restoring')
     setWriteError('')
     try {
-      const restored = await restoreTrashItem(trashType, trashId)
+      // Stage 3 / T01 契约：恢复必须携带当前版本，缺版本 428、旧版本 409。
+      const restored = await restoreTrashItem(trashType, trashId, item.revision)
       onActionDone('restore', restored)
     } catch (error: unknown) {
       setRestoreStage('idle')
       if (error instanceof TrashApiError && error.status === 404) {
         handleGone()
+      } else if (error instanceof TrashApiError && error.status === 409) {
+        // 版本已变化：不覆盖，重新读取最新状态由用户再确认。
+        setWriteError('这条记录已在别处发生变化，已重新读取，请再确认一次。')
+        setReloadToken((value) => value + 1)
       } else {
         setWriteError(error instanceof Error ? error.message : '恢复失败，请稍后重试')
       }
@@ -122,18 +127,22 @@ function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, 
   }
 
   async function confirmPurge() {
-    if (writing.current) return
+    if (writing.current || item === null) return
     writing.current = true
     onBusyChange(true)
     setPurgeStage('deleting')
     setWriteError('')
     try {
-      await purgeTrashItem(trashType, trashId)
-      onActionDone('purge', item as TrashItem)
+      // Stage 3 / T01 契约：永久删除同样必须携带当前版本。
+      await purgeTrashItem(trashType, trashId, item.revision)
+      onActionDone('purge', item)
     } catch (error: unknown) {
       setPurgeStage('idle')
       if (error instanceof TrashApiError && error.status === 404) {
         handleGone()
+      } else if (error instanceof TrashApiError && error.status === 409) {
+        setWriteError('这条记录已在别处发生变化，已重新读取，请再确认一次。')
+        setReloadToken((value) => value + 1)
       } else {
         setWriteError(error instanceof Error ? error.message : '永久删除失败，请稍后重试')
       }

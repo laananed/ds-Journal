@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   InboxApiError,
   createInbox,
@@ -12,23 +12,20 @@ import FileCard from '../components/FileCard'
 import FolderSelect from '../components/FolderSelect'
 import MarkdownContent from '../components/MarkdownContent'
 import Pagination from '../components/Pagination'
-import type { Inbox, InboxPage as InboxPageData } from '../types/inbox'
+import type { Inbox, InboxCreate, InboxPage as InboxPageData, InboxUpdate } from '../types/inbox'
+import { useAutosave, type AutosaveFile, type FlushResult } from '../hooks/useAutosave'
 import {
-  formatContentValidationErrors,
-  hasContentValidationErrors,
-  validateCreateInput,
-  validateUpdateInput,
-} from '../utils/contentValidation'
+  autosaveHint,
+  draftToSnapshot,
+  isSnapshotPatchEmpty,
+  isSavable,
+  snapshotPatch,
+  statusLabel,
+  type DraftSnapshot,
+} from '../utils/autosave'
 import { formatServerTimestamp } from '../utils/journalDetail'
 import { defaultJournalDate } from '../utils/journalDate'
-import {
-  buildInboxCreate,
-  buildInboxUpdate,
-  planDailyEntry,
-  toInboxDraft,
-  type InboxEditDraft,
-} from '../utils/inboxDraft'
-import { isDraftDirty } from '../utils/dirtyState'
+import { planDailyEntry } from '../utils/inboxDraft'
 import { nearestValidPage } from '../utils/pagination'
 
 interface InboxPageProps {
@@ -36,13 +33,15 @@ interface InboxPageProps {
   onBusyChange: (busy: boolean) => void
   onResolveLink: (title: string) => void
   onNavigate: (action: () => void) => void
+  /** T02：把当前编辑面板的 flush 交给 App。 */
+  onFlushReady?: (flush: (() => Promise<FlushResult>) | null) => void
   /** Folder/Search/内部链接请求打开真实 Inbox；也支持同模块的新请求。 */
   initialOpen?: { id: number; key: number } | null
   onOpenRequestConsumed?: () => void
 }
 
 type InboxPanelShape =
-  | { kind: 'create'; key: number; isDaily: boolean; inboxDate: string }
+  | { kind: 'create'; key: number; isDaily: boolean; inboxDate: string; savedId?: number }
   | { kind: 'detail'; key: number; id: number }
 
 /** Daily 身份由 `is_daily` 决定，与标题无关。 */
@@ -50,23 +49,40 @@ function identityLabel(isDaily: boolean): string {
   return isDaily ? '当日 Daily Inbox' : '普通 Inbox'
 }
 
+function toSnapshot(inbox: Inbox): DraftSnapshot {
+  return draftToSnapshot(
+    { title: inbox.title ?? '', content: inbox.content, folder_id: inbox.folder_id },
+    inbox.inbox_date,
+  )
+}
+
+function toFile(inbox: Inbox): AutosaveFile {
+  return { id: inbox.id, revision: inbox.revision, draft: toSnapshot(inbox) }
+}
+
 /** 源码标题 + 正文输入；创建与编辑共用同一份字段，避免重复组件。 */
-function InboxFields({ draft, disabled, onTitle, onContent }: {
-  draft: InboxEditDraft
-  disabled: boolean
+function InboxFields({ draft, contentReadOnly, onTitle, onContent, changeDraft, composing }: {
+  draft: DraftSnapshot
+  contentReadOnly: boolean
   onTitle: (value: string) => void
   onContent: (value: string) => void
+  changeDraft: (update: Partial<DraftSnapshot>) => void
+  composing: { start: () => void; end: () => void }
 }) {
   return (
     <>
       <label className="editor-field"><span>标题（留空则用业务日期作为默认标题）</span>
-        <input type="text" value={draft.title} disabled={disabled}
-          onChange={(event) => onTitle(event.target.value)} />
+        <input type="text" value={draft.title}
+          onChange={(event) => onTitle(event.target.value)}
+          onCompositionStart={composing.start} onCompositionEnd={composing.end} />
       </label>
       <label className="editor-field"><span>正文</span>
-        <textarea value={draft.content} rows={8} disabled={disabled}
-          onChange={(event) => onContent(event.target.value)} />
+        <textarea value={draft.content} rows={8} readOnly={contentReadOnly}
+          onChange={(event) => onContent(event.target.value)}
+          onCompositionStart={composing.start} onCompositionEnd={composing.end} />
       </label>
+      <FolderSelect value={draft.folder_id}
+        onChange={(folderId) => changeDraft({ folder_id: folderId })} />
     </>
   )
 }
@@ -75,6 +91,7 @@ interface InboxPanelProps {
   panel: InboxPanelShape
   onDirtyChange: (dirty: boolean) => void
   onBusyChange: (busy: boolean) => void
+  onFlushReady?: (flush: (() => Promise<FlushResult>) | null) => void
   onResolveLink: (title: string) => void
   onNavigate: (action: () => void) => void
   onCreated: (inbox: Inbox) => void
@@ -85,26 +102,37 @@ interface InboxPanelProps {
 }
 
 function InboxPanel({
-  panel, onDirtyChange, onBusyChange, onResolveLink, onNavigate, onCreated, onChanged, onDeleted, onClose, onOpenRecord,
+  panel, onDirtyChange, onBusyChange, onFlushReady, onResolveLink, onNavigate, onCreated, onChanged, onDeleted, onClose, onOpenRecord,
 }: InboxPanelProps) {
-  const isCreate = panel.kind === 'create'
+  const inboxDate = panel.kind === 'create' ? panel.inboxDate : ''
   const inboxId = panel.kind === 'detail' ? panel.id : null
 
-  const [status, setStatus] = useState<'ready' | 'loading' | 'success' | 'error'>(isCreate ? 'ready' : 'loading')
+  const [status, setStatus] = useState<'ready' | 'loading' | 'success' | 'error'>(panel.kind === 'create' ? 'ready' : 'loading')
   const [file, setFile] = useState<Inbox | null>(null)
+  // Creation changes identity in this session; never replace its hook or input DOM.
+  const isCreate = panel.kind === 'create' && file === null
+  const createdRef = useRef(false)
+  const isDaily = file?.is_daily ?? (panel.kind === 'create' && panel.isDaily)
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
-  const [mode, setMode] = useState<'view' | 'edit'>(isCreate ? 'edit' : 'view')
-  const [draft, setDraft] = useState<InboxEditDraft>({ title: '', content: '', folder_id: null })
-  const [initial, setInitial] = useState<InboxEditDraft>({ title: '', content: '', folder_id: null })
-  const [titleEdited, setTitleEdited] = useState(false)
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'invalid' | 'error'>('idle')
-  const [saveError, setSaveError] = useState('')
+  const [mode, setMode] = useState<'view' | 'edit'>(panel.kind === 'create' ? 'edit' : 'view')
   const [deleteStage, setDeleteStage] = useState<'idle' | 'confirming' | 'deleting'>('idle')
   const [deleteError, setDeleteError] = useState('')
-  const [conflict, setConflict] = useState<{ id: number | null; message: string } | null>(null)
+  // Daily 冲突后重读到的已有 Daily 身份（null 表示该日期确实没有可打开的 Daily）。
+  const [dailyConflict, setDailyConflict] = useState<{ id: number | null } | null>(null)
   const writing = useRef(false)
+  // 用户在标题框里真正打过字；决定创建请求是省略 title（用日期做默认标题）还是显式提交。
+  const titleEditedRef = useRef(false)
+  /**
+   * 首次创建请求冻结的标题编辑标志（null = 尚未发出创建请求）。
+   *
+   * 后端创建幂等按**完整 payload** 比对：`title` 省略与显式 `null` 是两个不同 payload
+   * （`docs/stage3-api.md` §1、§2）。若在响应丢失后用户才输入标题，重放必须仍用
+   * **首次 payload**，否则会变成同键异体 409；那些新输入只进入最新草稿，
+   * 由重放成功后的 PATCH 提交。
+   */
+  const createTitleEditedRef = useRef<boolean | null>(null)
 
   // 打开已有 Inbox 时真实读取详情；创建面板不发任何读请求。
   useEffect(() => {
@@ -124,134 +152,93 @@ function InboxPanel({
     return () => controller.abort()
   }, [inboxId, reloadToken])
 
-  // 统一把当前草稿是否 Dirty 交给 App 的离开检查；查看态永远不脏。
+  const hasBlocks = file?.content_blocks != null
+
+  const autosave = useAutosave<Inbox>({
+    enabled: mode === 'edit',
+    initialDraft: isCreate
+      ? { title: '', content: '', date: inboxDate, folder_id: null }
+      : { title: '', content: '', date: '', folder_id: null },
+    initialFile: null,
+    savable: (draft, context) => isSavable(draft, { ...context, requireDate: true }),
+    create: async (draft, createKey) => {
+      // 首次创建请求一旦发出即冻结「标题是否编辑过」：重放要发出与首次完全一致的 payload。
+      if (createTitleEditedRef.current === null) createTitleEditedRef.current = titleEditedRef.current
+      const payload: InboxCreate = {
+        content: draft.content,
+        inbox_date: draft.date,
+        is_daily: isDaily,
+        folder_id: draft.folder_id,
+        client_create_id: createKey,
+      }
+      // 没编辑过标题就省略 title：Daily / 普通 Inbox 都沿用后端「用业务日期做默认标题」。
+      if (createTitleEditedRef.current) payload.title = draft.title === '' ? null : draft.title
+      return await createInbox(payload)
+    },
+    update: async (fileId, draft, baseline, expectedRevision) => {
+      const patch = snapshotPatch(draft, baseline)
+      if (hasBlocks) delete patch.content
+      // 空补丁 = 响应丢失后的安全 no-op：只回读，不写。
+      if (isSnapshotPatchEmpty(patch)) return await getInbox(fileId)
+      const payload: InboxUpdate = { expected_revision: expectedRevision }
+      if ('title' in patch) payload.title = patch.title
+      if ('content' in patch) payload.content = patch.content
+      if ('folder_id' in patch) payload.folder_id = patch.folder_id
+      return await updateInbox(fileId, payload)
+    },
+    toFile,
+    refetch: async () => {
+      if (file === null) throw new Error('还没有创建成功，没有服务器版本可载入')
+      return await getInbox(file.id)
+    },
+    onSaved: (saved) => {
+      setFile(saved)
+      setStatus('success')
+      if (panel.kind === 'create' && !createdRef.current) {
+        createdRef.current = true
+        createTitleEditedRef.current = null
+        onCreated(saved)
+      } else onChanged(saved)
+    },
+    onDirtyChange,
+    onFlushReady,
+  })
+
+  // Daily 创建撞上 409：只重读该日期的 Daily 身份，绝不把当前草稿覆盖到已有记录。
   useEffect(() => {
-    if (mode !== 'edit') {
-      onDirtyChange(false)
-      return
-    }
-    onDirtyChange(isDraftDirty(initial, draft))
-  }, [mode, initial, draft, onDirtyChange])
+    if (!autosave.conflict || !isDaily || !isCreate) return
+    let cancelled = false
+    getDailyInbox(inboxDate).then((state) => {
+      if (cancelled) return
+      const plan = planDailyEntry(state)
+      setDailyConflict({ id: plan.kind === 'existing' ? plan.id : null })
+    }).catch(() => {
+      if (cancelled) return
+      setDailyConflict({ id: null })
+    })
+    return () => { cancelled = true }
+  }, [autosave.conflict, isDaily, isCreate, inboxDate])
 
-  const busy = saveStatus === 'saving' || deleteStage === 'deleting'
-  const isDirty = mode === 'edit' && isDraftDirty(initial, draft)
+  const busy = deleteStage === 'deleting'
+  const draft = autosave.draft
 
-  function resetSaveState() {
-    setSaveStatus('idle')
-    setSaveError('')
-    setConflict(null)
-  }
   function changeTitle(value: string) {
-    setDraft((current) => ({ ...current, title: value }))
-    setTitleEdited(true)
-    resetSaveState()
-  }
-  function changeContent(value: string) {
-    setDraft((current) => ({ ...current, content: value }))
-    resetSaveState()
-  }
-  function changeFolder(folderId: number | null) {
-    setDraft((current) => ({ ...current, folder_id: folderId }))
-    resetSaveState()
+    titleEditedRef.current = true
+    autosave.changeDraft({ title: value })
   }
   function startEditing() {
     if (!file) return
-    const next = toInboxDraft(file)
-    setDraft(next)
-    setInitial(next)
-    setTitleEdited(false)
+    autosave.load(toFile(file), toSnapshot(file))
     setDeleteStage('idle')
     setDeleteError('')
-    resetSaveState()
-    onDirtyChange(false)
     setMode('edit')
   }
   function exitEditing() {
-    onDirtyChange(false)
+    createTitleEditedRef.current = null
+    autosave.load(null, { title: '', content: '', date: '', folder_id: null })
+    setDeleteStage('idle')
+    setDeleteError('')
     setMode('view')
-    resetSaveState()
-  }
-
-  async function submitCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (writing.current || panel.kind !== 'create') return
-    const { inboxDate, isDaily } = panel
-    const errors = validateCreateInput({
-      title: draft.title === '' ? null : draft.title,
-      content: draft.content,
-    })
-    if (hasContentValidationErrors(errors)) {
-      setSaveStatus('invalid')
-      setSaveError(formatContentValidationErrors(errors))
-      return
-    }
-    const payload = buildInboxCreate(draft, { inboxDate, isDaily, titleEdited })
-    writing.current = true
-    onBusyChange(true)
-    setSaveStatus('saving')
-    setSaveError('')
-    setConflict(null)
-    try {
-      const created = await createInbox(payload)
-      setSaveStatus('saved')
-      onDirtyChange(false)
-      onCreated(created)
-    } catch (error: unknown) {
-      setSaveStatus('error')
-      if (error instanceof InboxApiError && error.status === 409 && isDaily) {
-        // 同一业务日期已存在 Daily：重读身份，保留当前输入，绝不覆盖已有正文。
-        setSaveError('该日期已存在 Daily Inbox，未覆盖已有内容。')
-        try {
-          const state = await getDailyInbox(inboxDate)
-          const plan = planDailyEntry(state)
-          setConflict({
-            id: plan.kind === 'existing' ? plan.id : null,
-            message: '已重新查询到该日期的 Daily。可打开已有记录查看；当前未保存的输入仍保留。',
-          })
-        } catch {
-          setConflict({ id: null, message: '重新查询该日期 Daily 失败，请返回列表后重试。' })
-        }
-      } else {
-        setSaveError(error instanceof Error ? error.message : '保存失败，请稍后重试')
-      }
-    } finally {
-      writing.current = false
-      onBusyChange(false)
-    }
-  }
-
-  async function submitUpdate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (writing.current || file === null) return
-    const update = buildInboxUpdate(file, draft)
-    const errors = validateUpdateInput(update)
-    if (hasContentValidationErrors(errors)) {
-      setSaveStatus('invalid')
-      setSaveError(formatContentValidationErrors(errors))
-      return
-    }
-    writing.current = true
-    onBusyChange(true)
-    setSaveStatus('saving')
-    setSaveError('')
-    try {
-      const updated = await updateInbox(file.id, update)
-      const next = toInboxDraft(updated)
-      setFile(updated)
-      setDraft(next)
-      setInitial(next)
-      setTitleEdited(false)
-      onDirtyChange(false)
-      setMode('view')
-      setSaveStatus('saved')
-      onChanged(updated)
-    } catch (error: unknown) {
-      setSaveStatus('error')
-      setSaveError(error instanceof Error ? error.message : '保存失败，请稍后重试')
-    } finally {
-      writing.current = false
-      onBusyChange(false)
-    }
   }
 
   async function confirmDelete() {
@@ -261,7 +248,8 @@ function InboxPanel({
     setDeleteStage('deleting')
     setDeleteError('')
     try {
-      await deleteInbox(file.id)
+      // Stage 3 契约：硬删除必须携带当前 revision（缺 428 / 旧 409）。
+      await deleteInbox(file.id, file.revision)
       onDirtyChange(false)
       onDeleted(file)
     } catch (error: unknown) {
@@ -269,6 +257,10 @@ function InboxPanel({
         // 目标已经不在了：与删除成功等价处理，刷新走正常路径。
         onDirtyChange(false)
         onDeleted(file)
+      } else if (error instanceof InboxApiError && error.status === 409) {
+        setDeleteStage('idle')
+        setDeleteError('这条记录已在别处发生变化，已重新读取，请再确认一次。')
+        setReloadToken((value) => value + 1)
       } else {
         setDeleteStage('idle')
         setDeleteError(error instanceof Error ? error.message : '删除失败，请稍后重试')
@@ -279,7 +271,25 @@ function InboxPanel({
     }
   }
 
-  const heading = isCreate ? (panel.kind === 'create' && panel.isDaily ? '新建当日 Daily Inbox' : '新建 Inbox') : 'Inbox 详情'
+  const heading = isCreate ? (isDaily ? '新建当日 Daily Inbox' : '新建 Inbox') : 'Inbox 详情'
+  const invalidDraft = autosave.dirty && !autosave.savable
+
+  const statusBanner = (
+    <div className={`autosave-status autosave-${autosave.status}`} role="status" aria-live="polite">
+      <span className="autosave-label">{statusLabel(autosave.status)}</span>
+      <span className="autosave-hint">{autosave.status === 'failed' || autosave.status === 'conflict'
+        ? autosave.error : autosaveHint(autosave.status)}</span>
+      {autosave.status === 'failed' && (
+        <button type="button" onClick={() => void autosave.retry()}>重试保存</button>
+      )}
+      {autosave.status === 'conflict' && (!isDaily || !isCreate) && (
+        <>
+          <button type="button" onClick={() => void autosave.resubmitAfterConflict()}>用我的草稿重试</button>
+          <button type="button" onClick={() => void autosave.reloadServerVersion()}>重新载入服务器版本</button>
+        </>
+      )}
+    </div>
+  )
 
   return (
     <section className="journal-editor" aria-label={heading}>
@@ -288,34 +298,42 @@ function InboxPanel({
         <button type="button" onClick={onClose} disabled={busy}>返回列表</button>
       </div>
 
-      {panel.kind === 'create' && (
+      {mode === 'edit' && (panel.kind === 'create' || (status === 'success' && file)) && (
         <>
           <p className="inbox-identity">
-            身份：{identityLabel(panel.isDaily)} · 业务日期 {panel.inboxDate}
+            身份：{identityLabel(isDaily)} · 业务日期 {file?.inbox_date ?? inboxDate}
           </p>
           <p className="detail-hint">日期与 Daily 身份在创建后不可修改。</p>
-          <form className="editor-form" onSubmit={submitCreate}>
-            <InboxFields draft={draft} disabled={busy}
-              onTitle={changeTitle} onContent={changeContent} />
-            <FolderSelect value={draft.folder_id} disabled={busy}
-              onChange={changeFolder} />
+          {statusBanner}
+          <form className="editor-form" onSubmit={(event) => { event.preventDefault(); void autosave.saveNow() }}>
+            <InboxFields draft={draft} contentReadOnly={hasBlocks}
+              onTitle={changeTitle} onContent={(value) => autosave.changeDraft({ content: value })}
+              changeDraft={autosave.changeDraft}
+              composing={{ start: autosave.onCompositionStart, end: autosave.onCompositionEnd }} />
+            {hasBlocks && (
+              <p className="detail-hint">
+                这篇文件已经有结构化内容（含 AI 段）。本任务不提供结构化编辑，正文暂时只读；
+                标题与 Folder 仍会自动保存。
+              </p>
+            )}
+            {invalidDraft && (
+              <p className="detail-hint" role="status">
+                空白或超长的输入不会提交，也不会创建空记录；内容保留在编辑器里。
+              </p>
+            )}
             <div className="editor-actions">
-              <button type="submit" disabled={busy}>{busy ? '保存中……' : '保存'}</button>
-              <button type="button" onClick={onClose} disabled={busy}>取消新建</button>
+              <button type="submit" disabled={!autosave.dirty}>立即保存</button>
+              <button type="button" onClick={() => isCreate ? onClose() : onNavigate(exitEditing)} disabled={busy}>
+                {isCreate ? '取消新建' : '返回查看'}
+              </button>
             </div>
           </form>
-          {(saveStatus === 'error' || saveStatus === 'invalid') && (
-            <p className="detail-error" role="alert">
-              {saveStatus === 'error' ? '保存失败' : '输入不合法'}：{saveError}
-              （输入已保留{saveStatus === 'invalid' ? '，未发送保存请求' : ''}，可修改后再次保存。）
-            </p>
-          )}
-          {conflict && (
+          {isCreate && isDaily && autosave.conflict && dailyConflict !== null && (
             <div className="detail-confirm" role="alert">
-              <p>{conflict.message}</p>
-              {conflict.id !== null && (
+              <p>该日期已经存在 Daily Inbox，未覆盖已有内容；当前未保存的输入仍然保留。</p>
+              {dailyConflict.id !== null && (
                 <div className="detail-confirm-actions">
-                  <button type="button" onClick={() => onOpenRecord(conflict.id as number)} disabled={busy}>
+                  <button type="button" onClick={() => onOpenRecord(dailyConflict.id as number)} disabled={busy}>
                     打开已有的 Daily
                   </button>
                 </div>
@@ -344,13 +362,13 @@ function InboxPanel({
           <h3 className="detail-title">{file.display_title}</h3>
           <dl className="detail-meta">
             <div className="detail-meta-row"><dt>id</dt><dd>{file.id}</dd></div>
+            <div className="detail-meta-row"><dt>版本</dt><dd>{file.revision}</dd></div>
             <div className="detail-meta-row"><dt>身份</dt><dd>{identityLabel(file.is_daily)}</dd></div>
             <div className="detail-meta-row"><dt>业务日期</dt><dd>{file.inbox_date}</dd></div>
             <div className="detail-meta-row"><dt>创建时间</dt><dd>{formatServerTimestamp(file.created_at)}</dd></div>
             <div className="detail-meta-row"><dt>修改时间</dt><dd>{formatServerTimestamp(file.updated_at)}</dd></div>
           </dl>
           <MarkdownContent source={file.content} onLink={onResolveLink} disabled={busy} />
-          {saveStatus === 'saved' && <p className="detail-success" role="status">已保存。</p>}
           <div className="detail-actions">
             <button type="button" onClick={startEditing} disabled={busy}>修改</button>
             {deleteStage === 'idle' && (
@@ -372,33 +390,13 @@ function InboxPanel({
         </>
       )}
 
-      {!isCreate && status === 'success' && file && mode === 'edit' && (
-        <form className="detail-form" onSubmit={submitUpdate}>
-          <p className="inbox-identity">
-            身份：{identityLabel(file.is_daily)} · 业务日期 {file.inbox_date}（创建后不可修改）
-          </p>
-          <InboxFields draft={draft} disabled={busy}
-            onTitle={changeTitle} onContent={changeContent} />
-          <FolderSelect value={draft.folder_id} disabled={busy}
-            onChange={changeFolder} />
-          <div className="editor-actions">
-            <button type="submit" disabled={busy}>{saveStatus === 'saving' ? '保存中……' : '保存修改'}</button>
-            <button type="button" onClick={() => onNavigate(exitEditing)} disabled={busy}>取消</button>
-          </div>
-          <p className="detail-hint">{isDirty ? '保存时只提交改过的字段。' : '没有任何改动，保存将按空更新处理。'}</p>
-          {(saveStatus === 'error' || saveStatus === 'invalid') && (
-            <p className="detail-error" role="alert">
-              {saveStatus === 'error' ? '保存失败' : '输入不合法'}：{saveError}
-              （输入已保留{saveStatus === 'invalid' ? '，未发送保存请求' : ''}，可修改后再次保存。）
-            </p>
-          )}
-        </form>
-      )}
     </section>
   )
 }
 
-function InboxPage({ onDirtyChange, onBusyChange, onResolveLink, onNavigate, initialOpen = null, onOpenRequestConsumed }: InboxPageProps) {
+function InboxPage({
+  onDirtyChange, onBusyChange, onResolveLink, onNavigate, onFlushReady, initialOpen = null, onOpenRequestConsumed,
+}: InboxPageProps) {
   // 初始外部请求直接进入详情；后续同模块链接由下面的 effect 消费。
   const [panel, setPanel] = useState<InboxPanelShape | { kind: 'list' }>(
     initialOpen ? { kind: 'detail', id: initialOpen.id, key: initialOpen.key } : { kind: 'list' },
@@ -553,14 +551,14 @@ function InboxPage({ onDirtyChange, onBusyChange, onResolveLink, onNavigate, ini
   }
 
   function handleCreated(inbox: Inbox) {
-    onDirtyChange(false)
-    setNotice(`已保存：${inbox.display_title}`)
-    setPanel({ kind: 'detail', id: inbox.id, key: nextKey() })
+    // List identity only; Dirty and the live save queue remain owned by the panel.
+    setPanel((current) => current.kind === 'create'
+      ? { ...current, savedId: inbox.id } : current)
     refreshList()
     setDailyRevision((value) => value + 1)
   }
   function handleChanged() {
-    // 面板自身在查看态显示“已保存。”；这里只负责刷新列表与 Daily 状态。
+    // 面板自身在查看态刷新；这里只负责刷新列表与 Daily 状态。
     refreshList()
     setDailyRevision((value) => value + 1)
   }
@@ -597,13 +595,15 @@ function InboxPage({ onDirtyChange, onBusyChange, onResolveLink, onNavigate, ini
 
       {panel.kind === 'create' && (
         <InboxPanel key={`create-${panel.key}`} panel={panel}
-          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onNavigate={onNavigate} onResolveLink={onResolveLink}
+          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onFlushReady={onFlushReady}
+          onNavigate={onNavigate} onResolveLink={onResolveLink}
           onCreated={handleCreated} onChanged={handleChanged} onDeleted={handleDeleted}
           onClose={() => onNavigate(showList)} onOpenRecord={openInbox} />
       )}
       {panel.kind === 'detail' && (
         <InboxPanel key={`detail-${panel.key}`} panel={panel}
-          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onNavigate={onNavigate} onResolveLink={onResolveLink}
+          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onFlushReady={onFlushReady}
+          onNavigate={onNavigate} onResolveLink={onResolveLink}
           onCreated={handleCreated} onChanged={handleChanged} onDeleted={handleDeleted}
           onClose={() => onNavigate(showList)} onOpenRecord={openInbox} />
       )}
@@ -624,8 +624,8 @@ function InboxPage({ onDirtyChange, onBusyChange, onResolveLink, onNavigate, ini
                 <ul className="journal-list">
                   {listResult.items.map((inbox) => (
                     <li key={`${inbox.type}:${inbox.id}`}>
-                      <FileCard file={inbox} onOpen={(file) => openInbox(file.id)}
-                        selected={panel.kind === 'detail' && panel.id === inbox.id} disabled={busy} />
+                      <FileCard file={inbox} onOpen={(value) => openInbox(value.id)}
+                        selected={(panel.kind === 'detail' && panel.id === inbox.id) || (panel.kind === 'create' && panel.savedId === inbox.id)} disabled={busy} />
                     </li>
                   ))}
                 </ul>

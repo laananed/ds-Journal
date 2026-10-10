@@ -70,8 +70,14 @@ export async function updateJournal(id: number, payload: JournalUpdate): Promise
   if (!response.ok) throw new JournalApiError(response.status, await readErrorMessage(response))
   return await response.json() as Journal
 }
-/** Journal普通删除是软删除；204没有正文，不能解析JSON。 */
-export async function deleteJournal(id: number): Promise<void> {
-  const response = await fetch(`${getApiBaseUrl()}/api/journals/${id}`, { method: 'DELETE' })
+/**
+ * Journal 普通删除是软删除；Stage 3 起必须携带 `If-Match: "<revision>"`。
+ * 缺版本后端返回 428、版本过期返回 409；204 没有正文，不能解析 JSON。
+ */
+export async function deleteJournal(id: number, expectedRevision: number): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/api/journals/${id}`, {
+    method: 'DELETE',
+    headers: { 'If-Match': `"${expectedRevision}"` },
+  })
   if (!response.ok) throw new JournalApiError(response.status, await readErrorMessage(response))
 }

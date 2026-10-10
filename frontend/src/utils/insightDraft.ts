@@ -14,7 +14,7 @@
  * 本文件不依赖 React、不发请求，可用 `node --experimental-strip-types` 直接测试。
  */
 
-import type { Insight, InsightCreate, InsightUpdate } from '../types/insight.ts'
+import type { Insight, InsightCreate, InsightUpdateFields } from '../types/insight.ts'
 import { draftTitleToValue } from './journalDetail.ts'
 
 /** 创建与编辑共用的表单草稿；null 表示无 Folder。 */
@@ -46,8 +46,8 @@ export function buildInsightCreate(draft: InsightEditDraft): InsightCreate {
  * 初始输入把 `null` 显示成空串；比较输入与初始展示值，
  * 避免未编辑的历史 `title=null` / `title=""` 被误改成另一种空值。
  */
-export function buildInsightUpdate(original: Insight, draft: InsightEditDraft): InsightUpdate {
-  const update: InsightUpdate = {}
+export function buildInsightUpdate(original: Insight, draft: InsightEditDraft): InsightUpdateFields {
+  const update: InsightUpdateFields = {}
   if (draft.title !== (original.title ?? '')) update.title = draftTitleToValue(draft.title)
   if (draft.content !== original.content) update.content = draft.content
   // Folder 真实变化才进 PATCH：null 表示移出 Folder，未变化不制造更新。
@@ -56,6 +56,6 @@ export function buildInsightUpdate(original: Insight, draft: InsightEditDraft): 
 }
 
 /** 更新请求是否为空（没有任何字段需要提交）。 */
-export function isInsightUpdateEmpty(update: InsightUpdate): boolean {
+export function isInsightUpdateEmpty(update: InsightUpdateFields): boolean {
   return Object.keys(update).length === 0
 }

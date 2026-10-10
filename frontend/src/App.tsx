@@ -14,6 +14,7 @@ import SearchPage from './pages/SearchPage'
 import type { FileIdentity } from './types/file'
 import type { JournalPage } from './types/journal'
 import type { SearchConditions } from './types/search'
+import type { FlushResult } from './hooks/useAutosave'
 import { nearestValidPage } from './utils/pagination'
 
 type Module = 'journal' | 'inbox' | 'insight' | 'search' | 'trash' | 'folder'
@@ -39,6 +40,12 @@ function App() {
   const busyRef = useRef(false)
   const dirtyRef = useRef(false)
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
+  // T02：当前编辑面板注册的 flush。所有离开出口先 flush 最新有效草稿再导航。
+  const flushRef = useRef<(() => Promise<FlushResult>) | null>(null)
+  const registerFlush = useCallback((flush: (() => Promise<FlushResult>) | null) => {
+    flushRef.current = flush
+  }, [])
+  const [leaveBlocked, setLeaveBlocked] = useState(false)
   const confirmDialog = useRef<HTMLDialogElement>(null)
   const [notice, setNotice] = useState('')
   const [linkRequest, setLinkRequest] = useState<{ title: string; key: number } | null>(null)
@@ -82,18 +89,43 @@ function App() {
   function setDirty(value: boolean) {
     dirtyRef.current = value
   }
-  /** 每个离开出口只提交动作；真正导航前在这里统一检查。 */
+  /**
+   * 每个离开出口只提交动作；真正导航前在这里统一处理。
+   *
+   * T02：编辑面板注册了 flush 时，先等最新有效草稿落库再导航；
+   * flush 返回 blocked（保存失败 / 版本冲突 / 输入不合法）则停留，
+   * 只有用户明确选择放弃才离开。
+   */
   function navigate(action: () => void) {
     if (busyRef.current) return
     const run = () => {
       setLinkRequest(null)
       action()
     }
-    if (dirtyRef.current) {
-      setPendingNavigation(() => run)
+    const flush = flushRef.current
+    if (flush === null) {
+      if (dirtyRef.current) {
+        setLeaveBlocked(false)
+        setPendingNavigation(() => run)
+        return
+      }
+      run()
       return
     }
-    run()
+    void (async () => {
+      let result: FlushResult
+      try {
+        result = await flush()
+      } catch {
+        result = 'blocked'
+      }
+      if (result === 'blocked') {
+        setLeaveBlocked(true)
+        setPendingNavigation(() => run)
+        return
+      }
+      run()
+    })()
   }
   function resolveLink(title: string) {
     navigate(() => setLinkRequest({ title, key: ++linkKey.current }))
@@ -101,6 +133,7 @@ function App() {
   function confirmLeave() {
     const action = pendingNavigation
     setPendingNavigation(null)
+    setLeaveBlocked(false)
     dirtyRef.current = false
     action?.()
   }
@@ -206,13 +239,13 @@ function App() {
       )}
       {module === 'inbox' && (
         <InboxPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate}
-          onResolveLink={resolveLink}
+          onResolveLink={resolveLink} onFlushReady={registerFlush}
           initialOpen={crossOpen?.file.type === 'inbox' ? { id: crossOpen.file.id, key: crossOpen.key } : null}
           onOpenRequestConsumed={consumeCrossOpen} />
       )}
       {module === 'insight' && (
         <InsightPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate}
-          onResolveLink={resolveLink}
+          onResolveLink={resolveLink} onFlushReady={registerFlush}
           initialOpen={crossOpen?.file.type === 'insight' ? { id: crossOpen.file.id, key: crossOpen.key } : null}
           onOpenRequestConsumed={consumeCrossOpen} />
       )}
@@ -231,13 +264,14 @@ function App() {
           {notice && <p className="detail-success" role="status">{notice}</p>}
           {panel.kind === 'create' && (
             <JournalEditor key={panel.key} listFilterDate={filterDate} externalRevision={dataRevision}
-              onSaved={refreshData} onOpen={openJournal} onClose={() => navigate(showList)}
-              onDirtyChange={setDirty} onBusyChange={setWriting} />
+              onSaved={() => refreshData()} onOpen={openJournal} onClose={() => navigate(showList)}
+              onDirtyChange={setDirty} onFlushReady={registerFlush} />
           )}
           {panel.kind === 'detail' && (
             <JournalDetail key={`${panel.file.type}:${panel.file.id}:${panel.key}`} journalId={panel.file.id}
               onResolveLink={resolveLink}
-              onBusyChange={setWriting} onDirtyChange={setDirty} onNavigate={navigate}
+              onBusyChange={setWriting} onDirtyChange={setDirty} onFlushReady={registerFlush}
+              onNavigate={navigate}
               onClose={() => navigate(showList)} onDataChanged={refreshData}
               onDeleted={() => {
                 showList()
@@ -272,11 +306,13 @@ function App() {
         onClose={() => setLinkRequest(null)} />}
 
       <dialog ref={confirmDialog} className="leave-dialog" aria-labelledby="leave-title"
-        onCancel={(event) => { event.preventDefault(); setPendingNavigation(null) }}>
-        <h2 id="leave-title">当前内容尚未保存，确定离开？</h2>
-        <p>确认离开会丢弃本次未保存的改动。</p>
+        onCancel={(event) => { event.preventDefault(); setPendingNavigation(null); setLeaveBlocked(false) }}>
+        <h2 id="leave-title">{leaveBlocked ? '最新改动还没保存成功，确定离开？' : '当前内容尚未保存，确定离开？'}</h2>
+        <p>{leaveBlocked
+          ? '自动保存失败或出现版本冲突，最新输入还没有提交到后端。确认离开会丢弃这些未保存的改动。'
+          : '确认离开会丢弃本次未保存的改动。'}</p>
         <div className="detail-confirm-actions">
-          <button type="button" autoFocus onClick={() => setPendingNavigation(null)}>继续编辑</button>
+          <button type="button" autoFocus onClick={() => { setPendingNavigation(null); setLeaveBlocked(false) }}>继续编辑</button>
           <button type="button" onClick={confirmLeave}>确认离开</button>
         </div>
       </dialog>

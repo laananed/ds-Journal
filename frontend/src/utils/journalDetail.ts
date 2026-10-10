@@ -1,5 +1,5 @@
 /** Journal 编辑的纯逻辑。只提交真实修改的原始字段，日期与时间保留字符串。 */
-import type { Journal, JournalUpdate } from '../types/journal.ts'
+import type { Journal, JournalUpdateFields } from '../types/journal.ts'
 
 export interface JournalEditDraft {
   title: string
@@ -12,8 +12,8 @@ export interface JournalEditDraft {
 export function draftTitleToValue(title: string): string | null {
   return title === '' ? null : title
 }
-export function buildJournalUpdate(original: Journal, draft: JournalEditDraft): JournalUpdate {
-  const update: JournalUpdate = {}
+export function buildJournalUpdate(original: Journal, draft: JournalEditDraft): JournalUpdateFields {
+  const update: JournalUpdateFields = {}
   // 初始输入把NULL显示成空串。先比较输入与初始展示值，避免未编辑的历史空串被改成NULL。
   if (draft.title !== (original.title ?? '')) update.title = draftTitleToValue(draft.title)
   if (draft.content !== original.content) update.content = draft.content
@@ -22,7 +22,7 @@ export function buildJournalUpdate(original: Journal, draft: JournalEditDraft): 
   if (draft.folder_id !== original.folder_id) update.folder_id = draft.folder_id
   return update
 }
-export function isJournalUpdateEmpty(update: JournalUpdate): boolean {
+export function isJournalUpdateEmpty(update: JournalUpdateFields): boolean {
   return Object.keys(update).length === 0
 }
 /** Stage1.5显示格式的历史回归。当前UI使用服务器display_title。 */

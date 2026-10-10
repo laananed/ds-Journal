@@ -1,4 +1,4 @@
-import type { ContentFile, FilePage } from './file'
+import type { Block, ContentFile, FilePage } from './file'
 
 /**
  * Inbox 的 `inbox_date` 与 `is_daily` 在创建时确定，编辑不可修改。
@@ -8,6 +8,8 @@ export interface Inbox extends ContentFile {
   type: 'inbox'
   inbox_date: string
   is_daily: boolean
+  /** 仅在详情响应里出现；普通列表不返回 blocks。 */
+  content_blocks?: Block[] | null
 }
 export type InboxPage = FilePage<Inbox>
 
@@ -23,13 +25,19 @@ export interface InboxCreate {
   is_daily: boolean
   title?: string | null
   folder_id?: number | null
+  client_create_id?: string
 }
 
-/** 修改只允许 title / content / folder_id；日期与 Daily 身份不可改。 */
-export interface InboxUpdate {
+/** PATCH 实际提交的字段子集；只允许 title / content / folder_id。 */
+export interface InboxUpdateFields {
   title?: string | null
   content?: string
   folder_id?: number | null
+}
+
+/** 对外 PATCH 请求体：Stage 3 起必须携带 expected_revision。 */
+export interface InboxUpdate extends InboxUpdateFields {
+  expected_revision: number
 }
 
 /** `GET /api/inboxes/daily` 只有 missing / active 两态；missing 不创建空行。 */

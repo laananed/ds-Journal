@@ -13,7 +13,7 @@
  * 本文件不依赖 React、不发请求，可用 `node --experimental-strip-types` 直接测试。
  */
 
-import type { DailyInboxState, Inbox, InboxCreate, InboxUpdate } from '../types/inbox.ts'
+import type { DailyInboxState, Inbox, InboxCreate, InboxUpdateFields } from '../types/inbox.ts'
 import { draftTitleToValue } from './journalDetail.ts'
 
 /** 创建与编辑共用的表单草稿；null 表示无 Folder。 */
@@ -60,8 +60,8 @@ export function buildInboxCreate(draft: InboxEditDraft, context: InboxCreateCont
  * 初始输入把 `null` 显示成空串；比较输入与初始展示值，
  * 避免未编辑的历史 `title=null` / `title=""` 被误改成另一种空值。
  */
-export function buildInboxUpdate(original: Inbox, draft: InboxEditDraft): InboxUpdate {
-  const update: InboxUpdate = {}
+export function buildInboxUpdate(original: Inbox, draft: InboxEditDraft): InboxUpdateFields {
+  const update: InboxUpdateFields = {}
   if (draft.title !== (original.title ?? '')) update.title = draftTitleToValue(draft.title)
   if (draft.content !== original.content) update.content = draft.content
   // Folder 真实变化才进 PATCH：null 表示移出 Folder，未变化不制造更新。

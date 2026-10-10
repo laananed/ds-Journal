@@ -94,8 +94,11 @@ export async function updateInbox(id: number, payload: InboxUpdate): Promise<Inb
   return await response.json() as Inbox
 }
 
-/** 所有 Inbox 都是硬删除；204 没有正文，不能解析 JSON。 */
-export async function deleteInbox(id: number): Promise<void> {
-  const response = await fetch(`${getApiBaseUrl()}/api/inboxes/${id}`, { method: 'DELETE' })
+/** 所有 Inbox 都是硬删除；Stage 3 起必须携带 `If-Match: "<revision>"`。204 没有正文，不能解析 JSON。 */
+export async function deleteInbox(id: number, expectedRevision: number): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/api/inboxes/${id}`, {
+    method: 'DELETE',
+    headers: { 'If-Match': `"${expectedRevision}"` },
+  })
   if (!response.ok) throw new InboxApiError(response.status, await readErrorMessage(response))
 }

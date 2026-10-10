@@ -84,8 +84,11 @@ export async function updateInsight(id: number, payload: InsightUpdate): Promise
   return await response.json() as Insight
 }
 
-/** 软删除（移入回收箱）；204 没有正文，不能解析 JSON。 */
-export async function deleteInsight(id: number): Promise<void> {
-  const response = await fetch(`${getApiBaseUrl()}/api/insights/${id}`, { method: 'DELETE' })
+/** 软删除（移入回收箱）；Stage 3 起必须携带 `If-Match: "<revision>"`。204 没有正文，不能解析 JSON。 */
+export async function deleteInsight(id: number, expectedRevision: number): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/api/insights/${id}`, {
+    method: 'DELETE',
+    headers: { 'If-Match': `"${expectedRevision}"` },
+  })
   if (!response.ok) throw new InsightApiError(response.status, await readErrorMessage(response))
 }

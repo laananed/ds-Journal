@@ -136,3 +136,27 @@
 .link-candidates { margin: 1rem 0; padding: 1rem; border: 1px solid #bcc9da; border-radius: .5rem; }
 .link-candidates li { margin: .5rem 0; }
 .link-candidates li button { text-align: left; overflow-wrap: anywhere; max-width: 100%; }
+
+/* T02 自动保存状态：未保存 / 保存中 / 已保存 / 保存失败 / 冲突 */
+.autosave-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid #e5e2ea;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #faf9fc;
+  font-size: 14px;
+  color: #4a4453;
+}
+.autosave-label { font-weight: 600; color: #332c3d; }
+.autosave-hint { color: #6b6375; overflow-wrap: anywhere; }
+.autosave-saved { border-left-color: #2f7d4f; }
+.autosave-saving { border-left-color: #3b6fb6; }
+.autosave-unsaved { border-left-color: #b58a2f; }
+.autosave-failed { border-left-color: #b63b3b; background: #fdf5f5; }
+.autosave-conflict { border-left-color: #b63b3b; background: #fff8ec; }
+.autosave-status button { padding: 4px 10px; font-size: 13px; }

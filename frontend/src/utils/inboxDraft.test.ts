@@ -41,6 +41,7 @@ function inbox(overrides: Partial<Inbox> = {}): Inbox {
     title: '原始标题',
     display_title: '原始标题',
     content: '原始正文',
+    revision: 1,
     inbox_date: '2026-10-08',
     is_daily: false,
     folder_id: null,

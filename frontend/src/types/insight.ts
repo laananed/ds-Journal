@@ -19,11 +19,17 @@ export interface InsightCreate {
   content: string
   title?: string | null
   folder_id?: number | null
+  client_create_id?: string
 }
 
-/** 修改只允许 title / content / folder_id；省略表示不修改。 */
-export interface InsightUpdate {
+/** PATCH 实际提交的字段子集；省略表示不修改。 */
+export interface InsightUpdateFields {
   title?: string | null
   content?: string
   folder_id?: number | null
+}
+
+/** 对外 PATCH 请求体：Stage 3 起必须携带 expected_revision。 */
+export interface InsightUpdate extends InsightUpdateFields {
+  expected_revision: number
 }

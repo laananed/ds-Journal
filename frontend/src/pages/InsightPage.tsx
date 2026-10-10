@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   InsightApiError,
   createInsight,
@@ -11,21 +11,17 @@ import FileCard from '../components/FileCard'
 import FolderSelect from '../components/FolderSelect'
 import MarkdownContent from '../components/MarkdownContent'
 import Pagination from '../components/Pagination'
-import type { Insight, InsightPage as InsightPageData } from '../types/insight'
+import type { Insight, InsightCreate, InsightPage as InsightPageData, InsightUpdate } from '../types/insight'
+import { useAutosave, type AutosaveFile, type FlushResult } from '../hooks/useAutosave'
 import {
-  formatContentValidationErrors,
-  hasContentValidationErrors,
-  validateCreateInput,
-  validateUpdateInput,
-} from '../utils/contentValidation'
+  autosaveHint,
+  draftToSnapshot,
+  isSnapshotPatchEmpty,
+  snapshotPatch,
+  statusLabel,
+  type DraftSnapshot,
+} from '../utils/autosave'
 import { formatServerTimestamp } from '../utils/journalDetail'
-import {
-  buildInsightCreate,
-  buildInsightUpdate,
-  toInsightDraft,
-  type InsightEditDraft,
-} from '../utils/insightDraft'
-import { isDraftDirty } from '../utils/dirtyState'
 import { nearestValidPage } from '../utils/pagination'
 
 interface InsightPageProps {
@@ -33,32 +29,52 @@ interface InsightPageProps {
   onBusyChange: (busy: boolean) => void
   onResolveLink: (title: string) => void
   onNavigate: (action: () => void) => void
+  /** T02：把当前编辑面板的 flush 交给 App。 */
+  onFlushReady?: (flush: (() => Promise<FlushResult>) | null) => void
   /** 其他模块（Folder 混合卡片）请求打开某条 Insight；同模块后续请求也消费。 */
   initialOpen?: { id: number; key: number } | null
   onOpenRequestConsumed?: () => void
 }
 
 type InsightPanelShape =
-  | { kind: 'create'; key: number }
+  | { kind: 'create'; key: number; savedId?: number }
   | { kind: 'detail'; key: number; id: number }
 
+function toSnapshot(insight: Insight): DraftSnapshot {
+  // Insight 没有业务日期：归一化快照的 date 恒为空串。
+  return draftToSnapshot(
+    { title: insight.title ?? '', content: insight.content, folder_id: insight.folder_id },
+    '',
+  )
+}
+
+function toFile(insight: Insight): AutosaveFile {
+  return { id: insight.id, revision: insight.revision, draft: toSnapshot(insight) }
+}
+
 /** 源码标题 + 正文输入；创建与编辑共用同一份字段，避免重复组件。 */
-function InsightFields({ draft, disabled, onTitle, onContent }: {
-  draft: InsightEditDraft
+function InsightFields({ draft, disabled, onTitle, onContent, changeDraft, composing }: {
+  draft: DraftSnapshot
   disabled: boolean
   onTitle: (value: string) => void
   onContent: (value: string) => void
+  changeDraft: (update: Partial<DraftSnapshot>) => void
+  composing: { start: () => void; end: () => void }
 }) {
   return (
     <>
       <label className="editor-field"><span>标题（留空显示为“未命名 Insight”）</span>
         <input type="text" value={draft.title} disabled={disabled}
-          onChange={(event) => onTitle(event.target.value)} />
+          onChange={(event) => onTitle(event.target.value)}
+          onCompositionStart={composing.start} onCompositionEnd={composing.end} />
       </label>
       <label className="editor-field"><span>正文</span>
         <textarea value={draft.content} rows={8} disabled={disabled}
-          onChange={(event) => onContent(event.target.value)} />
+          onChange={(event) => onContent(event.target.value)}
+          onCompositionStart={composing.start} onCompositionEnd={composing.end} />
       </label>
+      <FolderSelect value={draft.folder_id} disabled={disabled}
+        onChange={(folderId) => changeDraft({ folder_id: folderId })} />
     </>
   )
 }
@@ -67,6 +83,7 @@ interface InsightPanelProps {
   panel: InsightPanelShape
   onDirtyChange: (dirty: boolean) => void
   onBusyChange: (busy: boolean) => void
+  onFlushReady?: (flush: (() => Promise<FlushResult>) | null) => void
   onResolveLink: (title: string) => void
   onNavigate: (action: () => void) => void
   onCreated: (insight: Insight) => void
@@ -76,21 +93,19 @@ interface InsightPanelProps {
 }
 
 function InsightPanel({
-  panel, onDirtyChange, onBusyChange, onResolveLink, onNavigate, onCreated, onChanged, onDeleted, onClose,
+  panel, onDirtyChange, onBusyChange, onFlushReady, onResolveLink, onNavigate, onCreated, onChanged, onDeleted, onClose,
 }: InsightPanelProps) {
-  const isCreate = panel.kind === 'create'
   const insightId = panel.kind === 'detail' ? panel.id : null
 
-  const [status, setStatus] = useState<'ready' | 'loading' | 'success' | 'error'>(isCreate ? 'ready' : 'loading')
+  const [status, setStatus] = useState<'ready' | 'loading' | 'success' | 'error'>(panel.kind === 'create' ? 'ready' : 'loading')
   const [file, setFile] = useState<Insight | null>(null)
+  // Creation changes identity in this session; never replace its hook or input DOM.
+  const isCreate = panel.kind === 'create' && file === null
+  const createdRef = useRef(false)
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
-  const [mode, setMode] = useState<'view' | 'edit'>(isCreate ? 'edit' : 'view')
-  const [draft, setDraft] = useState<InsightEditDraft>({ title: '', content: '', folder_id: null })
-  const [initial, setInitial] = useState<InsightEditDraft>({ title: '', content: '', folder_id: null })
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'invalid' | 'error'>('idle')
-  const [saveError, setSaveError] = useState('')
+  const [mode, setMode] = useState<'view' | 'edit'>(panel.kind === 'create' ? 'edit' : 'view')
   const [deleteStage, setDeleteStage] = useState<'idle' | 'confirming' | 'deleting'>('idle')
   const [deleteError, setDeleteError] = useState('')
   const writing = useRef(false)
@@ -113,110 +128,61 @@ function InsightPanel({
     return () => controller.abort()
   }, [insightId, reloadToken])
 
-  // 统一把当前草稿是否 Dirty 交给 App 的离开检查；查看态永远不脏。
-  useEffect(() => {
-    if (mode !== 'edit') {
-      onDirtyChange(false)
-      return
-    }
-    onDirtyChange(isDraftDirty(initial, draft))
-  }, [mode, initial, draft, onDirtyChange])
+  const autosave = useAutosave<Insight>({
+    enabled: mode === 'edit',
+    initialDraft: { title: '', content: '', date: '', folder_id: null },
+    initialFile: null,
+    create: async (draft, createKey) => {
+      const payload: InsightCreate = {
+        content: draft.content,
+        title: draft.title === '' ? null : draft.title,
+        folder_id: draft.folder_id,
+        client_create_id: createKey,
+      }
+      return await createInsight(payload)
+    },
+    update: async (fileId, draft, baseline, expectedRevision) => {
+      const patch = snapshotPatch(draft, baseline)
+      // 空补丁 = 响应丢失后的安全 no-op：只回读，不写。
+      if (isSnapshotPatchEmpty(patch)) return await getInsight(fileId)
+      const payload: InsightUpdate = { expected_revision: expectedRevision }
+      if ('title' in patch) payload.title = patch.title
+      if ('content' in patch) payload.content = patch.content
+      if ('folder_id' in patch) payload.folder_id = patch.folder_id
+      return await updateInsight(fileId, payload)
+    },
+    toFile,
+    refetch: async () => {
+      if (file === null) throw new Error('还没有创建成功，没有服务器版本可载入')
+      return await getInsight(file.id)
+    },
+    onSaved: (saved) => {
+      setFile(saved)
+      setStatus('success')
+      if (panel.kind === 'create' && !createdRef.current) {
+        createdRef.current = true
+        onCreated(saved)
+      } else onChanged(saved)
+    },
+    onDirtyChange,
+    onFlushReady,
+  })
 
-  const busy = saveStatus === 'saving' || deleteStage === 'deleting'
-  const isDirty = mode === 'edit' && isDraftDirty(initial, draft)
+  const busy = deleteStage === 'deleting'
+  const draft = autosave.draft
 
-  function resetSaveState() {
-    setSaveStatus('idle')
-    setSaveError('')
-  }
-  function changeTitle(value: string) {
-    setDraft((current) => ({ ...current, title: value }))
-    resetSaveState()
-  }
-  function changeContent(value: string) {
-    setDraft((current) => ({ ...current, content: value }))
-    resetSaveState()
-  }
-  function changeFolder(folderId: number | null) {
-    setDraft((current) => ({ ...current, folder_id: folderId }))
-    resetSaveState()
-  }
   function startEditing() {
     if (!file) return
-    const next = toInsightDraft(file)
-    setDraft(next)
-    setInitial(next)
+    autosave.load(toFile(file), toSnapshot(file))
     setDeleteStage('idle')
     setDeleteError('')
-    resetSaveState()
-    onDirtyChange(false)
     setMode('edit')
   }
   function exitEditing() {
-    onDirtyChange(false)
+    autosave.load(null, { title: '', content: '', date: '', folder_id: null })
+    setDeleteStage('idle')
+    setDeleteError('')
     setMode('view')
-    resetSaveState()
-  }
-
-  async function submitCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (writing.current || panel.kind !== 'create') return
-    const payload = buildInsightCreate(draft)
-    const errors = validateCreateInput({ title: payload.title ?? null, content: payload.content })
-    if (hasContentValidationErrors(errors)) {
-      setSaveStatus('invalid')
-      setSaveError(formatContentValidationErrors(errors))
-      return
-    }
-    writing.current = true
-    onBusyChange(true)
-    setSaveStatus('saving')
-    setSaveError('')
-    try {
-      const created = await createInsight(payload)
-      setSaveStatus('saved')
-      onDirtyChange(false)
-      onCreated(created)
-    } catch (error: unknown) {
-      setSaveStatus('error')
-      setSaveError(error instanceof Error ? error.message : '保存失败，请稍后重试')
-    } finally {
-      writing.current = false
-      onBusyChange(false)
-    }
-  }
-
-  async function submitUpdate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (writing.current || file === null) return
-    const update = buildInsightUpdate(file, draft)
-    const errors = validateUpdateInput(update)
-    if (hasContentValidationErrors(errors)) {
-      setSaveStatus('invalid')
-      setSaveError(formatContentValidationErrors(errors))
-      return
-    }
-    writing.current = true
-    onBusyChange(true)
-    setSaveStatus('saving')
-    setSaveError('')
-    try {
-      const updated = await updateInsight(file.id, update)
-      const next = toInsightDraft(updated)
-      setFile(updated)
-      setDraft(next)
-      setInitial(next)
-      onDirtyChange(false)
-      setMode('view')
-      setSaveStatus('saved')
-      onChanged(updated)
-    } catch (error: unknown) {
-      setSaveStatus('error')
-      setSaveError(error instanceof Error ? error.message : '保存失败，请稍后重试')
-    } finally {
-      writing.current = false
-      onBusyChange(false)
-    }
   }
 
   async function confirmDelete() {
@@ -226,14 +192,18 @@ function InsightPanel({
     setDeleteStage('deleting')
     setDeleteError('')
     try {
-      await deleteInsight(file.id)
+      // Stage 3 契约：软删除必须携带当前 revision（缺 428 / 旧 409）。
+      await deleteInsight(file.id, file.revision)
       onDirtyChange(false)
       onDeleted(file)
     } catch (error: unknown) {
       if (error instanceof InsightApiError && error.status === 404) {
-        // 目标已经不在了：与删除成功等价处理，刷新走正常路径。
         onDirtyChange(false)
         onDeleted(file)
+      } else if (error instanceof InsightApiError && error.status === 409) {
+        setDeleteStage('idle')
+        setDeleteError('这条记录已在别处发生变化，已重新读取，请再确认一次。')
+        setReloadToken((value) => value + 1)
       } else {
         setDeleteStage('idle')
         setDeleteError(error instanceof Error ? error.message : '删除失败，请稍后重试')
@@ -244,6 +214,25 @@ function InsightPanel({
     }
   }
 
+  const invalidDraft = autosave.dirty && !autosave.savable
+
+  const statusBanner = (
+    <div className={`autosave-status autosave-${autosave.status}`} role="status" aria-live="polite">
+      <span className="autosave-label">{statusLabel(autosave.status)}</span>
+      <span className="autosave-hint">{autosave.status === 'failed' || autosave.status === 'conflict'
+        ? autosave.error : autosaveHint(autosave.status)}</span>
+      {autosave.status === 'failed' && (
+        <button type="button" onClick={() => void autosave.retry()}>重试保存</button>
+      )}
+      {autosave.status === 'conflict' && (
+        <>
+          <button type="button" onClick={() => void autosave.resubmitAfterConflict()}>用我的草稿重试</button>
+          <button type="button" onClick={() => void autosave.reloadServerVersion()}>重新载入服务器版本</button>
+        </>
+      )}
+    </div>
+  )
+
   return (
     <section className="journal-editor" aria-label={isCreate ? '新建 Insight' : 'Insight 详情'}>
       <div className="detail-header">
@@ -251,32 +240,35 @@ function InsightPanel({
         <button type="button" onClick={onClose} disabled={busy}>返回列表</button>
       </div>
 
-      {isCreate && (
+      {mode === 'edit' && (panel.kind === 'create' || (status === 'success' && file)) && (
         <>
           <p className="detail-hint">Insight 没有所属日期，也不需要来源或 AI 信息，只有标题与正文。</p>
-          <form className="editor-form" onSubmit={submitCreate}>
-            <InsightFields draft={draft} disabled={busy}
-              onTitle={changeTitle} onContent={changeContent} />
-            <FolderSelect value={draft.folder_id} disabled={busy}
-              onChange={changeFolder} />
+          {statusBanner}
+          <form className="editor-form" onSubmit={(event) => { event.preventDefault(); void autosave.saveNow() }}>
+            <InsightFields draft={draft} disabled={false}
+              onTitle={(value) => autosave.changeDraft({ title: value })}
+              onContent={(value) => autosave.changeDraft({ content: value })}
+              changeDraft={autosave.changeDraft}
+              composing={{ start: autosave.onCompositionStart, end: autosave.onCompositionEnd }} />
+            {invalidDraft && (
+              <p className="detail-hint" role="status">
+                空白或超长的输入不会提交，也不会创建空记录；内容保留在编辑器里。
+              </p>
+            )}
             <div className="editor-actions">
-              <button type="submit" disabled={busy}>{busy ? '保存中……' : '保存'}</button>
-              <button type="button" onClick={onClose} disabled={busy}>取消新建</button>
+              <button type="submit" disabled={!autosave.dirty}>立即保存</button>
+              <button type="button" onClick={() => isCreate ? onClose() : onNavigate(exitEditing)} disabled={busy}>
+                {isCreate ? '取消新建' : '返回查看'}
+              </button>
             </div>
           </form>
-          {(saveStatus === 'error' || saveStatus === 'invalid') && (
-            <p className="detail-error" role="alert">
-              {saveStatus === 'error' ? '保存失败' : '输入不合法'}：{saveError}
-              （输入已保留{saveStatus === 'invalid' ? '，未发送保存请求' : ''}，可修改后再次保存。）
-            </p>
-          )}
         </>
       )}
 
       {!isCreate && status === 'loading' && <p className="detail-state" role="status">正在读取详情……</p>}
       {!isCreate && status === 'error' && (
         <div className="detail-state detail-state-error" role="alert">
-          <p>{notFound ? `该 Insight 不存在（id ${insightId}），可能已被移入回收箱。` : `读取详情失败：${loadError}`}</p>
+          <p>{notFound ? `该 Insight 不存在（id ${insightId}），可能已移入回收箱。` : `读取详情失败：${loadError}`}</p>
           <button type="button" disabled={busy} onClick={() => {
             setStatus('loading')
             setFile(null)
@@ -292,6 +284,7 @@ function InsightPanel({
           <h3 className="detail-title">{file.display_title}</h3>
           <dl className="detail-meta">
             <div className="detail-meta-row"><dt>id</dt><dd>{file.id}</dd></div>
+            <div className="detail-meta-row"><dt>版本</dt><dd>{file.revision}</dd></div>
             {file.folder_id !== null && (
               <div className="detail-meta-row"><dt>所属 Folder</dt><dd>{file.folder_id}</dd></div>
             )}
@@ -299,7 +292,6 @@ function InsightPanel({
             <div className="detail-meta-row"><dt>修改时间</dt><dd>{formatServerTimestamp(file.updated_at)}</dd></div>
           </dl>
           <MarkdownContent source={file.content} onLink={onResolveLink} disabled={busy} />
-          {saveStatus === 'saved' && <p className="detail-success" role="status">已保存。</p>}
           <div className="detail-actions">
             <button type="button" onClick={startEditing} disabled={busy}>修改</button>
             {deleteStage === 'idle' && (
@@ -321,31 +313,13 @@ function InsightPanel({
         </>
       )}
 
-      {!isCreate && status === 'success' && file && mode === 'edit' && (
-        <form className="detail-form" onSubmit={submitUpdate}>
-          <p className="detail-hint">Insight 没有所属日期；保存时只提交改过的字段。</p>
-          <InsightFields draft={draft} disabled={busy}
-            onTitle={changeTitle} onContent={changeContent} />
-          <FolderSelect value={draft.folder_id} disabled={busy}
-            onChange={changeFolder} />
-          <div className="editor-actions">
-            <button type="submit" disabled={busy}>{saveStatus === 'saving' ? '保存中……' : '保存修改'}</button>
-            <button type="button" onClick={() => onNavigate(exitEditing)} disabled={busy}>取消</button>
-          </div>
-          <p className="detail-hint">{isDirty ? '保存时只提交改过的字段。' : '没有任何改动，保存将按空更新处理。'}</p>
-          {(saveStatus === 'error' || saveStatus === 'invalid') && (
-            <p className="detail-error" role="alert">
-              {saveStatus === 'error' ? '保存失败' : '输入不合法'}：{saveError}
-              （输入已保留{saveStatus === 'invalid' ? '，未发送保存请求' : ''}，可修改后再次保存。）
-            </p>
-          )}
-        </form>
-      )}
     </section>
   )
 }
 
-function InsightPage({ onDirtyChange, onBusyChange, onResolveLink, onNavigate, initialOpen = null, onOpenRequestConsumed }: InsightPageProps) {
+function InsightPage({
+  onDirtyChange, onBusyChange, onResolveLink, onNavigate, onFlushReady, initialOpen = null, onOpenRequestConsumed,
+}: InsightPageProps) {
   // 初始外部请求直接进入详情；后续同模块链接由下面的 effect 消费。
   const [panel, setPanel] = useState<InsightPanelShape | { kind: 'list' }>(
     initialOpen ? { kind: 'detail', id: initialOpen.id, key: initialOpen.key } : { kind: 'list' },
@@ -445,13 +419,13 @@ function InsightPage({ onDirtyChange, onBusyChange, onResolveLink, onNavigate, i
   }
 
   function handleCreated(insight: Insight) {
-    onDirtyChange(false)
-    setNotice(`已保存：${insight.display_title}`)
-    setPanel({ kind: 'detail', id: insight.id, key: nextKey() })
+    // List identity only; Dirty and the live save queue remain owned by the panel.
+    setPanel((current) => current.kind === 'create'
+      ? { ...current, savedId: insight.id } : current)
     refreshList()
   }
   function handleChanged() {
-    // 面板自身在查看态显示“已保存。”；这里只负责刷新列表。
+    // 面板自身在查看态刷新；这里只负责刷新列表。
     refreshList()
   }
   function handleDeleted() {
@@ -473,13 +447,15 @@ function InsightPage({ onDirtyChange, onBusyChange, onResolveLink, onNavigate, i
 
       {panel.kind === 'create' && (
         <InsightPanel key={`create-${panel.key}`} panel={panel}
-          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onNavigate={onNavigate} onResolveLink={onResolveLink}
+          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onFlushReady={onFlushReady}
+          onNavigate={onNavigate} onResolveLink={onResolveLink}
           onCreated={handleCreated} onChanged={handleChanged} onDeleted={handleDeleted}
           onClose={() => onNavigate(showList)} />
       )}
       {panel.kind === 'detail' && (
         <InsightPanel key={`detail-${panel.key}`} panel={panel}
-          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onNavigate={onNavigate} onResolveLink={onResolveLink}
+          onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onFlushReady={onFlushReady}
+          onNavigate={onNavigate} onResolveLink={onResolveLink}
           onCreated={handleCreated} onChanged={handleChanged} onDeleted={handleDeleted}
           onClose={() => onNavigate(showList)} />
       )}
@@ -500,8 +476,8 @@ function InsightPage({ onDirtyChange, onBusyChange, onResolveLink, onNavigate, i
                 <ul className="journal-list">
                   {listResult.items.map((insight) => (
                     <li key={`${insight.type}:${insight.id}`}>
-                      <FileCard file={insight} onOpen={(file) => openInsight(file.id)}
-                        selected={panel.kind === 'detail' && panel.id === insight.id} disabled={busy} />
+                      <FileCard file={insight} onOpen={(value) => openInsight(value.id)}
+                        selected={(panel.kind === 'detail' && panel.id === insight.id) || (panel.kind === 'create' && panel.savedId === insight.id)} disabled={busy} />
                     </li>
                   ))}
                 </ul>

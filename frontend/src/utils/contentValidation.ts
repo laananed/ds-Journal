@@ -27,7 +27,7 @@
  * `node --experimental-strip-types` 直接测试。
  */
 
-import type { JournalUpdate } from '../types/journal.ts'
+import type { JournalUpdateFields } from '../types/journal.ts'
 
 /** 标题允许的最大 Unicode 码点数。 */
 export const TITLE_MAX_CODE_POINTS = 80
@@ -155,7 +155,7 @@ export function validateCreateInput(
  * - 用户真的把非法值提交进来（例如把正文清空）→ 仍然拒绝。
  */
 export function validateUpdateInput(
-  update: JournalUpdate,
+  update: JournalUpdateFields,
 ): ContentValidationErrors {
   const errors: ContentValidationErrors = {}
 

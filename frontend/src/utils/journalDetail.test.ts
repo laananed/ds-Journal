@@ -46,6 +46,7 @@ function journal(overrides: Partial<Journal> = {}): Journal {
     display_title: '2026-10-02',
     folder_id: null,
     deleted_at: null,
+    revision: 1,
     id: 42,
     title: '原始标题',
     content: '原始正文',
