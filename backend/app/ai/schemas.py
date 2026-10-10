@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.ai.settings import CUSTOM_PROMPT_MAX_CODE_POINTS, custom_prompt_limit_error
 from app.writing.schemas import Revision
+from uuid import UUID
 
 #: ``expected_revision=0`` means "no settings row exists yet"; every other value
 #: must be a real stored revision >= 1.
@@ -127,3 +128,39 @@ class AICallsPage(BaseModel):
     page_size: int
     total: int
     has_next: bool
+
+
+class LocalSource(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+    type: Literal["journal", "inbox"]
+    id: Annotated[int, Field(strict=True, ge=1)]
+    expected_revision: Revision
+
+
+class LocalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+    request_id: UUID
+    source: LocalSource
+    question: Annotated[str, Field(strict=True, max_length=2000)] | None = None
+
+
+class AiRequestResponse(BaseModel):
+    request_id: str
+    kind: Literal["local", "review"]
+    status: Literal["pending", "ready", "applied", "failed", "conflict", "unknown"]
+    sources: list[SourceIdentity]
+    reply: str | None
+    file: dict | None
+    review: dict | None
+    saved_target: SavedTarget | None
+    usage: AIUsageResponse
+    web_status: Literal["disabled", "not_configured", "not_needed", "searched", "failed", "blocked"]
+    citations: list[dict]
+    error: dict | None
+
+
+class NoopResponse(BaseModel):
+    status: Literal["noop"]
+    message: str
+    request_id: None = None
+    usage: None = None

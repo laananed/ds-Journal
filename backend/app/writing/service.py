@@ -50,6 +50,38 @@ def project_blocks(blocks):
     return "".join(parts)
 
 
+def insert_ai_reply(row, reply, request_id, captured_blocks):
+    """Server-only append at the captured user boundary. Does not commit.
+
+    The caller has already locked/checked the source. Preserve existing user
+    IDs and the preallocated empty continuation. Convert NULL only on success.
+    """
+    from copy import deepcopy
+    from datetime import datetime, timezone
+    from uuid import uuid4
+    from app.journal.schemas import CONTENT_MAX_CODE_POINTS
+
+    blocks = deepcopy(captured_blocks)
+    if blocks is None:
+        blocks = [{"id": str(uuid4()), "kind": "user", "text": row.content}]
+    users = [index for index, block in enumerate(blocks) if block["kind"] == "user"]
+    boundary = len(blocks)
+    if users:
+        last_user = users[-1]
+        boundary = last_user if blocks[last_user]["text"] == "" else last_user + 1
+    blocks.insert(boundary, {"id": str(uuid4()), "kind": "ai_reply",
+                             "text": reply, "request_id": str(request_id)})
+    if boundary + 1 == len(blocks) or blocks[boundary + 1]["kind"] != "user" or blocks[boundary + 1]["text"] != "":
+        blocks.insert(boundary + 1, {"id": str(uuid4()), "kind": "user", "text": ""})
+    content = project_blocks(blocks)
+    if len(content) > CONTENT_MAX_CODE_POINTS:
+        raise WritingError("AI reply exceeds the content length limit")
+    row.content_blocks = blocks
+    row.content = content
+    row.revision += 1
+    row.updated_at = datetime.now(timezone.utc)
+
+
 def validate_blocks(blocks, *, old_blocks=None, old_content=None):
     from app.journal.schemas import _is_blank, _validate_content
 

@@ -235,6 +235,7 @@ Get-ChildItem .\src\utils -Filter *.test.ts | ForEach-Object { node --experiment
 - 本轮开始确认seekjournal_test实际S3、八表空、无其他会话，串行测试；个人库只读摘要。收尾摘要/原报告保护、修复diff及新57文件SHA256见 `.workbuddy/s3-t01-codex/if-match-fix/`；修复报告见 `.workbuddy/s3-t01-codex/if-match-fix-report.md`。
 - 状态：**最小修复与开发自测通过，待未参与修复的新Codex对话独立复测、待提交/整合及用户接受。** 本开发对话不能作为本次修复的独立测试者。停止修改，不进入T02、不调用其他Agent、无Git整合操作；Stage2历史未闭环状态保留，不宣布T01或Stage验收完成。
 
+
 ### S3-T04 独立 HTTP/UI 测试库资源准备（2026-10-11，Codex，仅环境隔离）
 
 - 用户明确授权新建 `seekjournal_test_02`，仅在本轮新库执行当前已整合 Alembic 迁移；T05 继续独占 `seekjournal_test`，T04 独占 `seekjournal_test_02`，用途限后端服务与 HTTP/UI 测试。本记录不改变 T04/T05 功能授权、历史验收或完成状态。
@@ -245,3 +246,14 @@ Get-ChildItem .\src\utils -Filter *.test.ts | ForEach-Object { node --experiment
 - pytest 隔离仍未支持新库：`get_test_database_url()` 固定为 `seekjournal_test`，conftest 导入时覆盖 DATABASE_URL，迁移 fixture 同样固定库名。T04 不得运行加载此 conftest 的 pytest；本轮未执行 pytest 或 `prepare_test_db.py`，未改测试框架/固定库名守卫。
 - 收尾：新库保留给 T04，无业务数据写入、服务未启动、依赖未安装、无其他 Agent 调用；仅追加本资源记录，未提交/整合。此为本轮环境实测，非产品自测或独立验收，不宣布 T04/T05/Stage 完成。
 - 脱敏证据与可复制启动/核验指令：`C:\Programme\demo\SeekJournal\.workbuddy\s3-t04-db-isolation\`，包括 `database-evidence.json`（创建前后、列/约束、迁移输出与退出码）、`probe.py`、`T04-commands.md` 和收尾证据；不含凭据、连接串、Key 或正文。
+
+
+### S3-T05 开发自测交付（2026-10-11，Codex）
+
+- 用户明确授权 T05 与 Work-01 的 T04 并行；本轮只执行 T05，无其他 Agent 调用。用户确认实际干净起始基线 `codex/s03-t05` / `faf4c14ebad9422719ff7a96cd197326b5877c3e`（相较提示词旧基线仅清理 T03 临时调试测试）；T02/T03 通过并整合依据本轮用户确认，未重新宣布历史或 Stage 验收完成。
+- 实现 POST `/api/ai/local`、GET `/api/ai/requests/{request_id}`、user-only Unicode 增量/修订与有限问题上下文、同键恢复/源 pending 排他、独立计量事务与正文/C 原子附着、运行期过期/重启 unknown、迟到结果保护和基础提示词。T03 client 仅补无效 completion 的已知 usage 元数据；无前端、迁移、依赖、真实 .env 或未来 T06/T07/T08 实施。
+- 开发自测：专项 34 passed、T03/blocks 聚焦回归 98 passed、后端全量 1001 passed，三个指定命令退出 0。真实 8033 TCP HTTP/DB + Mock 主轮与主动断线补充轮退出 0；上游等待时另一 Session 源写约 0.016s 提交，冲突/失败不推进 C。全量迁移测试只走已有私有 schema 守卫。
+- 已记录产品反例、脚本错误和资源变化。资源竞争期间暂停并向用户协调；一次未通过连接守卫却误执行证据脚本的门禁疏漏单独保留，不将污染轮作为通过。重新验证独占后成功轮恢复八表零基线，仅清自建对象；最终 revision=3aa16300a58a、其他连接=0、8033关闭、无私有测试 schema。已发布“已释放seekjournal_test”，发布后不再连库测试。
+- 待测状态为未提交 diff/新文件，未 commit/merge/push/tag、切分支或整合 T04。开发者已停止产品写入，交 WorkBuddy 未参与实现的新对话独立测试，六项风险仍待独立复核、Git整合与用户接受。真实模型连通性/风格、联网、前端集成未验证；Task/Stage 不宣告验收完成。
+- 脱敏证据与文件 SHA256：`.workbuddy/s3-t05/development-report.md`、`handoff.md`、`file-sha256.json`、命令/退出码、实际 HTTP/DB/Mock 消息、状态及释放记录。核心学习点为用户文本检查点、不可回滚付费与正文事务边界、幂等/unknown 查询恢复。
+

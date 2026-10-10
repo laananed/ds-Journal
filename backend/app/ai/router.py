@@ -22,9 +22,33 @@ from app.ai.schemas import (
 )
 from app.ai.usage import SourceNotFound
 from app.database import get_db
+from app.ai.local import execute_local, LocalError
+from app.ai.requests import request_response
+from app.ai.schemas import LocalRequest, AiRequestResponse, NoopResponse
+from uuid import UUID
+from fastapi import Response
+from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 files_router = APIRouter(prefix="/api/files", tags=["ai"])
+
+
+@router.post("/local", response_model=AiRequestResponse | NoopResponse)
+def post_local(payload: LocalRequest, response: Response, db: Session = Depends(get_db)):
+    try:
+        result, status = execute_local(db, payload)
+        response.status_code = status
+        return result
+    except LocalError as error:
+        content = {"detail": str(error)}
+        if error.request_id:
+            content["request_id"] = error.request_id
+        return JSONResponse(status_code=error.status_code, content=content)
+
+
+@router.get("/requests/{request_id}", response_model=AiRequestResponse)
+def get_request(request_id: UUID, db: Session = Depends(get_db)):
+    return request_response(db, request_id)
 
 _CONFLICT = "AI settings revision has changed; re-read and retry"
 _PRECONDITION_REQUIRED = "expected_revision is required"
