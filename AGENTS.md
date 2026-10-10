@@ -7,7 +7,7 @@ SeekJournal 是以个人认知成长为核心、生活与情感记录为辅的�
 
 ## 2. Required Reading
 
-- 始终读取根 `AGENTS.md`、适用角色规范（Codex：`agents/gpt-lead.md`；WorkBuddy：`agents/ds-developer.md`；ZCode：`agents/zcode-developer.md`）及 `agents/multi-agent-workflow.md`，单 Agent 执行也适用。
+- 始终读取根 `AGENTS.md`、适用角色规范（Codex：`agents/gpt-lead.md`；WorkBuddy：`agents/ds-developer.md`；DSH：`agents/dsh-developer.md`）及 `agents/multi-agent-workflow.md`，单 Agent 执行也适用。
 - 按当前 Task 选择性读取 §3 中相关产品需求、API、架构、任务计划章节及实际代码；包含适用的通用规则、范围、依赖、验收标准、执行记录与引用条款，不要求完整读取四份 Stage 2 文档。
 - 历史文档仅在追溯历史行为、兼容性或 Bug 时读取相关内容，包括任务所需的迁移、回归和引用依据；不默认完整读取 Stage 1 / 1.5 文档。
 - 已读且未变化、上下文仍可用的内容无需重复加载；范围不明或存在依赖引用时先检索、补读。按需读取不改变文档权威性，不得跳过本任务需要的契约。
@@ -72,10 +72,10 @@ T03/T04 的历史分工与资源边界见 `docs/stage2-tasks.md` 的历史记录
 
 ## 10. 多 Agent 协作与开发入口
 
-- Agent / 模型配置及分配策略统一维护于 `agents/multi-agent-workflow.md`：Codex 为 Lead + Developer，承担重要决策、复杂实现、疑难调试与升级处理；WorkBuddy 和 ZCode 为同级 Developer，常规任务优先由一方开发、另一方独立测试，按上下文、能力适配和额度选择，可互换。此为项目策略，不是模型性能排名。
+- Agent / 模型配置及分配策略统一维护于 `agents/multi-agent-workflow.md`：Codex 为 Lead + Developer，承担重要决策、复杂实现、疑难调试与升级处理；WorkBuddy 和 DSH 为同级 Developer，常规任务优先由一方开发、另一方独立测试，按上下文、能力适配和额度选择，可互换。此为项目策略，不是模型性能排名。
 - 新开发 Task 先只读检查，输出任务分配、串并行安排和每项开发 / 独立测试完整提示词，用户确认开始后实施；既有明确授权继续有效。
-- 已配置三个 Agent，默认最多两个同时开发，Codex 按需介入，不要求亲自开发或重复运行每个常规任务的完整测试；重要、高风险、跨模块架构任务及升级处理交 Codex，触发与证据要求见协作规范。
-- 三个同时开发须在具体方案中明确资源隔离并获用户确认；并行工作使用独立分支 / Worktree，同目录禁止同时写入，数据库与端口协调，main 原则上用于集成。不建立自动调度系统，不擅自调用或创建其他 Agent。
+- 最多三个 Agent 同时开发，日常优先两个；有三个可独立执行的工作项且资源隔离满足时允许三路并发，无须重复申请已批准的并发人数。Codex 按需介入，不要求亲自开发或重复运行每个常规任务的完整测试；重要、高风险、跨模块架构任务及升级处理交 Codex，触发与证据要求见协作规范。
+- 每个具体 Task 仍须只读检查、依赖分析、明确资源分配和用户确认开始；并发人数批准不授权新 Task 或自动启动 Agent。每个同时写代码的 Agent 使用自己的分支和 Git Worktree，同目录单写者，无法隔离的资源串行，main 原则上用于集成。不引入任务调度服务、自动编排框架或新的运行依赖，不擅自调用或创建其他 Agent。
 - Codex 统一协调共享 `docs/`、`agents/` 和本文件；执行者只改分配范围，不覆盖他人修改，交叉变更先协调。
 - 局部验证后，仅按已确认 Git 权限提交、审核和整合；未授权的 commit / merge / push / tag、切换或清理他人 Worktree、删分支不自动执行。未获提交或整合授权时交付 diff，明确待提交 / 整合。
 - 详细分配、提示词模板、升级处理、资源隔离、Worktree 同步和统一验收执行 `agents/multi-agent-workflow.md`。本次用户已批准的协作分工与审核机制优先于任务文档中的旧通用协作流程；原 Task 的功能、测试、专项审核门禁和既有授权不因此改变，根文件不重复维护细节。
