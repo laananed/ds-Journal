@@ -3,6 +3,7 @@ import { createJournal, getJournal, listJournals, updateJournal } from '../api/j
 import JournalList from './JournalList'
 import FolderSelect from './FolderSelect'
 import Pagination from './Pagination'
+import WritingEditor from './WritingEditor'
 import type { Journal, JournalCreate, JournalPage, JournalUpdate } from '../types/journal'
 import { useAutosave, type AutosaveFile, type FlushResult } from '../hooks/useAutosave'
 import {
@@ -14,6 +15,7 @@ import {
   statusLabel,
   type DraftSnapshot,
 } from '../utils/autosave'
+import { legacyBlocksFromContent, newUserBlock, projectBlocks } from '../utils/writingBlocks'
 import { defaultJournalDate } from '../utils/journalDate'
 import { nearestValidPage } from '../utils/pagination'
 
@@ -28,10 +30,15 @@ interface JournalEditorProps {
   onFlushReady?: (flush: (() => Promise<FlushResult>) | null) => void
 }
 
+/** 编辑态草稿：结构化写作统一使用块；历史 NULL 正文包成等价 user 段。 */
 function toSnapshot(journal: Journal): DraftSnapshot {
+  const blocks = journal.content_blocks != null && journal.content_blocks.length > 0
+    ? journal.content_blocks
+    : legacyBlocksFromContent(journal.content)
   return draftToSnapshot(
     { title: journal.title ?? '', content: journal.content, folder_id: journal.folder_id },
     journal.journal_date,
+    blocks,
   )
 }
 
@@ -49,6 +56,15 @@ function JournalEditor({
   const [dayError, setDayError] = useState('')
   const [dayReloadToken, setDayReloadToken] = useState(0)
 
+  // 只构造一次初始草稿：块 id 必须跨渲染稳定。
+  const [initialDraft] = useState<DraftSnapshot>(() => ({
+    title: '',
+    content: '',
+    date: defaultJournalDate(),
+    folder_id: null,
+    blocks: [newUserBlock('')],
+  }))
+
   // 已创建文件 id 的同步副本：供 create/update/refetch 闭包读取（避免闭包拿到旧 state）。
   const lastSavedIdRef = useRef(0)
   const rememberSaved = (saved: Journal): void => {
@@ -63,17 +79,18 @@ function JournalEditor({
 
   const autosave = useAutosave<Journal>({
     enabled: true,
-    initialDraft: { title: '', content: '', date: defaultJournalDate(), folder_id: null },
+    initialDraft,
     initialFile: null,
     // 新建必须带日期；空白正文不提交，也不会创建空文件。
     savable: (draft, context) => isSavable(draft, { ...context, requireDate: true }),
     create: async (draft, createKey) => {
       const payload: JournalCreate = {
         title: draft.title === '' ? null : draft.title,
-        content: draft.content,
         journal_date: draft.date,
         folder_id: draft.folder_id,
         client_create_id: createKey,
+        // 结构化写作只提交 content_blocks，绝不与 content 同时提交。
+        content_blocks: draft.blocks ?? [],
       }
       return await createJournal(payload)
     },
@@ -84,6 +101,7 @@ function JournalEditor({
       const payload: JournalUpdate = { expected_revision: expectedRevision }
       if ('title' in patch) payload.title = patch.title
       if ('content' in patch) payload.content = patch.content
+      if ('blocks' in patch) payload.content_blocks = patch.blocks
       if ('date' in patch) payload.journal_date = patch.date
       if ('folder_id' in patch) payload.folder_id = patch.folder_id
       return await updateJournal(fileId, payload)
@@ -99,6 +117,7 @@ function JournalEditor({
   })
 
   const draft = autosave.draft
+  const draftBlocks = draft.blocks ?? []
 
   const requestKey = `${draft.date}:${dayPage}:${dayReloadToken}:${externalRevision}`
   const [dayLoadedKey, setDayLoadedKey] = useState('')
@@ -173,12 +192,15 @@ function JournalEditor({
             onCompositionStart={autosave.onCompositionStart}
             onCompositionEnd={autosave.onCompositionEnd} />
         </label>
-        <label className="editor-field"><span>正文</span>
-          <textarea value={draft.content} rows={6}
-            onChange={(event) => autosave.changeDraft({ content: event.target.value })}
+        <div className="editor-field">
+          <span>正文</span>
+          <WritingEditor
+            blocks={draftBlocks}
+            onChange={(blocks) => autosave.changeDraft({ blocks, content: projectBlocks(blocks) })}
             onCompositionStart={autosave.onCompositionStart}
-            onCompositionEnd={autosave.onCompositionEnd} />
-        </label>
+            onCompositionEnd={autosave.onCompositionEnd}
+          />
+        </div>
         <FolderSelect value={draft.folder_id}
           onChange={(folderId) => autosave.changeDraft({ folder_id: folderId })} />
         {invalidDraft && (

@@ -1,4 +1,5 @@
-import type { Block, ContentFile, FilePage } from './file'
+import type { ContentFile, FilePage } from './file'
+import type { Block } from './writing'
 
 /**
  * Inbox 的 `inbox_date` 与 `is_daily` 在创建时确定，编辑不可修改。
@@ -18,9 +19,12 @@ export type InboxPage = FilePage<Inbox>
  *
  * `title` 是唯一可选字段：省略时后端把 `inbox_date` 存成默认标题；
  * 显式提交 `null` / 空字符串表示主动无标题，原值分别保留。
+ *
+ * `content` 与 `content_blocks` **二选一**（`docs/stage3-api.md` §2）。
  */
 export interface InboxCreate {
-  content: string
+  content?: string
+  content_blocks?: Block[]
   inbox_date: string
   is_daily: boolean
   title?: string | null
@@ -28,10 +32,14 @@ export interface InboxCreate {
   client_create_id?: string
 }
 
-/** PATCH 实际提交的字段子集；只允许 title / content / folder_id。 */
+/**
+ * PATCH 实际提交的字段子集；只允许 title / content / content_blocks / folder_id。
+ * `content` 与 `content_blocks` 互斥。
+ */
 export interface InboxUpdateFields {
   title?: string | null
   content?: string
+  content_blocks?: Block[]
   folder_id?: number | null
 }
 

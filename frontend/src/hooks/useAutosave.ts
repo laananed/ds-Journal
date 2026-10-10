@@ -34,6 +34,7 @@ import {
   type SavableContext,
   type SaveStatus,
 } from '../utils/autosave'
+import { pruneBlocksToServer } from '../utils/writingBlocks'
 
 /** 自动保存需要的最小文件形状：身份 + 版本 + 服务器内容快照。 */
 export interface AutosaveFile {
@@ -106,6 +107,18 @@ export interface UseAutosaveResult {
   onCompositionEnd: () => void
   /** 立即保存（不等防抖）。 */
   saveNow: () => Promise<void>
+  /**
+   * 落地所有待保存输入并给出结论（`docs/stage3-tasks.md` §6 的「删除前先 flush」）：
+   * `'clean'` = 已无待提交输入；`'blocked'` = 保存失败 / 版本冲突 / 输入不合法，
+   * 调用方（如删除 AI 段）必须停下让用户处理，不能继续写库。
+   */
+  flush: () => Promise<FlushResult>
+  /**
+   * 服务器版本在**外部**被改变后（例如刚删除了一个 AI 段），用重读到的详情
+   * 安全重建基线：未编辑时整体采用服务器版本；本轮又打了新字时只更新服务器
+   * 基线与身份，保留较新草稿，并剔除服务器已删除的段，避免下次提交被拒。
+   */
+  syncFromServer: (file: AutosaveFile) => void
   /** 失败后的显式重试：复用首次创建键，草稿不变。 */
   retry: () => Promise<void>
   /** 冲突时重新载入服务器版本（丢弃本地草稿）。 */
@@ -332,6 +345,37 @@ export function useAutosave<F>(options: UseAutosaveOptions<F>): UseAutosaveResul
     else if (inFlightRef.current !== null) await inFlightRef.current
   }, [checkSavable, send])
 
+  const syncFromServer = useCallback((file: AutosaveFile): void => {
+    const core = coreRef.current
+    const serverDraft = file.draft
+    if (isDirty(core) && core.draft.blocks !== undefined && core.draft.blocks !== null
+      && serverDraft.blocks !== undefined && serverDraft.blocks !== null) {
+      // 本轮删除期间用户继续输入：只换服务器基线与身份，保留较新草稿；
+      // 同时剔除服务器已删除的段，否则下一次提交会被后端判为
+      // 「客户端删除 AI 段」而拒绝。
+      const pruned = pruneBlocksToServer(core.draft.blocks, serverDraft.blocks) ?? core.draft.blocks
+      const nextDraft: DraftSnapshot = { ...core.draft, blocks: pruned }
+      coreRef.current = {
+        ...core,
+        fileId: file.id,
+        revision: file.revision,
+        baseline: serverDraft,
+        draft: nextDraft,
+        inFlight: null,
+        error: '',
+      }
+      setDraft(nextDraft)
+    } else {
+      coreRef.current = createAutosaveCore({
+        draft: serverDraft,
+        createKey: core.createKey,
+        file: { id: file.id, revision: file.revision },
+      })
+      setDraft(serverDraft)
+    }
+    publish()
+  }, [publish])
+
   const retry = useCallback(async (): Promise<void> => {
     coreRef.current = clearFailure(coreRef.current)
     publish()
@@ -414,6 +458,8 @@ export function useAutosave<F>(options: UseAutosaveOptions<F>): UseAutosaveResul
     onCompositionStart,
     onCompositionEnd,
     saveNow,
+    flush: stableFlush,
+    syncFromServer,
     retry,
     reloadServerVersion,
     resubmitAfterConflict,

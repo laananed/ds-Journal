@@ -8,9 +8,11 @@ import {
   listInboxes,
   updateInbox,
 } from '../api/inboxes'
+import { WritingApiError, deleteAiBlock } from '../api/writing'
 import FileCard from '../components/FileCard'
 import FolderSelect from '../components/FolderSelect'
-import MarkdownContent from '../components/MarkdownContent'
+import WritingContent from '../components/WritingContent'
+import WritingEditor from '../components/WritingEditor'
 import Pagination from '../components/Pagination'
 import type { Inbox, InboxCreate, InboxPage as InboxPageData, InboxUpdate } from '../types/inbox'
 import { useAutosave, type AutosaveFile, type FlushResult } from '../hooks/useAutosave'
@@ -23,10 +25,12 @@ import {
   statusLabel,
   type DraftSnapshot,
 } from '../utils/autosave'
+import { legacyBlocksFromContent, newUserBlock, projectBlocks } from '../utils/writingBlocks'
 import { formatServerTimestamp } from '../utils/journalDetail'
 import { defaultJournalDate } from '../utils/journalDate'
 import { planDailyEntry } from '../utils/inboxDraft'
 import { nearestValidPage } from '../utils/pagination'
+import type { Block } from '../types/writing'
 
 interface InboxPageProps {
   onDirtyChange: (dirty: boolean) => void
@@ -49,10 +53,15 @@ function identityLabel(isDaily: boolean): string {
   return isDaily ? '当日 Daily Inbox' : '普通 Inbox'
 }
 
+/** 编辑态草稿：结构化写作统一使用块；历史 NULL 正文包成等价 user 段。 */
 function toSnapshot(inbox: Inbox): DraftSnapshot {
+  const blocks: Block[] = inbox.content_blocks != null && inbox.content_blocks.length > 0
+    ? inbox.content_blocks
+    : legacyBlocksFromContent(inbox.content)
   return draftToSnapshot(
     { title: inbox.title ?? '', content: inbox.content, folder_id: inbox.folder_id },
     inbox.inbox_date,
+    blocks,
   )
 }
 
@@ -60,14 +69,18 @@ function toFile(inbox: Inbox): AutosaveFile {
   return { id: inbox.id, revision: inbox.revision, draft: toSnapshot(inbox) }
 }
 
-/** 源码标题 + 正文输入；创建与编辑共用同一份字段，避免重复组件。 */
-function InboxFields({ draft, contentReadOnly, onTitle, onContent, changeDraft, composing }: {
+/** 源码标题 + 结构化正文输入；创建与编辑共用同一份字段，避免重复组件。 */
+function InboxFields({ draft, blocks, disabled, onTitle, changeDraft, composing, onBlocks, onRequestDeleteAiBlock, deletingBlockId, onResolveLink }: {
   draft: DraftSnapshot
-  contentReadOnly: boolean
+  blocks: Block[]
+  disabled: boolean
   onTitle: (value: string) => void
-  onContent: (value: string) => void
   changeDraft: (update: Partial<DraftSnapshot>) => void
   composing: { start: () => void; end: () => void }
+  onBlocks: (blocks: Block[]) => void
+  onRequestDeleteAiBlock?: (blockId: string) => void
+  deletingBlockId?: string | null
+  onResolveLink?: (title: string) => void
 }) {
   return (
     <>
@@ -76,11 +89,19 @@ function InboxFields({ draft, contentReadOnly, onTitle, onContent, changeDraft, 
           onChange={(event) => onTitle(event.target.value)}
           onCompositionStart={composing.start} onCompositionEnd={composing.end} />
       </label>
-      <label className="editor-field"><span>正文</span>
-        <textarea value={draft.content} rows={8} readOnly={contentReadOnly}
-          onChange={(event) => onContent(event.target.value)}
-          onCompositionStart={composing.start} onCompositionEnd={composing.end} />
-      </label>
+      <div className="editor-field">
+        <span>正文（用户文字与 AI 段分开显示）</span>
+        <WritingEditor
+          blocks={blocks}
+          disabled={disabled}
+          onChange={onBlocks}
+          onCompositionStart={composing.start}
+          onCompositionEnd={composing.end}
+          onRequestDeleteAiBlock={onRequestDeleteAiBlock}
+          deletingBlockId={deletingBlockId}
+          onResolveLink={onResolveLink}
+        />
+      </div>
       <FolderSelect value={draft.folder_id}
         onChange={(folderId) => changeDraft({ folder_id: folderId })} />
     </>
@@ -119,9 +140,13 @@ function InboxPanel({
   const [mode, setMode] = useState<'view' | 'edit'>(panel.kind === 'create' ? 'edit' : 'view')
   const [deleteStage, setDeleteStage] = useState<'idle' | 'confirming' | 'deleting'>('idle')
   const [deleteError, setDeleteError] = useState('')
+  const [deletingBlockId, setDeletingBlockId] = useState<string | null>(null)
+  const [blockError, setBlockError] = useState('')
   // Daily 冲突后重读到的已有 Daily 身份（null 表示该日期确实没有可打开的 Daily）。
   const [dailyConflict, setDailyConflict] = useState<{ id: number | null } | null>(null)
   const writing = useRef(false)
+  /** 服务器最新版本：AI 段删除必须用最新 revision（缺 428 / 旧 409）。 */
+  const latestRevisionRef = useRef(0)
   // 用户在标题框里真正打过字；决定创建请求是省略 title（用日期做默认标题）还是显式提交。
   const titleEditedRef = useRef(false)
   /**
@@ -134,6 +159,16 @@ function InboxPanel({
    */
   const createTitleEditedRef = useRef<boolean | null>(null)
 
+  // 只构造一次初始草稿：新建面板给出一个空 user 段，块 id 跨渲染稳定。
+  const [initialDraft] = useState<DraftSnapshot>(() => ({
+    title: '', content: '', date: inboxDate, folder_id: null,
+    blocks: isCreate ? [newUserBlock('')] : null,
+  }))
+
+  function rememberServer(inbox: Inbox): void {
+    latestRevisionRef.current = inbox.revision
+  }
+
   // 打开已有 Inbox 时真实读取详情；创建面板不发任何读请求。
   useEffect(() => {
     if (inboxId === null) return
@@ -141,6 +176,7 @@ function InboxPanel({
     getInbox(inboxId, controller.signal).then((data) => {
       if (controller.signal.aborted) return
       setFile(data)
+      rememberServer(data)
       setStatus('success')
     }).catch((error: unknown) => {
       if (controller.signal.aborted) return
@@ -152,24 +188,21 @@ function InboxPanel({
     return () => controller.abort()
   }, [inboxId, reloadToken])
 
-  const hasBlocks = file?.content_blocks != null
-
   const autosave = useAutosave<Inbox>({
     enabled: mode === 'edit',
-    initialDraft: isCreate
-      ? { title: '', content: '', date: inboxDate, folder_id: null }
-      : { title: '', content: '', date: '', folder_id: null },
+    initialDraft,
     initialFile: null,
     savable: (draft, context) => isSavable(draft, { ...context, requireDate: true }),
     create: async (draft, createKey) => {
       // 首次创建请求一旦发出即冻结「标题是否编辑过」：重放要发出与首次完全一致的 payload。
       if (createTitleEditedRef.current === null) createTitleEditedRef.current = titleEditedRef.current
       const payload: InboxCreate = {
-        content: draft.content,
         inbox_date: draft.date,
         is_daily: isDaily,
         folder_id: draft.folder_id,
         client_create_id: createKey,
+        // 结构化写作只提交 content_blocks，绝不与 content 同时提交。
+        content_blocks: draft.blocks ?? [],
       }
       // 没编辑过标题就省略 title：Daily / 普通 Inbox 都沿用后端「用业务日期做默认标题」。
       if (createTitleEditedRef.current) payload.title = draft.title === '' ? null : draft.title
@@ -177,12 +210,12 @@ function InboxPanel({
     },
     update: async (fileId, draft, baseline, expectedRevision) => {
       const patch = snapshotPatch(draft, baseline)
-      if (hasBlocks) delete patch.content
       // 空补丁 = 响应丢失后的安全 no-op：只回读，不写。
       if (isSnapshotPatchEmpty(patch)) return await getInbox(fileId)
       const payload: InboxUpdate = { expected_revision: expectedRevision }
       if ('title' in patch) payload.title = patch.title
       if ('content' in patch) payload.content = patch.content
+      if ('blocks' in patch) payload.content_blocks = patch.blocks
       if ('folder_id' in patch) payload.folder_id = patch.folder_id
       return await updateInbox(fileId, payload)
     },
@@ -193,6 +226,7 @@ function InboxPanel({
     },
     onSaved: (saved) => {
       setFile(saved)
+      rememberServer(saved)
       setStatus('success')
       if (panel.kind === 'create' && !createdRef.current) {
         createdRef.current = true
@@ -219,8 +253,9 @@ function InboxPanel({
     return () => { cancelled = true }
   }, [autosave.conflict, isDaily, isCreate, inboxDate])
 
-  const busy = deleteStage === 'deleting'
+  const busy = deleteStage === 'deleting' || deletingBlockId !== null
   const draft = autosave.draft
+  const draftBlocks = draft.blocks ?? []
 
   function changeTitle(value: string) {
     titleEditedRef.current = true
@@ -228,9 +263,11 @@ function InboxPanel({
   }
   function startEditing() {
     if (!file) return
-    autosave.load(toFile(file), toSnapshot(file))
+    const snapshot = toSnapshot(file)
+    autosave.load({ id: file.id, revision: file.revision, draft: snapshot }, snapshot)
     setDeleteStage('idle')
     setDeleteError('')
+    setBlockError('')
     setMode('edit')
   }
   function exitEditing() {
@@ -238,6 +275,7 @@ function InboxPanel({
     autosave.load(null, { title: '', content: '', date: '', folder_id: null })
     setDeleteStage('idle')
     setDeleteError('')
+    setBlockError('')
     setMode('view')
   }
 
@@ -269,6 +307,52 @@ function InboxPanel({
       writing.current = false
       onBusyChange(false)
     }
+  }
+
+  /** 删除一个 AI 段：先 flush 待保存输入，再按最新 revision 调专用接口，最后安全重读基线。 */
+  async function requestDeleteAiBlock(blockId: string): Promise<void> {
+    if (file === null || writing.current || deletingBlockId !== null) return
+    writing.current = true
+    onBusyChange(true)
+    setBlockError('')
+    setDeletingBlockId(blockId)
+    try {
+      const flushed = await autosave.flush()
+      if (flushed === 'blocked') {
+        setBlockError('还有未保存的输入或版本冲突，已停止删除，避免与自动保存互相覆盖。请先处理保存状态。')
+        return
+      }
+      await deleteAiBlock('inbox', file.id, blockId, latestRevisionRef.current)
+      const refreshed = await getInbox(file.id)
+      setFile(refreshed)
+      rememberServer(refreshed)
+      autosave.syncFromServer(toFile(refreshed))
+      onChanged(refreshed)
+    } catch (error: unknown) {
+      if (error instanceof WritingApiError && error.status === 409) {
+        setBlockError('这条记录已在别处发生变化，已重新读取，请再确认一次。')
+        await refreshAfterDeleteFailure()
+      } else if (error instanceof WritingApiError && error.status === 404) {
+        setBlockError('该 AI 段或文件已不存在；当前输入已保留。')
+        await refreshAfterDeleteFailure()
+      } else {
+        setBlockError(error instanceof Error ? error.message : '删除该 AI 段失败，请稍后重试')
+      }
+    } finally {
+      writing.current = false
+      setDeletingBlockId(null)
+      onBusyChange(false)
+    }
+  }
+
+  async function refreshAfterDeleteFailure(): Promise<void> {
+    if (file === null) return
+    try {
+      const refreshed = await getInbox(file.id)
+      setFile(refreshed)
+      rememberServer(refreshed)
+      autosave.syncFromServer(toFile(refreshed))
+    } catch { /* 重读失败：保留原草稿与错误提示，不覆盖用户输入。 */ }
   }
 
   const heading = isCreate ? (isDaily ? '新建当日 Daily Inbox' : '新建 Inbox') : 'Inbox 详情'
@@ -306,16 +390,16 @@ function InboxPanel({
           <p className="detail-hint">日期与 Daily 身份在创建后不可修改。</p>
           {statusBanner}
           <form className="editor-form" onSubmit={(event) => { event.preventDefault(); void autosave.saveNow() }}>
-            <InboxFields draft={draft} contentReadOnly={hasBlocks}
-              onTitle={changeTitle} onContent={(value) => autosave.changeDraft({ content: value })}
+            <InboxFields draft={draft} blocks={draftBlocks}
+              disabled={false}
+              onTitle={changeTitle}
+              onBlocks={(blocks) => autosave.changeDraft({ blocks, content: projectBlocks(blocks) })}
               changeDraft={autosave.changeDraft}
-              composing={{ start: autosave.onCompositionStart, end: autosave.onCompositionEnd }} />
-            {hasBlocks && (
-              <p className="detail-hint">
-                这篇文件已经有结构化内容（含 AI 段）。本任务不提供结构化编辑，正文暂时只读；
-                标题与 Folder 仍会自动保存。
-              </p>
-            )}
+              composing={{ start: autosave.onCompositionStart, end: autosave.onCompositionEnd }}
+              onRequestDeleteAiBlock={file === null ? undefined : (blockId) => void requestDeleteAiBlock(blockId)}
+              deletingBlockId={deletingBlockId}
+              onResolveLink={onResolveLink} />
+            {blockError && <p className="detail-error" role="alert">{blockError}</p>}
             {invalidDraft && (
               <p className="detail-hint" role="status">
                 空白或超长的输入不会提交，也不会创建空记录；内容保留在编辑器里。
@@ -368,7 +452,8 @@ function InboxPanel({
             <div className="detail-meta-row"><dt>创建时间</dt><dd>{formatServerTimestamp(file.created_at)}</dd></div>
             <div className="detail-meta-row"><dt>修改时间</dt><dd>{formatServerTimestamp(file.updated_at)}</dd></div>
           </dl>
-          <MarkdownContent source={file.content} onLink={onResolveLink} disabled={busy} />
+          <WritingContent blocks={file.content_blocks} content={file.content}
+            onLink={onResolveLink} disabled={busy} />
           <div className="detail-actions">
             <button type="button" onClick={startEditing} disabled={busy}>修改</button>
             {deleteStage === 'idle' && (

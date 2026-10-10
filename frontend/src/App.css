@@ -160,3 +160,82 @@
 .autosave-failed { border-left-color: #b63b3b; background: #fdf5f5; }
 .autosave-conflict { border-left-color: #b63b3b; background: #fff8ec; }
 .autosave-status button { padding: 4px 10px; font-size: 13px; }
+
+/* S3-T04 结构化写作：用户 textarea 段与 AI 蓝块交错排列 */
+.app .writing-editor { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.app .writing-blocks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.app .writing-block { min-width: 0; }
+.app .writing-user-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid #cfc9d6;
+  border-radius: 6px;
+  background: #fff;
+  line-height: 1.55;
+  min-width: 0;
+  resize: vertical;
+}
+/* AI 段：蓝字 + 左侧蓝色竖线（与用户正文明确区分） */
+.app .writing-block-ai_reply,
+.app .writing-block-ai_summary {
+  border: 1px solid #cfe0f4;
+  border-left: 4px solid #2f6fbf;
+  border-radius: 8px;
+  background: #f5f9ff;
+  padding: 8px 10px 8px 12px;
+}
+.app .writing-block-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.app .writing-block-tag { font-size: 13px; font-weight: 600; color: #1f4f8f; background: #e3eefc; border-radius: 999px; padding: 2px 8px; }
+.app .writing-block-source { font-size: 12px; color: #5d7ba6; }
+.app .writing-ai-text { min-width: 0; color: #1f4f8f; }
+.app .writing-ai-text .markdown-body { color: inherit; }
+.app .writing-summary-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  color: #1f4f8f;
+  padding: 6px 8px;
+  border: 1px solid #bcd3ec;
+  border-radius: 6px;
+  background: #fff;
+  min-width: 0;
+  resize: vertical;
+}
+.app .writing-block-menu-wrap { position: relative; margin-left: auto; }
+.app .writing-block-menu-button { padding: 2px 8px; font-size: 12px; }
+.app .writing-block-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+  padding: 6px;
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(31, 47, 70, 0.16);
+}
+.app .writing-block-menu-item { text-align: left; padding: 6px 8px; font-size: 13px; }
+.app .writing-block-menu-item.danger { color: #a5302f; }
+.app .writing-locked {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #e6d9b8;
+  border-left: 4px solid #b58a2f;
+  border-radius: 8px;
+  background: #fffaf0;
+  color: #6b5320;
+  font-size: 13px;
+}
+/* 只读阅读：连续 user 段合并渲染，AI 段仍为蓝块 */
+.app .writing-reading { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+@media (max-width: 480px) {
+  .app .writing-block-menu { min-width: 0; width: max-content; max-width: 80vw; }
+}

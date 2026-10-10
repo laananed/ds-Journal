@@ -7,7 +7,7 @@ import {
   restoreTrashItem,
 } from '../api/trash'
 import FileCard from '../components/FileCard'
-import MarkdownContent from '../components/MarkdownContent'
+import WritingContent from '../components/WritingContent'
 import Pagination from '../components/Pagination'
 import type { TrashFilter, TrashItem, TrashPageData, TrashType } from '../types/trash'
 import { nearestValidPage } from '../utils/pagination'
@@ -192,7 +192,10 @@ function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, 
             <div className="detail-meta-row"><dt>修改时间</dt><dd>{formatServerTimestamp(item.updated_at)}</dd></div>
             <div className="detail-meta-row"><dt>移入回收箱时间</dt><dd>{formatServerTimestamp(item.deleted_at ?? '')}</dd></div>
           </dl>
-          <MarkdownContent source={item.content} onLink={onResolveLink} disabled={busy} />
+          {/* 只读展示：Journal 含结构化 blocks（Trash 详情返回原 blocks），Insight 无 blocks。 */}
+          <WritingContent
+            blocks={item.type === 'journal' ? item.content_blocks : null}
+            content={item.content} onLink={onResolveLink} disabled={busy} />
           <p className="detail-hint">回收箱中的记录只读，不能编辑或修改 Folder；恢复后回到原来的位置。</p>
           <div className="detail-actions">
             <button type="button" onClick={confirmRestore} disabled={busy}>

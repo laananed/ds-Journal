@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { JournalApiError, deleteJournal, getJournal, updateJournal } from '../api/journals'
+import { WritingApiError, deleteAiBlock } from '../api/writing'
 import FolderSelect from './FolderSelect'
-import MarkdownContent from './MarkdownContent'
+import WritingContent from './WritingContent'
+import WritingEditor from './WritingEditor'
 import { formatServerTimestamp } from '../utils/journalDetail'
 import { useAutosave, type AutosaveFile, type FlushResult } from '../hooks/useAutosave'
 import {
@@ -12,7 +14,9 @@ import {
   statusLabel,
   type DraftSnapshot,
 } from '../utils/autosave'
+import { legacyBlocksFromContent, projectBlocks } from '../utils/writingBlocks'
 import type { Journal, JournalUpdate } from '../types/journal'
+import type { Block } from '../types/writing'
 
 interface JournalDetailProps {
   journalId: number
@@ -29,10 +33,21 @@ interface JournalDetailProps {
 
 const EMPTY_DRAFT: DraftSnapshot = { title: '', content: '', date: '', folder_id: null }
 
+/**
+ * 编辑态草稿：结构化写作**始终使用块**。
+ *
+ * - 已经是结构化文件（`content_blocks` 非 NULL）→ 直接用服务器块（id 稳定）；
+ * - 历史 NULL 文件 → 用 `legacyBlocksFromContent` 包成**一个等价 user 段**，
+ *   首次保存时投影与旧 `content` 逐字相同，后端走等价转换、不重新校验旧正文。
+ */
 function toSnapshot(journal: Journal): DraftSnapshot {
+  const blocks: Block[] = journal.content_blocks != null && journal.content_blocks.length > 0
+    ? journal.content_blocks
+    : legacyBlocksFromContent(journal.content)
   return draftToSnapshot(
     { title: journal.title ?? '', content: journal.content, folder_id: journal.folder_id },
     journal.journal_date,
+    blocks,
   )
 }
 
@@ -51,13 +66,22 @@ function JournalDetail({
   const [mode, setMode] = useState<'view' | 'edit'>('view')
   const [deleteStage, setDeleteStage] = useState<'idle' | 'confirming' | 'deleting'>('idle')
   const [deleteError, setDeleteError] = useState('')
+  const [deletingBlockId, setDeletingBlockId] = useState<string | null>(null)
+  const [blockError, setBlockError] = useState('')
   const writing = useRef(false)
+  /** 服务器最新版本：AI 段删除必须用最新 revision（缺 428 / 旧 409）。 */
+  const latestRevisionRef = useRef(0)
+
+  function rememberServer(journal: Journal): void {
+    latestRevisionRef.current = journal.revision
+  }
 
   useEffect(() => {
     const controller = new AbortController()
     getJournal(journalId, controller.signal).then((data) => {
       if (controller.signal.aborted) return
       setDetail(data)
+      rememberServer(data)
       setStatus('success')
     }).catch((error: unknown) => {
       if (controller.signal.aborted) return
@@ -69,10 +93,6 @@ function JournalDetail({
     return () => controller.abort()
   }, [journalId, reloadToken])
 
-  // 已有结构化 blocks 的文件：普通正文写入会被后端 409 拒绝（T04 才做结构化编辑），
-  // 因此本期只读正文，仍可自动保存标题 / 日期 / Folder。
-  const hasBlocks = detail?.content_blocks != null
-
   const autosave = useAutosave<Journal>({
     enabled: mode === 'edit',
     initialDraft: EMPTY_DRAFT,
@@ -80,7 +100,6 @@ function JournalDetail({
     create: async () => { throw new Error('详情页不创建新文件') },
     update: async (fileId, draft, baseline, expectedRevision) => {
       const patch = snapshotPatch(draft, baseline)
-      if (hasBlocks) delete patch.content
       if (isSnapshotPatchEmpty(patch)) {
         // 没有可提交字段：这是「响应丢失后的安全 no-op」，直接回读当前详情。
         return await getJournal(fileId)
@@ -88,6 +107,7 @@ function JournalDetail({
       const payload: JournalUpdate = { expected_revision: expectedRevision }
       if ('title' in patch) payload.title = patch.title
       if ('content' in patch) payload.content = patch.content
+      if ('blocks' in patch) payload.content_blocks = patch.blocks
       if ('date' in patch) payload.journal_date = patch.date
       if ('folder_id' in patch) payload.folder_id = patch.folder_id
       return await updateJournal(fileId, payload)
@@ -96,26 +116,32 @@ function JournalDetail({
     refetch: async () => await getJournal(journalId),
     onSaved: (saved) => {
       setDetail(saved)
+      rememberServer(saved)
       onDataChanged()
     },
     onDirtyChange,
     onFlushReady,
   })
 
-  const busy = deleteStage === 'deleting'
+  const busy = deleteStage === 'deleting' || deletingBlockId !== null
   const draft = autosave.draft
+  const draftBlocks = draft.blocks ?? []
 
   function startEditing() {
     if (!detail) return
-    autosave.load(toFile(detail), toSnapshot(detail))
+    // 只构造一次快照：草稿与基线必须共用同一批块 id。
+    const snapshot = toSnapshot(detail)
+    autosave.load({ id: detail.id, revision: detail.revision, draft: snapshot }, snapshot)
     setDeleteStage('idle')
     setDeleteError('')
+    setBlockError('')
     setMode('edit')
   }
   function exitEditing() {
     autosave.load(null, EMPTY_DRAFT)
     setDeleteStage('idle')
     setDeleteError('')
+    setBlockError('')
     setMode('view')
   }
 
@@ -148,6 +174,56 @@ function JournalDetail({
     }
   }
 
+  /**
+   * 删除一个 AI 段（`docs/stage3-tasks.md` §6 步骤 6）：
+   * ① 先 flush 待保存的用户输入；② 用最新 revision 调专用接口；
+   * ③ 重读详情并安全更新基线。任何一步失败都保留用户输入。
+   */
+  async function requestDeleteAiBlock(blockId: string): Promise<void> {
+    if (detail === null || writing.current || deletingBlockId !== null) return
+    writing.current = true
+    onBusyChange(true)
+    setBlockError('')
+    setDeletingBlockId(blockId)
+    try {
+      const flushed = await autosave.flush()
+      if (flushed === 'blocked') {
+        setBlockError('还有未保存的输入或版本冲突，已停止删除，避免与自动保存互相覆盖。请先处理保存状态。')
+        return
+      }
+      await deleteAiBlock('journal', detail.id, blockId, latestRevisionRef.current)
+      const refreshed = await getJournal(detail.id)
+      setDetail(refreshed)
+      rememberServer(refreshed)
+      autosave.syncFromServer(toFile(refreshed))
+      onDataChanged()
+    } catch (error: unknown) {
+      if (error instanceof WritingApiError && error.status === 409) {
+        setBlockError('这条记录已在别处发生变化，已重新读取，请再确认一次。')
+        await refreshAfterDeleteFailure()
+      } else if (error instanceof WritingApiError && error.status === 404) {
+        setBlockError('该 AI 段或文件已不存在；当前输入已保留。')
+        await refreshAfterDeleteFailure()
+      } else {
+        setBlockError(error instanceof Error ? error.message : '删除该 AI 段失败，请稍后重试')
+      }
+    } finally {
+      writing.current = false
+      setDeletingBlockId(null)
+      onBusyChange(false)
+    }
+  }
+
+  async function refreshAfterDeleteFailure(): Promise<void> {
+    if (detail === null) return
+    try {
+      const refreshed = await getJournal(detail.id)
+      setDetail(refreshed)
+      rememberServer(refreshed)
+      autosave.syncFromServer(toFile(refreshed))
+    } catch { /* 重读失败：保留原草稿与错误提示，不覆盖用户输入。 */ }
+  }
+
   const invalidDraft = autosave.dirty && !autosave.savable
   return (
     <section className="journal-detail" aria-label="Journal 详情">
@@ -178,7 +254,8 @@ function JournalDetail({
             <div className="detail-meta-row"><dt>创建时间</dt><dd>{formatServerTimestamp(detail.created_at)}</dd></div>
             <div className="detail-meta-row"><dt>修改时间</dt><dd>{formatServerTimestamp(detail.updated_at)}</dd></div>
           </dl>
-          <MarkdownContent source={detail.content} onLink={onResolveLink} disabled={busy} />
+          <WritingContent blocks={detail.content_blocks} content={detail.content}
+            onLink={onResolveLink} disabled={busy} />
           <div className="detail-actions">
             <button type="button" onClick={startEditing} disabled={busy}>修改</button>
             {deleteStage === 'idle' && <button type="button" className="detail-danger"
@@ -224,20 +301,21 @@ function JournalDetail({
                 onCompositionStart={autosave.onCompositionStart}
                 onCompositionEnd={autosave.onCompositionEnd} />
             </label>
-            <label className="editor-field"><span>正文</span>
-              <textarea value={draft.content} rows={8} readOnly={hasBlocks}
-                onChange={(event) => autosave.changeDraft({ content: event.target.value })}
+            <div className="editor-field">
+              <span>正文（用户文字与 AI 段分开显示）</span>
+              <WritingEditor
+                blocks={draftBlocks}
+                onChange={(blocks) => autosave.changeDraft({ blocks, content: projectBlocks(blocks) })}
                 onCompositionStart={autosave.onCompositionStart}
-                onCompositionEnd={autosave.onCompositionEnd} />
-            </label>
-            {hasBlocks && (
-              <p className="detail-hint">
-                这篇文件已经有结构化内容（含 AI 段）。本任务不提供结构化编辑，正文暂时只读；
-                标题、日期与 Folder 仍会自动保存。
-              </p>
-            )}
+                onCompositionEnd={autosave.onCompositionEnd}
+                onRequestDeleteAiBlock={(blockId) => void requestDeleteAiBlock(blockId)}
+                deletingBlockId={deletingBlockId}
+                onResolveLink={onResolveLink}
+              />
+            </div>
             <FolderSelect value={draft.folder_id}
               onChange={(folderId) => autosave.changeDraft({ folder_id: folderId })} />
+            {blockError && <p className="detail-error" role="alert">{blockError}</p>}
             {invalidDraft && (
               <p className="detail-hint" role="status">
                 当前输入为空或超出长度限制，暂不提交；内容会保留在编辑器里。

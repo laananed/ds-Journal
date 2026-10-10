@@ -26,6 +26,14 @@
  */
 
 import { validateContent, validateTitle } from './contentValidation.ts'
+import {
+  blocksBodySavable,
+  blocksEqual,
+  hasNonBlankUserBlock,
+  projectBlocks,
+  validateBlocksForSave,
+} from './writingBlocks.ts'
+import type { Block } from '../types/writing.ts'
 
 /** 保存状态：与产品 §2 的「未保存 / 保存中 / 已保存 / 保存失败 / 冲突」一一对应。 */
 export type SaveStatus = 'saved' | 'unsaved' | 'saving' | 'failed' | 'conflict'
@@ -34,10 +42,24 @@ export type SaveStatus = 'saved' | 'unsaved' | 'saving' | 'failed' | 'conflict'
 export interface DraftSnapshot {
   /** 原始输入标题；空串表示没有标题（提交时再决定是省略还是 null）。 */
   title: string
+  /**
+   * 纯文本正文。**只在普通（非结构化）文件上用**：
+   * `blocks` 非 null 时以 blocks 为权威正文，`content` 不参与比较与提交。
+   */
   content: string
   /** 业务日期：Journal 用 journal_date，Inbox 用 inbox_date，Insight 恒为 ''。 */
   date: string
   folder_id: number | null
+  /**
+   * 结构化正文（Stage 3 / S3-T04）。`null` / 省略表示该文件是普通文本文件。
+   *
+   * - 非 null 时 blocks 是唯一权威正文，保存只发 `content_blocks`、绝不发 `content`
+   *   （两者后端互斥）；
+   * - 历史 NULL 文件在**首次结构化保存**时用 `legacyBlocksFromContent` 转成一个
+   *   等价 user 段，投影与旧 `content` 逐字相同；
+   * - 块 id 稳定：编辑文本不改变 id，也不自动合并相邻段。
+   */
+  blocks?: Block[] | null
 }
 
 /** 三种页面草稿的公共部分（title / content / folder_id 都同名）。 */
@@ -102,14 +124,39 @@ export interface AutosaveCore {
   error: string
 }
 
-/** 归一化草稿转换：`date` 由调用方按文件类型给出（Insight 传 ''）。 */
-export function draftToSnapshot(draft: DraftLike, date = ''): DraftSnapshot {
-  return { title: draft.title, content: draft.content, date, folder_id: draft.folder_id }
+/**
+ * 归一化草稿转换：`date` 由调用方按文件类型给出（Insight 传 ''）。
+ * 普通文本文件不传 `blocks`（保持无该字段）；结构化文件传入块数组。
+ */
+export function draftToSnapshot(draft: DraftLike, date = '', blocks: Block[] | null = null): DraftSnapshot {
+  const base: DraftSnapshot = { title: draft.title, content: draft.content, date, folder_id: draft.folder_id }
+  return blocks === null ? base : { ...base, blocks }
 }
 
-/** 快照是否完全一致（逐字段比较，避免 JSON key 顺序影响）。 */
+/**
+ * 快照的阅读投影：`blocks` 非 null 时是块投影，否则是纯文本 `content`。
+ *
+ * 这是「正文是否变了」的唯一口径——用于校验与「旧超长正文只改标题不重新校验」
+ * 的判断，和后端 `validate_blocks` 的 `content == old_content` 短路同一依据。
+ */
+export function draftProjection(draft: DraftSnapshot): string {
+  return draft.blocks ? projectBlocks(draft.blocks) : draft.content
+}
+
+/**
+ * 快照是否完全一致（逐字段比较，避免 JSON key 顺序影响）。
+ *
+ * 结构化文件比较块数组（顺序 / id / kind / text / request_id），
+ * 且**普通 vs 结构化必须不相等**——否则「旧 NULL 正文 → 单段 user 块」的
+ * 首次等价转换会因为投影相同而被误判成「没有变化」而不提交。
+ */
 export function snapshotEquals(a: DraftSnapshot, b: DraftSnapshot): boolean {
-  return a.title === b.title && a.content === b.content && a.date === b.date && a.folder_id === b.folder_id
+  if (a.title !== b.title || a.date !== b.date || a.folder_id !== b.folder_id) return false
+  const aBlocks = a.blocks ?? null
+  const bBlocks = b.blocks ?? null
+  if ((aBlocks === null) !== (bBlocks === null)) return false
+  if (aBlocks !== null) return blocksEqual(aBlocks, bBlocks)
+  return a.content === b.content
 }
 
 /**
@@ -124,7 +171,14 @@ export function snapshotEquals(a: DraftSnapshot, b: DraftSnapshot): boolean {
  */
 export function isSnapshotSavable(snapshot: DraftSnapshot): boolean {
   const title = snapshot.title === '' ? null : snapshot.title
-  return validateTitle(title) === undefined && validateContent(snapshot.content) === undefined
+  if (validateTitle(title) !== undefined) return false
+  if (snapshot.blocks) {
+    // 结构化新建：投影必须在限制内，且至少有一个非空 user 段
+    // （后端 `validate_blocks`：普通保存不能只含 AI 段）。
+    return validateContent(projectBlocks(snapshot.blocks)) === undefined
+      && hasNonBlankUserBlock(snapshot.blocks)
+  }
+  return validateContent(snapshot.content) === undefined
 }
 
 /**
@@ -133,11 +187,35 @@ export function isSnapshotSavable(snapshot: DraftSnapshot): boolean {
  * 这是 `docs/stage3-api.md` §2「只改其他业务字段不重新验证旧正文」的前端落点：
  * 旧超长正文只改标题 / 日期 / Folder 时，补丁里没有 `content`，就不校验正文；
  * 旧超长标题未改动时同理。真正被修改的字段仍走原有限制。
+ *
+ * 结构化文件按**阅读投影**判断是否真的改了正文：
+ * - 旧 NULL 正文 → 单段等价 user 块（首次转换）投影不变 → 跳过正文校验，
+ *   因此旧超长正文不会被截断或重新拒绝；
+ * - 投影真的变了才校验长度、有效用户正文与块结构。
  */
 export function isUpdateSavable(draft: DraftSnapshot, baseline: DraftSnapshot): boolean {
   const patch = snapshotPatch(draft, baseline)
   if (patch.title !== undefined && validateTitle(patch.title) !== undefined) return false
-  if (patch.content !== undefined && validateContent(draft.content) !== undefined) return false
+
+  const projection = draftProjection(draft)
+  const baselineProjection = draftProjection(baseline)
+  const projectionChanged = projection !== baselineProjection
+
+  // 结构化正文：只要 blocks 被提交（**包括旧 NULL 正文的首次等价转换**），
+  // 就先做结构校验——身份/重排/删除 AI 段这类违规在阅读投影里看不出来，
+  // 但会被后端拒绝，所以必须在这里先拦。
+  if (draft.blocks !== undefined && draft.blocks !== null && patch.blocks !== undefined) {
+    if (validateBlocksForSave(draft.blocks, baseline.blocks ?? null) !== undefined) return false
+    if (projectionChanged) {
+      const serverIds = new Set((baseline.blocks ?? []).map((block) => block.id))
+      if (!blocksBodySavable(draft.blocks, serverIds)) return false
+    }
+  }
+
+  // 正文（阅读投影）真的变了才重新校验长度与「至少有效用户正文」；
+  // 只改标题/日期/Folder、或旧 NULL 正文的等价转换（投影逐字相同）
+  // 一律不重新校验旧数据，因此旧超长正文不会被截断或重新拒绝。
+  if (projectionChanged && validateContent(projection) !== undefined) return false
   return true
 }
 
@@ -342,6 +420,8 @@ export function isDirty(core: AutosaveCore): boolean {
 export interface SnapshotPatch {
   title?: string | null
   content?: string
+  /** 结构化正文；与 `content` 互斥（`docs/stage3-api.md` §2）。 */
+  blocks?: Block[]
   date?: string
   folder_id?: number | null
 }
@@ -357,7 +437,17 @@ export interface SnapshotPatch {
 export function snapshotPatch(draft: DraftSnapshot, baseline: DraftSnapshot): SnapshotPatch {
   const patch: SnapshotPatch = {}
   if (draft.title !== baseline.title) patch.title = draft.title === '' ? null : draft.title
-  if (draft.content !== baseline.content) patch.content = draft.content
+  const draftBlocks = draft.blocks ?? null
+  const baselineBlocks = baseline.blocks ?? null
+  if (draftBlocks !== null || baselineBlocks !== null) {
+    // 结构化文件只发 content_blocks；绝不发 content（后端两者互斥，且
+    // 结构化文件收到 content 会返回 409）。
+    if (draftBlocks !== null && !blocksEqual(draftBlocks, baselineBlocks)) {
+      patch.blocks = [...draftBlocks]
+    }
+  } else if (draft.content !== baseline.content) {
+    patch.content = draft.content
+  }
   if (draft.date !== baseline.date) patch.date = draft.date
   if (draft.folder_id !== baseline.folder_id) patch.folder_id = draft.folder_id
   return patch

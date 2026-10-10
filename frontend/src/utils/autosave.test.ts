@@ -19,6 +19,7 @@ import {
   clearFailure,
   createAutosaveCore,
   displayStatus,
+  draftProjection,
   draftToSnapshot,
   isCoreSavable,
   isSavable,
@@ -35,6 +36,7 @@ import {
   type DraftSnapshot,
   type SaveRequest,
 } from './autosave.ts'
+import type { Block } from '../types/writing.ts'
 
 let passed = 0
 
@@ -486,6 +488,122 @@ function savableOf(core: AutosaveCore): boolean {
   expect(core.pendingCreate?.createKey === 'daily-key', 'D-2 冲突后待重放键不变（不会被同键异体吞掉）')
   const decision = planSave(core, savableOf(core))
   expect(decision.kind === 'blocked' && decision.reason === 'conflict', 'D-2 冲突不自动重试')
+}
+
+// ---------------------------------------------------------------------------
+// E. 结构化正文（Stage 3 / S3-T04）：块快照、比较、校验与 payload
+//    依据 `docs/stage3-api.md` §2、`docs/stage3-architecture.md` §3。
+// ---------------------------------------------------------------------------
+
+const U1 = '11111111-1111-4111-8111-111111111111'
+const U2 = '22222222-2222-4222-8222-222222222222'
+const U3 = '33333333-3333-4333-8333-333333333333'
+const U4 = '44444444-4444-4444-8444-444444444444'
+
+function ublock(id: string, text: string): Block {
+  return { id, kind: 'user', text }
+}
+function rblock(id: string, text: string, requestId: string): Block {
+  return { id, kind: 'ai_reply', text, request_id: requestId }
+}
+
+// 含空格、空行、缩进与 emoji 的旧正文，用于验证逐字往返
+const LEGACY_TEXT = '第一行\n\n  缩进两个空格\n末行 🧭\n'
+const LEGACY_PLAIN = snapshot({ title: '旧标题', content: LEGACY_TEXT, date: '2026-02-01' })
+const LEGACY_CONVERTED: DraftSnapshot = { ...LEGACY_PLAIN, blocks: [ublock(U1, LEGACY_TEXT)] }
+
+// E-1 旧 NULL 正文首次结构化保存：等价转换、只发 content_blocks
+{
+  expect(draftProjection(LEGACY_CONVERTED) === LEGACY_TEXT, 'E-1 转换后阅读投影逐字等于旧正文')
+  expect(!snapshotEquals(LEGACY_CONVERTED, LEGACY_PLAIN),
+    'E-1 投影相同但普通 vs 结构化必须不相等（否则首次转换永远不会提交）')
+  expectSnapshotEqual(snapshotPatch(LEGACY_CONVERTED, LEGACY_PLAIN), { blocks: [ublock(U1, LEGACY_TEXT)] },
+    'E-1 首次转换的补丁只含 content_blocks，不含 content')
+  expect(isUpdateSavable(LEGACY_CONVERTED, LEGACY_PLAIN), 'E-1 首次转换可提交')
+
+  let core = createAutosaveCore({ draft: LEGACY_PLAIN, createKey: 'k1', file: { id: 9, revision: 1 } })
+  core = applyInput(core, LEGACY_CONVERTED)
+  expect(core.inputSeq === 1, 'E-1 结构化输入被登记为一次真实输入')
+  const request = sendOf(core, savableOf(core))
+  expect(request.kind === 'update' && request.snapshot.blocks?.[0]?.text === LEGACY_TEXT,
+    'E-1 提交快照携带等价 user 块')
+  core = beginSend(core, request)
+  core = settle(core, request.seq, { kind: 'ok', fileId: 9, revision: 2 })
+  expect(core.baseline.blocks?.[0]?.text === LEGACY_TEXT, 'E-1 保存成功后基线切换为结构化')
+  expect(core.revision === 2, 'E-1 保存成功后版本更新')
+  expect(core.status === 'saved', 'E-1 转换完成后状态为已保存')
+}
+
+// E-2 结构化文件只改标题 / 日期 / Folder：补丁不含正文
+{
+  const base: DraftSnapshot = snapshot({ title: '旧标题', content: LEGACY_TEXT, date: '2026-02-01', blocks: [ublock(U1, LEGACY_TEXT)] })
+  expectSnapshotEqual(snapshotPatch({ ...base, title: '新标题' }, base), { title: '新标题' },
+    'E-2 只改标题时补丁只有 title')
+  expectSnapshotEqual(snapshotPatch({ ...base, date: '2026-02-09' }, base), { date: '2026-02-09' },
+    'E-2 只改日期时补丁只有 date')
+  expectSnapshotEqual(snapshotPatch({ ...base, folder_id: 5 }, base), { folder_id: 5 },
+    'E-2 只改 Folder 时补丁只有 folder_id')
+  expect(isUpdateSavable({ ...base, title: '新标题' }, base), 'E-2 结构化文件只改标题可提交')
+}
+
+// E-3 结构化文件编辑用户段：只发 blocks，不发 content
+{
+  const base: DraftSnapshot = snapshot({ title: '旧标题', content: LEGACY_TEXT, date: '2026-02-01', blocks: [ublock(U1, LEGACY_TEXT)] })
+  const editedBlocks = [ublock(U1, '改过的正文')]
+  const draft: DraftSnapshot = { ...base, blocks: editedBlocks, content: '改过的正文' }
+  expectSnapshotEqual(snapshotPatch(draft, base), { blocks: editedBlocks },
+    'E-3 编辑用户段的补丁只含 content_blocks')
+  expect(isUpdateSavable(draft, base), 'E-3 编辑用户段可提交')
+  // 后端只禁止重排 / 新增 AI 段 / 篡改 AI 身份，并不禁止替换 user 段 id；
+  // 「块 id 稳定」是编辑器（`writingBlocks.setBlockText`）的客户端保证。
+  expect(isUpdateSavable({ ...base, blocks: [ublock(U2, '改过的正文')], content: '改过的正文' }, base),
+    'E-3 后端允许替换 user 段 id；稳定性由编辑器保证（见 writingBlocks 测试）')
+}
+
+// E-4 旧超长正文（结构化）只改标题：不重新校验、不截断
+{
+  const longText = 'a'.repeat(60_000)
+  const base: DraftSnapshot = snapshot({ title: '旧标题', content: longText, date: '2026-02-02', blocks: [ublock(U1, longText)] })
+  expect(isUpdateSavable({ ...base, title: '新标题' }, base), 'E-4 结构化旧超长正文只改标题仍可提交')
+  expectSnapshotEqual(snapshotPatch({ ...base, title: '新标题' }, base), { title: '新标题' },
+    'E-4 补丁不含超长正文（后端不会重新校验）')
+  expect(!isUpdateSavable({ ...base, blocks: [ublock(U1, 'a'.repeat(50_001))], content: 'a'.repeat(50_001) }, base),
+    'E-4 真正修改后的结构化正文超限则拒绝')
+}
+
+// E-5 结构违规：客户端删除 AI 段 / 篡改身份 / 改回复文本
+{
+  const serverBlocks = [ublock(U1, '甲'), rblock(U2, '回复', U3)]
+  const base: DraftSnapshot = snapshot({ content: '甲\n\n> AI 回复\n> 回复\n\n', date: '2026-02-03', blocks: serverBlocks })
+  expect(!isUpdateSavable({ ...base, blocks: [ublock(U1, '甲')], content: '甲' }, base),
+    'E-5 通过普通保存删除 AI 段被拒（须走专用接口）')
+  const tampered = [ublock(U1, '甲'), rblock(U2, '回复', U4)]
+  expect(!isUpdateSavable({ ...base, blocks: tampered, content: draftProjection({ ...base, blocks: tampered }) }, base),
+    'E-5 篡改 AI 段来源身份被拒')
+  const editedReply = [ublock(U1, '甲'), rblock(U2, '改过的回复', U3)]
+  expect(!isUpdateSavable({ ...base, blocks: editedReply, content: draftProjection({ ...base, blocks: editedReply }) }, base),
+    'E-5 修改 ai_reply 文本被拒')
+}
+
+// E-6 新建带 blocks：需要至少一个非空 user 段
+{
+  expect(isSnapshotSavable(snapshot({ title: '', content: '新正文', date: '2026-02-04', blocks: [ublock(U4, '新正文')] })),
+    'E-6 新建非空 user 块可创建')
+  expect(!isSnapshotSavable(snapshot({ title: '', content: '', date: '2026-02-04', blocks: [] })),
+    'E-6 空块数组不可创建')
+  expect(!isSnapshotSavable(snapshot({ title: '', content: '  ', date: '2026-02-04', blocks: [ublock(U4, '  ')] })),
+    'E-6 纯空白 user 块不可创建')
+  expect(!isSnapshotSavable(snapshot({ title: '', content: '', date: '2026-02-04', blocks: [rblock(U4, '只有 AI', U3)] })),
+    'E-6 客户端不能以「只有 AI 段」创建文件')
+}
+
+// E-7 块比较不依赖数组引用（避免每次渲染都判脏）
+{
+  const a: DraftSnapshot = snapshot({ title: 't', content: LEGACY_TEXT, date: '2026-02-05', blocks: [ublock(U1, LEGACY_TEXT)] })
+  const b: DraftSnapshot = snapshot({ title: 't', content: LEGACY_TEXT, date: '2026-02-05', blocks: [ublock(U1, LEGACY_TEXT)] })
+  expect(snapshotEquals(a, b), 'E-7 块内容相同则快照相等（新数组引用不影响）')
+  const c: DraftSnapshot = { ...a, blocks: [ublock(U1, LEGACY_TEXT), ublock(U2, '')] }
+  expect(!snapshotEquals(a, c), 'E-7 追加空续写段算作变化')
 }
 
 if (failures.length > 0) {

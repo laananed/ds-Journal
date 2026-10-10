@@ -1,4 +1,5 @@
-import type { Block, ContentFile, FilePage } from './file'
+import type { ContentFile, FilePage } from './file'
+import type { Block } from './writing'
 /** 日期与时间保留服务器字符串，避免业务日期时区偏移。 */
 export interface Journal extends ContentFile {
   type: 'journal'
@@ -8,19 +9,31 @@ export interface Journal extends ContentFile {
 }
 export type JournalPage = FilePage<Journal>
 
-/** 创建请求；Stage 3 起 UI 必须携带稳定的 client_create_id。 */
+/**
+ * 创建请求；Stage 3 起 UI 必须携带稳定的 client_create_id。
+ *
+ * `content` 与 `content_blocks` **二选一**（`docs/stage3-api.md` §2）：
+ * 结构化写作提交 `content_blocks`，普通旧客户端提交 `content`。
+ */
 export interface JournalCreate {
-  title: string | null
-  content: string
+  title?: string | null
+  content?: string
+  content_blocks?: Block[]
   journal_date: string
   folder_id?: number | null
   client_create_id?: string
 }
 
-/** PATCH 实际提交的字段子集（只包含真正改动的字段）。 */
+/**
+ * PATCH 实际提交的字段子集（只包含真正改动的字段）。
+ *
+ * `content` 与 `content_blocks` 互斥：结构化文件只提交 `content_blocks`，
+ * 普通文件只提交 `content`。
+ */
 export interface JournalUpdateFields {
   title?: string | null
   content?: string
+  content_blocks?: Block[]
   journal_date?: string
   folder_id?: number | null
 }
