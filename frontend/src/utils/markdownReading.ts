@@ -91,6 +91,8 @@ function remarkInternalLinks() {
  * 2. 显式写死默认的 `defaultUrlTransform`（协议白名单 https / http / irc /
  *    ircs / mailto / xmpp），其余带冒号的 URL（`javascript:`、`data:` 等）
  *    会被替换成空串，链接不可执行；显式写法也是防止以后被误改成不安全实现。
+ *    转换后 href 为空（或缺失）的普通链接只渲染文字，不输出 `<a href="">`
+ *    ——空 href 锚点点击会重载应用、丢失导航状态（S2-F01）。
  * 3. 只做阅读呈现，不把渲染结果写回数据库：源码仍是数据库里的原始 Markdown，
  *    编辑态仍是普通 textarea。
  *
@@ -120,6 +122,10 @@ export function buildMarkdownReadingElement(source: string, onLink?: (title: str
             return createElement('button', { type: 'button', className: 'internal-link',
               disabled: disabled || !onLink, onClick: () => onLink?.(title) }, children)
           }
+          // defaultUrlTransform 把危险协议转成空串，空目标链接本就是空串；
+          // <a href=""> 点击后会重载应用、丢失导航状态（S2-F01），因此空 href
+          // 一律只渲染文字，不生成可导航的锚点。非空 href 保持原有行为。
+          if (!props.href) return createElement('span', null, children)
           return createElement('a', props, children)
         },
       },
