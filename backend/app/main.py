@@ -15,6 +15,8 @@ from app.insight.router import router as insight_router
 from app.trash.router import router as trash_router
 from app.search.router import router as search_router
 from app.link.router import router as link_router
+from app.ai.router import files_router as ai_files_router
+from app.ai.router import router as ai_router
 
 app = FastAPI(title="SeekJournal API")
 
@@ -44,6 +46,10 @@ app.include_router(folder_router)
 app.include_router(trash_router)
 app.include_router(search_router)
 app.include_router(link_router)
+# S3-T03 adds the AI settings/metering router and the per-file call listing.
+# Model generation routes belong to S3-T05/S3-T06 and are not registered here.
+app.include_router(ai_router)
+app.include_router(ai_files_router)
 
 
 @app.get("/api/health")
@@ -52,6 +58,7 @@ def health() -> dict[str, str]:
 
 
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from app.writing.service import WritingError
 from app.writing.router import router as writing_router
 
@@ -59,6 +66,25 @@ from app.writing.router import router as writing_router
 @app.exception_handler(WritingError)
 async def writing_error_response(request, error):
     return JSONResponse(status_code=error.status_code, content={"detail": str(error)})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_response(request, error):
+    """Standard 422 shape, without echoing the submitted value back.
+
+    FastAPI's default body includes an ``input`` field for every invalid field.
+    The value is what the client just sent, so replying with it would copy
+    whatever it contained — including an accidentally pasted credential — into
+    an HTTP response and any browser/proxy log. The error type and location are
+    enough for a client to fix its request.
+    """
+    details = [
+        {"type": item.get("type", "value_error"),
+         "loc": item.get("loc", ()),
+         "msg": item.get("msg", "Invalid request")}
+        for item in error.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": details})
 
 
 app.include_router(writing_router)
