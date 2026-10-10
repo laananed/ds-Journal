@@ -1,0 +1,151 @@
+/* Stage 3 / S3-T03：Token 用量组件局部样式。
+ *
+ * 只作用于 `.token-usage` 内部；由 TokenUsage.tsx 自行导入。
+ * 蓝色只用于 AI 相关内容（与后续 AI 蓝块保持同一语义方向），
+ * 但这里仅做计量展示，不引入任何 App 级样式改动。
+ */
+
+.token-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e5e2ea;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.token-usage-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.token-usage-header h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.token-usage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.token-usage-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border: 1px solid #eee9f2;
+  border-radius: 8px;
+  background: #faf9fc;
+}
+
+.token-usage-grid dt {
+  font-size: 12px;
+  color: #6b6375;
+}
+
+.token-usage-grid dd {
+  margin: 0;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  color: #08060d;
+}
+
+.token-usage-note,
+.token-usage-call-meta,
+.token-usage-state {
+  margin: 0;
+  font-size: 13px;
+  color: #6b6375;
+}
+
+.token-usage-state {
+  padding: 14px;
+  border: 1px dashed #d8d3de;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.token-usage-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  border-style: solid;
+  border-color: #e3b7b7;
+  background: #fdf4f4;
+  color: #8a2f2f;
+}
+
+.token-usage-error p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.token-usage-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.token-usage-calls > li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #e5e2ea;
+  border-left: 3px solid #4a6fd0;
+  border-radius: 8px;
+  background: #faf9fc;
+}
+
+.token-usage-call-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #6b6375;
+}
+
+.token-usage-kind {
+  padding: 1px 6px;
+  font-size: 12px;
+  border-radius: 999px;
+  background: #e8eefb;
+  color: #2c4a91;
+}
+
+.token-usage-status {
+  color: #4a4453;
+}
+
+.token-usage-call-meta code {
+  font-size: 12px;
+  word-break: break-all;
+  color: #4a4453;
+}
+
+.token-usage-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #4a4453;
+}
+
+@media (max-width: 480px) {
+  .token-usage-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
