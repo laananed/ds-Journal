@@ -1,8 +1,17 @@
-"""检查已存在的 seekjournal_test 非空保护，再运行 Alembic 迁移。
+"""检查已存在的测试库非空保护，再运行 Alembic 迁移。
 
 Stage 2 / S2-T01 起，本脚本的「非空拒绝」检查覆盖**所有已存在的业务表**，
 不再只看 journals。升级前部分新表可能还不存在，因此逐一用 `to_regclass`
 判断，表不存在就跳过，不会因此报错，也**不会**创建表（建表只由 Alembic 负责）。
+
+S3-T06 起支持两个隔离测试库并行（T06 用 `seekjournal_test_02`，T07 用
+`seekjournal_test`）。库名只来自进程环境 `SEEKJOURNAL_TEST_DB`：
+
+- 未指定时保持既有行为，默认 `seekjournal_test`；
+- 只允许下面 `ALLOWED_TEST_DATABASES` 白名单，个人库 `seekjournal`、
+  任意库名、管理库或带附加内容的取值一律直接拒绝，不连接、不降级回退。
+
+这里只做选库，不引入新的配置层，也不改变应用业务 `DATABASE_URL`。
 """
 
 from __future__ import annotations
@@ -18,10 +27,32 @@ from psycopg import sql
 from sqlalchemy import URL, make_url
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-TEST_DATABASE_NAME = "seekjournal_test"
+
+#: 选择隔离测试库的进程环境变量；未指定时用默认值。
+TEST_DATABASE_ENV = "SEEKJOURNAL_TEST_DB"
+DEFAULT_TEST_DATABASE_NAME = "seekjournal_test"
+#: 只有这两个库可用于 pytest/迁移；个人库与任意库名都不在列。
+ALLOWED_TEST_DATABASES = ("seekjournal_test", "seekjournal_test_02")
 
 # 当前阶段的全部业务表。新增业务表时同步这个元组。
 BUSINESS_TABLES = ("folders", "journals", "inboxes", "insights", "ai_requests", "ai_checkpoints", "ai_usage", "ai_settings")
+
+
+def get_test_database_name() -> str:
+    """解析本轮要用的隔离测试库名；非法取值直接拒绝。
+
+    纯逻辑函数：只读环境变量，不连接、不建库、不改任何配置。
+    """
+    raw = (os.environ.get(TEST_DATABASE_ENV) or "").strip()
+    if not raw:
+        return DEFAULT_TEST_DATABASE_NAME
+    if raw not in ALLOWED_TEST_DATABASES:
+        # 不回显取值：它可能是误粘贴的连接串，也可能指向个人库。
+        raise RuntimeError(
+            f"{TEST_DATABASE_ENV} 只允许 {' / '.join(ALLOWED_TEST_DATABASES)}；"
+            "当前取值不在白名单，已拒绝连接"
+        )
+    return raw
 
 
 def get_test_database_url() -> URL:
@@ -33,7 +64,7 @@ def get_test_database_url() -> URL:
     url = make_url(raw_url)
     if url.drivername not in ("postgres", "postgresql", "postgresql+psycopg"):
         raise RuntimeError("测试库只支持 PostgreSQL / psycopg")
-    return url.set(drivername="postgresql+psycopg", database=TEST_DATABASE_NAME)
+    return url.set(drivername="postgresql+psycopg", database=get_test_database_name())
 
 
 def _connection_url(url: URL, database: str) -> str:
@@ -44,22 +75,23 @@ def _connection_url(url: URL, database: str) -> str:
 
 def main() -> int:
     test_url = get_test_database_url()
+    database_name = get_test_database_name()
     # 仅只读核实固定测试库存在；缺失时不自动建库。
     with psycopg.connect(
         _connection_url(test_url, "postgres"), autocommit=True, connect_timeout=5
     ) as connection:
         exists = connection.execute(
-            "SELECT 1 FROM pg_database WHERE datname = %s", (TEST_DATABASE_NAME,)
+            "SELECT 1 FROM pg_database WHERE datname = %s", (database_name,)
         ).fetchone()
         if not exists:
-            raise RuntimeError("seekjournal_test 不存在；本轮不自动新建数据库")
+            raise RuntimeError(f"{database_name} 不存在；本轮不自动新建数据库")
 
     with psycopg.connect(
-        _connection_url(test_url, TEST_DATABASE_NAME), connect_timeout=5
+        _connection_url(test_url, database_name), connect_timeout=5
     ) as connection:
         actual = connection.execute("SELECT current_database()").fetchone()[0]
-        if actual != TEST_DATABASE_NAME:
-            raise RuntimeError("实际数据库不是 seekjournal_test")
+        if actual != database_name:
+            raise RuntimeError(f"实际数据库不是 {database_name}")
         others = connection.execute(
             "SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() "
             "AND pid<>pg_backend_pid()"
@@ -98,7 +130,7 @@ def main() -> int:
     )
     if result.returncode:
         raise RuntimeError(f"测试库 Alembic upgrade 失败，退出码 {result.returncode}")
-    print("PASS: seekjournal_test 已准备，开发库未执行迁移或数据操作")
+    print(f"PASS: {database_name} 已准备，开发库未执行迁移或数据操作")
     return 0
 
 

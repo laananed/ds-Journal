@@ -7,6 +7,10 @@ Rules that this module is responsible for:
 - one row per **model subcall**, uniquely identified by
   ``(request_id, subcall_index)``. Recording the same subcall twice must never
   create a second row and must never add its tokens a second time;
+- a multi-round Function Calling run (S3-T06) gives every subcall its own stable
+  index — the tool round, the round after the search and the final answer are
+  three separately metered subcalls. A later failure therefore keeps the tokens
+  already spent on earlier rounds;
 - official usage that is missing or unusable is stored as ``metering="unknown"``
   with NULL counters. It is *not* stored as ``0`` — "we were not told" and "it
   was zero" are different facts;
@@ -15,8 +19,9 @@ Rules that this module is responsible for:
 - the global total sums ``known`` subcalls only and counts unknown subcalls
   separately. A multi-source request is one ledger row, so it contributes to the
   global total exactly once even though it is listed under every source file;
-- search requests are counted on their own axis and are never converted into
-  model tokens;
+- search requests are counted on their own axis — on the subcall row that asked
+  for the tool — and are never converted into model tokens. A repeated query that
+  is served from this call's cache adds no outbound request and counts nothing;
 - deleting a source sets ``ai_usage.request_id`` to NULL but keeps the row, so
   the anonymous global totals survive deletion.
 """
@@ -124,6 +129,21 @@ def record_subcall(
             row_id = existing
     db.commit()
     return UsageRecord(usage_id=row_id, created=created)
+
+
+def next_subcall_index(db: Session, request_id: UUID) -> int:
+    """The stable index of the next model subcall of one request.
+
+    Subcalls are recorded in order, so the ledger rows of a request are always
+    the prefix ``0..n-1``. The next index is therefore ``n``. Recovery uses this
+    to mark the subcall that was *actually* in flight: a multi-round call whose
+    first round already has confirmed tokens must not be re-marked as unknown,
+    and a later round that never reached the ledger must not be omitted.
+    """
+    highest = db.scalar(
+        select(func.max(AIUsage.subcall_index)).where(AIUsage.request_id == request_id)
+    )
+    return 0 if highest is None else int(highest) + 1
 
 
 def global_usage(db: Session) -> dict[str, int]:

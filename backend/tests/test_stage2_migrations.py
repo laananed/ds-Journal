@@ -1,8 +1,13 @@
-"""Migration checks use a private schema inside seekjournal_test only.
+"""Migration checks use a private schema inside the selected test database only.
 
 The fixture creates a unique schema, passes search_path through DATABASE_URL to
 independent Alembic processes, preserves public data/revision, and drops only its
 own schema. No other database is created, upgraded, or dropped.
+
+S3-T06: the database is the one selected by ``SEEKJOURNAL_TEST_DB`` (default
+``seekjournal_test``; whitelist in ``scripts/prepare_test_db.py``). Every probe
+asserts ``current_database()`` equals that selection, so a run cannot silently
+land in the personal database or in the other Agent's test database.
 """
 
 from __future__ import annotations
@@ -29,7 +34,7 @@ from app.database import Base
 from app.folder.models import Folder
 from app.inbox.models import Inbox
 from app.insight.models import Insight
-from scripts.prepare_test_db import get_test_database_url
+from scripts.prepare_test_db import get_test_database_name, get_test_database_url
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -53,13 +58,13 @@ EXPECTED_TABLES = {"journals", "folders", "inboxes", "insights", "ai_requests", 
 
 def _sqlalchemy_url(schema: str) -> str:
     url = get_test_database_url()
-    assert url.database == 'seekjournal_test'
+    assert url.database == get_test_database_name()
     return url.update_query_dict({'options': f'-csearch_path={schema}'}).render_as_string(hide_password=False)
 
 
 def _schema_connection():
     url = get_test_database_url()
-    assert url.database == 'seekjournal_test'
+    assert url.database == get_test_database_name()
     return psycopg.connect(url.set(drivername='postgresql').render_as_string(hide_password=False), autocommit=True, connect_timeout=5)
 
 
@@ -142,7 +147,7 @@ def _run_alembic(schema: str, *args: str) -> None:
         cwd=BACKEND_DIR, env=env, capture_output=True, text=True,
     )
     assert probe.returncode == 0, 'search_path connection probe failed'
-    assert probe.stdout.strip() == repr(('seekjournal_test', schema)), 'Alembic child escaped the migration schema'
+    assert probe.stdout.strip() == repr((get_test_database_name(), schema)), 'Alembic child escaped the migration schema'
 
     result = subprocess.run(
         [sys.executable, "-B", "-m", "alembic", *args],
@@ -325,15 +330,15 @@ def migration_check() -> MigrationCheck:
         _run_alembic(schema, 'upgrade', chain[0])
         engine = create_engine(_sqlalchemy_url(schema))
         with engine.connect() as connection:
-            assert connection.execute(text('SELECT current_database(), current_schema()')).one() == ('seekjournal_test', schema)
+            assert connection.execute(text('SELECT current_database(), current_schema()')).one() == (get_test_database_name(), schema)
         _seed_legacy_rows(engine)
         baseline = _snapshot_six_fields(engine)
-        check = MigrationCheck(dbname='seekjournal_test', schema=schema, engine=engine, chain=chain, baseline=baseline)
+        check = MigrationCheck(dbname=get_test_database_name(), schema=schema, engine=engine, chain=chain, baseline=baseline)
         for revision in chain[1:]:
             _run_alembic(schema, 'upgrade', revision)
             engine.dispose()
             check.snapshots[revision] = _snapshot_six_fields(engine)
-        print(f'[migration_check] db=seekjournal_test schema={schema} chain={chain} legacy_rows={len(baseline)}')
+        print(f'[migration_check] db={get_test_database_name()} schema={schema} chain={chain} legacy_rows={len(baseline)}')
         for revision, rows in check.snapshots.items():
             print(f'[migration_check] revision={revision} preserved={rows == baseline} rows={len(rows)}')
         _run_alembic(schema, 'check')

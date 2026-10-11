@@ -16,6 +16,12 @@ Stage 2 / S2-T01：无残留检查从只数 `journals` 扩展到**全部四张�
 表名列表复用 `scripts/prepare_test_db.py` 的 `BUSINESS_TABLES`，
 避免准备脚本与守卫各维护一份。
 
+S3-T06：目标测试库改由 `SEEKJOURNAL_TEST_DB` 选定（默认 `seekjournal_test`，
+白名单只含 `seekjournal_test` / `seekjournal_test_02`），本文件在导入应用前
+用它切换 `DATABASE_URL`，并断言 Engine 实际指向该库；迁移私有 schema 的
+探针也会核对 `current_database()`，所以两个库可以并行但不会互相写入。
+非白名单取值由 `get_test_database_name()` 直接拒绝，不会退回个人库。
+
 各测试模块自己用的局部 helper（例如 `_count_rows_in`）留在原来的模块里，
 不在这里再包一层通用工具。
 
@@ -54,10 +60,16 @@ from __future__ import annotations
 
 import os
 
-from scripts.prepare_test_db import BUSINESS_TABLES, get_test_database_url
+from scripts.prepare_test_db import (
+    BUSINESS_TABLES,
+    get_test_database_name,
+    get_test_database_url,
+)
 
 # 必须在导入 app.database / app.main 之前切换，确保所有测试模块引用同一测试 Engine。
 # 只修改 pytest 进程环境，不修改 backend/.env 或应用运行时配置。
+# 目标库来自 SEEKJOURNAL_TEST_DB（默认 seekjournal_test，只允许白名单内的隔离库）。
+TEST_DATABASE_NAME = get_test_database_name()
 os.environ["DATABASE_URL"] = get_test_database_url().render_as_string(hide_password=False)
 
 import pytest
@@ -67,6 +79,9 @@ from sqlalchemy.orm import Session
 
 from app.database import engine, get_db
 from app.main import app
+
+# 只核对 Engine 的实际 URL，不建立连接：导入测试模块本身不做数据库访问。
+assert engine.url.database == TEST_DATABASE_NAME, "pytest Engine 没有指向选定的隔离测试库"
 
 
 def _count_rows_with_engine(table: str) -> int:
@@ -144,7 +159,7 @@ def stage3_schema():
     try:
         with private_engine.connect() as connection:
             assert connection.execute(text("select current_database(), current_schema()")).one() == (
-                "seekjournal_test", schema)
+                TEST_DATABASE_NAME, schema)
         yield schema, private_engine
     finally:
         private_engine.dispose()

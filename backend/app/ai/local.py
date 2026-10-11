@@ -2,6 +2,11 @@
 
 The semaphore belongs to this single local process. Source row locks protect
 cross-session registration. No DB transaction crosses the upstream invocation.
+
+S3-T06 adds the bounded tool loop (``app.ai.tool_calls``) inside the invocation
+phase only: registration and attachment keep their T05 shape and transaction
+boundaries, every subcall is metered independently, and only a final usable
+answer is attached to the source text.
 """
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
@@ -10,7 +15,7 @@ from threading import BoundedSemaphore
 from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
-from app.ai import client, settings, usage
+from app.ai import client, search, settings, tool_calls, usage
 from app.ai.incremental import compute_increment, user_text, bounded_context
 from app.ai.models import AIRequest, AICheckpoint, AIUsage
 from app.ai.prompts import local_messages
@@ -90,40 +95,58 @@ def register(db, payload):
                     'date': getattr(row, source['type'] + '_date').isoformat(),
                     'blocks': deepcopy(row.content_blocks)}
         frozen_settings = settings.settings_snapshot(db)
+        # Whether the search tool may be offered is frozen with the settings, so
+        # a later settings change cannot alter a call that is already running.
+        access = search.web_access(frozen_settings)
         messages = local_messages(increment, question, frozen_settings['custom_prompt'],
-                                  recent_context(db, source) if question else [])
+                                  recent_context(db, source) if question else [],
+                                  web_tools=access.enabled)
+        # The user's own words — including the in-flight question and the custom
+        # prompt — are what a search query must never repeat verbatim.
+        private_texts = (current, question or '', frozen_settings['custom_prompt'])
         db.add(AIRequest(id=payload.request_id, kind='local', payload_hash=digest,
                          status='pending', sources=[captured], question=question,
                          settings=frozen_settings))
         db.commit()
-        return None, None, (captured, messages)
+        return None, None, (captured, messages, access, private_texts)
     except Exception:
         _slots.release()
         raise
 
 
-def persist_subcall(bind, request_id, source, result=None, error=None):
-    """Independent ledger commit first, then a separate result transaction.
+def persist_subcall(bind, request_id, source, result=None, error=None, *,
+                    subcall_index=None, search_requests=0, web=None,
+                    failure_category=None, final=True):
+    """Independent ledger commit first, then a separate request-state transaction.
 
     Lock source before request, as source deletion does. A hard deletion may
     remove the request: meter anonymously and never recreate private snapshots.
+
+    ``subcall_index`` records one model subcall; T06 calls this once per round so
+    a later failure cannot erase the tokens of an earlier round. ``final`` applies
+    the reply/web projection and the bounded-failure status; intermediate rounds
+    only apply the staleness rule. The final call passes ``subcall_index=None``
+    because the last subcall was already recorded by its own round.
     """
-    with Session(bind) as ledger:
-        lock_source(ledger, source)
-        row = ledger.scalar(select(AIRequest).where(AIRequest.id == request_id).with_for_update())
-        record = usage.record_subcall(ledger, request_id=request_id if row else None,
-            subcall_index=0, usage=result.usage if result else getattr(error, 'usage', None),
-            response_id=result.response_id if result else getattr(error, 'response_id', None))
-        measured = result.usage if result else getattr(error, 'usage', None)
-        if measured is not None and not record.created:
-            # Explicit unknown recovery slot -> confirmed late usage. Never
-            # add a second ledger row or overwrite already confirmed metering.
-            ledger.execute(update(AIUsage).where(AIUsage.id == record.usage_id,
-                AIUsage.metering == 'unknown').values(metering='known',
-                prompt_tokens=measured.prompt_tokens, completion_tokens=measured.completion_tokens,
-                total_tokens=measured.total_tokens,
-                response_id=result.response_id if result else getattr(error, 'response_id', None)))
-            ledger.commit()
+    if subcall_index is not None:
+        with Session(bind) as ledger:
+            lock_source(ledger, source)
+            row = ledger.scalar(select(AIRequest).where(AIRequest.id == request_id).with_for_update())
+            record = usage.record_subcall(ledger, request_id=request_id if row else None,
+                subcall_index=subcall_index,
+                usage=result.usage if result else getattr(error, 'usage', None),
+                response_id=result.response_id if result else getattr(error, 'response_id', None),
+                search_requests=search_requests)
+            measured = result.usage if result else getattr(error, 'usage', None)
+            if measured is not None and not record.created:
+                # Explicit unknown recovery slot -> confirmed late usage. Never
+                # add a second ledger row or overwrite already confirmed metering.
+                ledger.execute(update(AIUsage).where(AIUsage.id == record.usage_id,
+                    AIUsage.metering == 'unknown').values(metering='known',
+                    prompt_tokens=measured.prompt_tokens, completion_tokens=measured.completion_tokens,
+                    total_tokens=measured.total_tokens,
+                    response_id=result.response_id if result else getattr(error, 'response_id', None)))
+                ledger.commit()
     with Session(bind) as db:
         lock_source(db, source)
         row = db.scalar(select(AIRequest).where(AIRequest.id == request_id).with_for_update())
@@ -133,12 +156,28 @@ def persist_subcall(bind, request_id, source, result=None, error=None):
             row.status = 'unknown'
             row.error_category = 'expired'
             row.completed_at = datetime.now(timezone.utc)
-        if result is not None:
-            row.result = {'reply': result.text, 'web_status': 'not_needed', 'citations': []}
-        if row.status == 'pending' and (error is not None or (result and result.truncated)):
-            row.status = 'failed'
-            row.error_category = error.category if error else 'truncated'
-            row.completed_at = datetime.now(timezone.utc)
+        if final:
+            stored = dict(row.result) if isinstance(row.result, dict) else {}
+            if result is not None:
+                stored['reply'] = result.text
+            if web is not None:
+                stored['web_status'] = web['status']
+                stored['citations'] = list(web['citations'])
+            elif result is not None:
+                stored.setdefault('web_status', 'not_needed')
+                stored.setdefault('citations', [])
+            if stored:
+                row.result = stored
+            if row.status == 'pending':
+                category = failure_category
+                if category is None and error is not None:
+                    category = error.category
+                if category is None and result is not None and result.truncated:
+                    category = 'truncated'
+                if category is not None:
+                    row.status = 'failed'
+                    row.error_category = category
+                    row.completed_at = datetime.now(timezone.utc)
         db.commit()
 
 
@@ -180,11 +219,19 @@ def mark_attach_failure(bind, request_id, source, category):
             db.commit()
 
 
-def execute_local(db, payload):
-    """T06 can extend the invocation phase; T08 can reuse request/ledger primitives.
+def model_invoke(messages, *, tools_enabled, timeout):
+    """One official subcall; tools are only ever the one fixed search function."""
+    parameters = {'tools': list(tool_calls.TOOLS), 'tool_choice': 'auto'} if tools_enabled else None
+    return client.invoke(messages, max_tokens=client.LOCAL_MAX_TOKENS,
+                         parameters=parameters, timeout=timeout)
 
-    Model transport stays T03's invoke; only the invocation phase may perform
-    network work. Registration, metering/result and attachment remain distinct.
+
+def execute_local(db, payload):
+    """T08 can reuse the request/ledger primitives; only this phase does network work.
+
+    Registration, metering/result and attachment remain distinct transactions.
+    The whole function call shares one 90-second deadline and one 2-search /
+    3-subcall budget, enforced by ``tool_calls.run_tool_loop``.
     """
     recover_pending(db)
     try:
@@ -194,17 +241,28 @@ def execute_local(db, payload):
         raise
     if execution is None:
         return response, code
-    source, messages = execution
+    source, messages, access, private_texts = execution
     bind = db.get_bind()
+
+    def record_round(index, result, error, searches):
+        persist_subcall(bind, payload.request_id, source, result, error,
+                        subcall_index=index, search_requests=searches, final=False)
+
+    def search_once(query, *, timeout):
+        return search.search_web(query, source_texts=private_texts, timeout=timeout)
+
     try:
-        error = None
-        result = None
-        try:
-            result = client.invoke(messages, max_tokens=client.LOCAL_MAX_TOKENS)
-        except client.AIClientError as caught:
-            error = caught
-        persist_subcall(bind, payload.request_id, source, result, error)
-        if result is not None and not result.truncated:
+        outcome = tool_calls.run_tool_loop(
+            messages, max_tokens=client.LOCAL_MAX_TOKENS, access=access,
+            invoke=model_invoke, search=search_once, on_subcall=record_round,
+            private_texts=private_texts)
+        result = outcome.result
+        error = outcome.error
+        persist_subcall(bind, payload.request_id, source, result, error, subcall_index=None,
+                        web={'status': outcome.web_status, 'citations': list(outcome.citations)},
+                        failure_category=outcome.failure_category)
+        if (result is not None and not result.truncated and error is None
+                and outcome.failure_category is None):
             try:
                 attach_reply(db, payload.request_id, source, result.text)
             except Exception as caught:

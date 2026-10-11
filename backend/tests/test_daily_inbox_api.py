@@ -76,7 +76,8 @@ def test_daily_conflict_checks_unused_deleted_column_too(api):
 
 def test_two_independent_sessions_concurrently_create_daily_with_one_api_409():
     """True commits use a fresh date/marker and clean only the generated typed IDs."""
-    assert engine.url.database == 'seekjournal_test'
+    from scripts.prepare_test_db import get_test_database_name
+    assert engine.url.database == get_test_database_name()
     business_date = date(2200, 1, 1) + timedelta(days=uuid4().int % 25000)
     marker = f'S2T04 concurrent {uuid4()}'
     with engine.connect() as connection:

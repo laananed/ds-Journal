@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.ai.models import AIRequest, AIUsage
-from app.ai.usage import _aggregate, _source_identity
+from app.ai.usage import _aggregate, _source_identity, next_subcall_index
 from app.writing.service import WritingError
 
 
@@ -21,14 +21,19 @@ ERROR_MESSAGES = {
     'truncated': '回复不完整，未附着正文。',
     'content_limit': '追加回复将超过正文长度限制，结果已保留。',
     'storage': '正文保存失败，结果已保留，检查点未推进。',
+    'tool_invalid': '工具调用不合法，本轮未附着正文。',
+    'tool_budget': '工具调用超出本轮额度，未附着正文。',
 }
 
 
 def recover_pending(db, *, restart=False, now=None):
     """POST recovers expired rows; lifespan recovers all old process pending rows.
 
-    Unknown ledger slots may later gain confirmed metering when that same
-    subcall arrives. No retry, worker or timer is created.
+    The unknown slot is the subcall that was actually in flight — the next free
+    index of that request's ledger — so a multi-round call that already recorded
+    earlier rounds keeps their confirmed tokens and still reports the genuinely
+    unknown round. Unknown ledger slots may later gain confirmed metering when
+    that same subcall arrives. No retry, worker or timer is created.
     """
     now = now or datetime.now(timezone.utc)
     statement = select(AIRequest).where(AIRequest.status == 'pending')
@@ -39,7 +44,8 @@ def recover_pending(db, *, restart=False, now=None):
         row.status = 'unknown'
         row.error_category = 'restart' if restart else 'expired'
         row.completed_at = now
-        db.execute(insert(AIUsage).values(request_id=row.id, subcall_index=0,
+        db.execute(insert(AIUsage).values(request_id=row.id,
+                                          subcall_index=next_subcall_index(db, row.id),
                                           metering='unknown', search_requests=0)
                    .on_conflict_do_nothing(index_elements=['request_id', 'subcall_index']))
     if rows:

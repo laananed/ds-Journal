@@ -80,9 +80,10 @@ def registry():
 
 
 def _assert_test_database() -> None:
+    from scripts.prepare_test_db import get_test_database_name
     with engine.connect() as connection:
         database = connection.execute(text("SELECT current_database()")).scalar_one()
-    assert database == "seekjournal_test"
+    assert database == get_test_database_name()
 
 
 def _new_session() -> Session:

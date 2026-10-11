@@ -49,10 +49,10 @@ class MockTransport:
 
 @pytest.fixture
 def local_env(monkeypatch):
-    from scripts.prepare_test_db import BUSINESS_TABLES
+    from scripts.prepare_test_db import BUSINESS_TABLES, get_test_database_name
     def counts():
         with engine.connect() as c:
-            assert c.scalar(text('select current_database()')) == 'seekjournal_test'
+            assert c.scalar(text('select current_database()')) == get_test_database_name()
             assert c.scalar(text('select version_num from alembic_version')) == '3aa16300a58a'
             return {t: c.scalar(text('select count(*) from ' + t)) for t in BUSINESS_TABLES}
     baseline = counts()

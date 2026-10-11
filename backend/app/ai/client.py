@@ -2,8 +2,11 @@
 
 Scope is deliberately small: one function that performs **one** bounded
 ``POST /chat/completions`` call and reports what the provider actually returned.
-No retries, no streaming, no tool loop, no queue, no SDK. Later tasks (T05/T06)
-add their own turn/orchestration logic on top of this transport.
+No retries, no streaming, no queue, no SDK. Later tasks (T05/T06) add their own
+turn/orchestration logic on top of this transport; this module only validates the
+answer shape, including a tool-only round whose ``content`` is ``null``
+(``docs/stage3-architecture.md`` §6). The bounded tool loop itself lives in
+``app/ai/tool_calls.py``.
 
 Facts fixed here (``docs/stage3-architecture.md`` §6):
 
@@ -41,6 +44,12 @@ API_KEY_ENV = "DEEPSEEK_API_KEY"
 DEFAULT_TIMEOUT_SECONDS = 90.0
 #: Any provider body larger than this is treated as malformed instead of buffered.
 MAX_RESPONSE_BYTES = 1_048_576
+
+#: Bound on one answer's tool calls and on the raw arguments string of each.
+#: The search budget is 2 per call; these caps only keep a broken or hostile
+#: answer from building an unbounded message list.
+MAX_TOOL_CALLS = 8
+MAX_TOOL_ARGUMENT_CHARS = 4_096
 
 #: Product budgets from ``docs/stage3-architecture.md`` §6 (local / review).
 LOCAL_MAX_TOKENS = 512
@@ -186,18 +195,45 @@ class ModelUsage:
 
 
 @dataclass(frozen=True)
+class ToolCall:
+    """One function call the model asked for.
+
+    ``arguments`` stays the raw JSON **string** the provider sent, so replaying
+    the assistant message reproduces it exactly instead of re-serializing our own
+    interpretation of it.
+    """
+
+    id: str
+    name: str
+    arguments: str
+
+    def as_message(self) -> dict[str, Any]:
+        """The official ``tool_calls`` entry, ready to send back unchanged."""
+        return {
+            "id": self.id,
+            "type": "function",
+            "function": {"name": self.name, "arguments": self.arguments},
+        }
+
+
+@dataclass(frozen=True)
 class ModelResult:
     """One successful subcall.
 
     ``usage`` is ``None`` when the provider answered without usable usage
     figures. Callers must record that as ``unknown`` metering rather than as
     zero (``docs/stage3-architecture.md`` §5).
+
+    ``text`` may be empty when the provider returned a tool call instead of an
+    answer; ``tool_calls`` is then non-empty. Exactly one of the two is present
+    for any accepted response.
     """
 
     text: str
     response_id: str | None
     usage: ModelUsage | None
     finish_reason: str | None
+    tool_calls: tuple[ToolCall, ...] = ()
 
     @property
     def truncated(self) -> bool:
@@ -257,8 +293,43 @@ def _extract_message_text(message: Any) -> str:
     return ""
 
 
+def _extract_tool_calls(message: dict[str, Any]) -> tuple[ToolCall, ...]:
+    """Validate the official ``tool_calls`` array, or reject the whole answer.
+
+    A structurally invalid tool call is not repaired and not dropped: the caller
+    would otherwise answer as if the model had produced a normal completion.
+    """
+    raw = message.get("tool_calls")
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or not raw or len(raw) > MAX_TOOL_CALLS:
+        raise UpstreamResponseError("model response has an invalid tool call list")
+    calls: list[ToolCall] = []
+    for item in raw:
+        if not isinstance(item, dict) or item.get("type", "function") != "function":
+            raise UpstreamResponseError("model response has an invalid tool call")
+        call_id = item.get("id")
+        function = item.get("function")
+        if not isinstance(call_id, str) or not call_id.strip():
+            raise UpstreamResponseError("model response has an invalid tool call id")
+        if not isinstance(function, dict):
+            raise UpstreamResponseError("model response has an invalid tool call")
+        name = function.get("name")
+        arguments = function.get("arguments")
+        if not isinstance(name, str) or not name.strip():
+            raise UpstreamResponseError("model response has an invalid tool name")
+        if not isinstance(arguments, str) or len(arguments) > MAX_TOOL_ARGUMENT_CHARS:
+            raise UpstreamResponseError("model response has invalid tool arguments")
+        calls.append(ToolCall(call_id.strip(), name.strip(), arguments))
+    return tuple(calls)
+
+
 def parse_completion(payload: dict[str, Any]) -> ModelResult:
-    """Validate the answer shape; unusable answers raise a safe error."""
+    """Validate the answer shape; unusable answers raise a safe error.
+
+    A tool round legitimately has ``content: null`` (or an empty string) plus a
+    valid ``tool_calls`` array. Text-only answers keep working exactly as before.
+    """
     choices = payload.get("choices")
     if not isinstance(choices, list) or not choices:
         raise UpstreamResponseError("model response has no completion choices")
@@ -269,7 +340,8 @@ def parse_completion(payload: dict[str, Any]) -> ModelResult:
     if not isinstance(message, dict):
         raise UpstreamResponseError("model response has no message")
     text = _extract_message_text(message.get("content"))
-    if not text.strip():
+    tool_calls = _extract_tool_calls(message)
+    if not text.strip() and not tool_calls:
         raise UpstreamResponseError("model response contains no text")
     finish_reason = first.get("finish_reason")
     response_id = payload.get("id")
@@ -278,6 +350,7 @@ def parse_completion(payload: dict[str, Any]) -> ModelResult:
         response_id=response_id if isinstance(response_id, str) else None,
         usage=parse_usage(payload),
         finish_reason=finish_reason if isinstance(finish_reason, str) else None,
+        tool_calls=tool_calls,
     )
 
 
