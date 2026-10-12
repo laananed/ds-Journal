@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { JournalApiError, deleteJournal, getJournal, updateJournal } from '../api/journals'
 import { WritingApiError, deleteAiBlock } from '../api/writing'
+import AiWritingActions, { type AiPrepareResult } from './AiWritingActions'
 import FolderSelect from './FolderSelect'
 import WritingContent from './WritingContent'
 import WritingEditor from './WritingEditor'
@@ -15,6 +16,7 @@ import {
   type DraftSnapshot,
 } from '../utils/autosave'
 import { legacyBlocksFromContent, projectBlocks } from '../utils/writingBlocks'
+import { parseAiFileDetail, type AiFileDetail } from '../utils/aiRequestState'
 import type { Journal, JournalUpdate } from '../types/journal'
 import type { Block } from '../types/writing'
 
@@ -24,6 +26,8 @@ interface JournalDetailProps {
   onDirtyChange: (dirty: boolean) => void
   /** T02：把 flush 交给 App，所有离开出口先落库再导航。 */
   onFlushReady?: (flush: (() => Promise<FlushResult>) | null) => void
+  /** T07：把 AI 处理中锁交给 App；与自动保存 busy 分开，避免误解锁或死锁。 */
+  onAiLockChange?: (locked: boolean) => void
   onNavigate: (action: () => void) => void
   onClose: () => void
   onDataChanged: () => void
@@ -55,8 +59,31 @@ function toFile(journal: Journal): AutosaveFile {
   return { id: journal.id, revision: journal.revision, draft: toSnapshot(journal) }
 }
 
+/**
+ * 把后端返回的**完整文件详情**还原成 `Journal`（T07）。
+ *
+ * 只用它刷新保存基线：`content_blocks` 里已经有后端附着的蓝块和尾部空续写段，
+ * 前端不再自己插入任何 AI 段，也不伪造 `request_id`。
+ */
+function toJournal(detail: AiFileDetail): Journal {
+  return {
+    type: 'journal',
+    id: detail.id,
+    revision: detail.revision,
+    title: detail.title,
+    display_title: detail.display_title,
+    content: detail.content,
+    content_blocks: detail.content_blocks as Block[] | null,
+    journal_date: detail.date,
+    folder_id: detail.folder_id,
+    created_at: detail.created_at,
+    updated_at: detail.updated_at,
+    deleted_at: detail.deleted_at,
+  }
+}
+
 function JournalDetail({
-  journalId, onBusyChange, onDirtyChange, onFlushReady, onNavigate, onClose, onDataChanged, onDeleted, onResolveLink,
+  journalId, onBusyChange, onDirtyChange, onFlushReady, onAiLockChange, onNavigate, onClose, onDataChanged, onDeleted, onResolveLink,
 }: JournalDetailProps) {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [detail, setDetail] = useState<Journal | null>(null)
@@ -71,6 +98,15 @@ function JournalDetail({
   const writing = useRef(false)
   /** 服务器最新版本：AI 段删除必须用最新 revision（缺 428 / 旧 409）。 */
   const latestRevisionRef = useRef(0)
+  /** T07：AI 处理中锁。与删除 busy 分开，避免 AI 结束误解锁删除、或反过来死锁。 */
+  const [aiLocked, setAiLocked] = useState(false)
+  const aiLockedRef = useRef(false)
+
+  function changeAiLock(locked: boolean): void {
+    aiLockedRef.current = locked
+    setAiLocked(locked)
+    onAiLockChange?.(locked)
+  }
 
   function rememberServer(journal: Journal): void {
     latestRevisionRef.current = journal.revision
@@ -224,12 +260,64 @@ function JournalDetail({
     } catch { /* 重读失败：保留原草稿与错误提示，不覆盖用户输入。 */ }
   }
 
+  /**
+   * T07 调用前准备：先 flush 最新有效草稿，再返回**当前服务器版本**。
+   *
+   * flush 返回 `blocked`（保存失败 / 版本冲突 / 输入不合法）时不返回版本，
+   * 组件因此**不会**发出任何 AI 请求；草稿原样留在编辑器里。
+   */
+  async function prepareAiCall(): Promise<AiPrepareResult> {
+    if (detail === null) return { ok: false, message: '还没有打开这篇 Journal，无法调用 AI。' }
+    const flushed = await autosave.flush()
+    if (flushed === 'blocked') {
+      return {
+        ok: false,
+        message: '还有未保存的输入或版本冲突，已停止调用 AI（不会消耗 Token）。请先处理编辑器里的保存状态。',
+      }
+    }
+    const revision = latestRevisionRef.current
+    if (revision < 1) return { ok: false, message: '还没有取得服务器版本，无法调用 AI。' }
+    return { ok: true, revision }
+  }
+
+  /**
+   * 后端返回的完整文件 → 安全刷新基线。
+   *
+   * `call`：AI 段已由后端附着，整体采用服务器版本（编辑器随即出现蓝块与
+   * 蓝色块下方的空续写段，用户可以继续写并自动保存）。
+   * `recovery`：关页重开后的查询结果，采用后端最新文件作为保存基线。
+   * **不能只在查看态采用**：编辑态且没有未保存输入时如果不采用，草稿基线会停在
+   * 旧版本，下一次自动保存会被后端按「删除了 AI 段」拒绝（422/409）。
+   * `syncFromServer` 自己区分两种情况：有未保存输入时只换基线与版本、并剔除
+   * 服务器已删除的段，保留较新草稿；没有未保存输入时整体采用服务器版本。
+   */
+  function applyAiFile(raw: unknown, origin: 'call' | 'recovery'): void {
+    const parsed = parseAiFileDetail(raw)
+    if (parsed === null || (detail !== null && parsed.id !== detail.id)) {
+      // 形状不符或不是同一篇：退回只读重读，绝不猜测性地改草稿。
+      if (origin === 'recovery' && mode === 'view') setReloadToken((value) => value + 1)
+      return
+    }
+    const journal = toJournal(parsed)
+    if (origin === 'call') {
+      setDetail(journal)
+      rememberServer(journal)
+      autosave.syncFromServer(toFile(journal))
+      onDataChanged()
+      return
+    }
+    setDetail(journal)
+    rememberServer(journal)
+    autosave.syncFromServer(toFile(journal))
+    onDataChanged()
+  }
+
   const invalidDraft = autosave.dirty && !autosave.savable
   return (
     <section className="journal-detail" aria-label="Journal 详情">
       <div className="detail-header">
         <h2>Journal 详情</h2>
-        <button type="button" onClick={onClose} disabled={busy}>返回列表</button>
+        <button type="button" onClick={onClose} disabled={busy || aiLocked}>返回列表</button>
       </div>
       {status === 'loading' && <p className="detail-state" role="status">正在读取详情……</p>}
       {status === 'error' && (
@@ -292,11 +380,11 @@ function JournalDetail({
           </div>
           <form className="detail-form" onSubmit={(event) => { event.preventDefault(); void autosave.saveNow() }}>
             <label className="editor-field"><span>日期</span>
-              <input type="date" value={draft.date}
+              <input type="date" value={draft.date} disabled={aiLocked}
                 onChange={(event) => autosave.changeDraft({ date: event.target.value })} />
             </label>
             <label className="editor-field"><span>标题（留空表示没有标题）</span>
-              <input type="text" value={draft.title}
+              <input type="text" value={draft.title} disabled={aiLocked}
                 onChange={(event) => autosave.changeDraft({ title: event.target.value })}
                 onCompositionStart={autosave.onCompositionStart}
                 onCompositionEnd={autosave.onCompositionEnd} />
@@ -305,6 +393,7 @@ function JournalDetail({
               <span>正文（用户文字与 AI 段分开显示）</span>
               <WritingEditor
                 blocks={draftBlocks}
+                locked={aiLocked}
                 onChange={(blocks) => autosave.changeDraft({ blocks, content: projectBlocks(blocks) })}
                 onCompositionStart={autosave.onCompositionStart}
                 onCompositionEnd={autosave.onCompositionEnd}
@@ -313,7 +402,7 @@ function JournalDetail({
                 onResolveLink={onResolveLink}
               />
             </div>
-            <FolderSelect value={draft.folder_id}
+            <FolderSelect value={draft.folder_id} disabled={aiLocked}
               onChange={(folderId) => autosave.changeDraft({ folder_id: folderId })} />
             {blockError && <p className="detail-error" role="alert">{blockError}</p>}
             {invalidDraft && (
@@ -322,10 +411,19 @@ function JournalDetail({
               </p>
             )}
             <div className="editor-actions">
-              <button type="submit" disabled={!autosave.dirty}>立即保存</button>
-              <button type="button" onClick={() => onNavigate(exitEditing)}>返回查看</button>
+              <button type="submit" disabled={!autosave.dirty || aiLocked}>立即保存</button>
+              <button type="button" onClick={() => onNavigate(exitEditing)} disabled={aiLocked}>返回查看</button>
             </div>
           </form>
+          {/* T07：局部陪伴写作入口，只在编辑态出现；调用期间本页编辑/删除/导航被锁。 */}
+          <AiWritingActions
+            source={{ type: 'journal', id: detail.id }}
+            disabled={busy}
+            prepare={prepareAiCall}
+            onServerFile={applyAiFile}
+            onLockChange={changeAiLock}
+            onActivity={onDataChanged}
+          />
         </>
       )}
     </section>

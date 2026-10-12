@@ -71,3 +71,91 @@ export interface AICallsPage {
   total: number
   has_next: boolean
 }
+
+/* -------------------------------------------------------------------------
+ * Stage 3 / S3-T07：局部互动与请求恢复（`docs/stage3-api.md` §4）
+ *
+ * 这些形状与后端 `backend/app/ai/schemas.py` 一一对应。前端**只提交**
+ * `request_id` / `source` / `question`：正文、增量、检查点、AI 回复一律由
+ * 后端从文件与检查点算出来，前端不自报 delta，也不伪造蓝块。
+ * ---------------------------------------------------------------------- */
+
+/** `web_status`：关闭 / 缺配置 / 未需要 / 成功 / 失败 / 拦截。 */
+export type AIWebStatus =
+  | 'disabled'
+  | 'not_configured'
+  | 'not_needed'
+  | 'searched'
+  | 'failed'
+  | 'blocked'
+
+/** 引用：只有标题与纯 HTTP(S) 地址。 */
+export interface AICitation {
+  title: string
+  url: string
+}
+
+/** `AiRequest.status` 的固定取值。 */
+export type AIRequestStatus = 'pending' | 'ready' | 'applied' | 'failed' | 'conflict' | 'unknown'
+
+/** `POST /api/ai/local` 的 source 参数：必须带 `expected_revision`。 */
+export interface AILocalSource {
+  type: 'journal' | 'inbox'
+  id: number
+  expected_revision: number
+}
+
+/** `POST /api/ai/local` 请求体；`question` 是独立对话信息，不写回正文。 */
+export interface AILocalRequest {
+  request_id: string
+  source: AILocalSource
+  question?: string
+}
+
+/** 后端安全分类的错误说明（不透传上游原文）。 */
+export interface AIRequestErrorInfo {
+  category?: string | null
+  message?: string | null
+}
+
+/**
+ * `AiRequest`：`POST /api/ai/local` 的 200/202 响应，
+ * 以及 `GET /api/ai/requests/{request_id}` 的响应。
+ *
+ * `file` 在 applied local 时是**完整文件详情**（AI 段已由后端附着）；
+ * 前端只用它刷新保存基线，绝不自己插入蓝块。
+ */
+export interface AIRequestDetail {
+  request_id: string
+  kind: 'local' | 'review'
+  status: AIRequestStatus
+  sources: AISourceIdentity[]
+  reply: string | null
+  file: Record<string, unknown> | null
+  review: Record<string, unknown> | null
+  saved_target: { type: 'journal'; id: number } | null
+  usage: AIUsage
+  web_status: AIWebStatus
+  citations: AICitation[]
+  error: AIRequestErrorInfo | null
+}
+
+/**
+ * 无有效增量、也无有效问题时的固定响应：
+ * 零模型调用、零请求登记、零蓝块（`docs/stage3-api.md` §4）。
+ */
+export interface AINoopResponse {
+  status: 'noop'
+  message: string
+  request_id: null
+  usage: null
+}
+
+/** `POST /api/ai/local` 的两种 200 结果。 */
+export type AILocalResponse = AIRequestDetail | AINoopResponse
+
+/** 带上 HTTP 状态码的调用结果：202 表示同键重放且仍在处理。 */
+export interface AILocalResult {
+  status: number
+  body: AILocalResponse
+}

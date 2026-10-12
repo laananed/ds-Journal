@@ -9,6 +9,7 @@ import {
   updateInbox,
 } from '../api/inboxes'
 import { WritingApiError, deleteAiBlock } from '../api/writing'
+import AiWritingActions, { type AiPrepareResult } from '../components/AiWritingActions'
 import FileCard from '../components/FileCard'
 import FolderSelect from '../components/FolderSelect'
 import WritingContent from '../components/WritingContent'
@@ -26,6 +27,7 @@ import {
   type DraftSnapshot,
 } from '../utils/autosave'
 import { legacyBlocksFromContent, newUserBlock, projectBlocks } from '../utils/writingBlocks'
+import { parseAiFileDetail, type AiFileDetail } from '../utils/aiRequestState'
 import { formatServerTimestamp } from '../utils/journalDetail'
 import { defaultJournalDate } from '../utils/journalDate'
 import { planDailyEntry } from '../utils/inboxDraft'
@@ -39,6 +41,8 @@ interface InboxPageProps {
   onNavigate: (action: () => void) => void
   /** T02：把当前编辑面板的 flush 交给 App。 */
   onFlushReady?: (flush: (() => Promise<FlushResult>) | null) => void
+  /** T07：把 AI 处理中锁交给 App（与删除 busy 分开）。 */
+  onAiLockChange?: (locked: boolean) => void
   /** Folder/Search/内部链接请求打开真实 Inbox；也支持同模块的新请求。 */
   initialOpen?: { id: number; key: number } | null
   onOpenRequestConsumed?: () => void
@@ -69,11 +73,32 @@ function toFile(inbox: Inbox): AutosaveFile {
   return { id: inbox.id, revision: inbox.revision, draft: toSnapshot(inbox) }
 }
 
+/** 后端完整文件详情 → `Inbox`（蓝块已由后端附着，前端只读取）。 */
+function toInbox(detail: AiFileDetail): Inbox {
+  return {
+    type: 'inbox',
+    id: detail.id,
+    revision: detail.revision,
+    title: detail.title,
+    display_title: detail.display_title,
+    content: detail.content,
+    content_blocks: detail.content_blocks as Block[] | null,
+    inbox_date: detail.date,
+    is_daily: detail.isDaily === true,
+    folder_id: detail.folder_id,
+    created_at: detail.created_at,
+    updated_at: detail.updated_at,
+    deleted_at: detail.deleted_at,
+  }
+}
+
 /** 源码标题 + 结构化正文输入；创建与编辑共用同一份字段，避免重复组件。 */
-function InboxFields({ draft, blocks, disabled, onTitle, changeDraft, composing, onBlocks, onRequestDeleteAiBlock, deletingBlockId, onResolveLink }: {
+function InboxFields({ draft, blocks, disabled, locked, onTitle, changeDraft, composing, onBlocks, onRequestDeleteAiBlock, deletingBlockId, onResolveLink }: {
   draft: DraftSnapshot
   blocks: Block[]
   disabled: boolean
+  /** T07：AI 处理中锁定编辑（与 disabled 分开，以便显示锁定原因）。 */
+  locked?: boolean
   onTitle: (value: string) => void
   changeDraft: (update: Partial<DraftSnapshot>) => void
   composing: { start: () => void; end: () => void }
@@ -85,7 +110,7 @@ function InboxFields({ draft, blocks, disabled, onTitle, changeDraft, composing,
   return (
     <>
       <label className="editor-field"><span>标题（留空则用业务日期作为默认标题）</span>
-        <input type="text" value={draft.title}
+        <input type="text" value={draft.title} disabled={disabled || locked === true}
           onChange={(event) => onTitle(event.target.value)}
           onCompositionStart={composing.start} onCompositionEnd={composing.end} />
       </label>
@@ -94,6 +119,7 @@ function InboxFields({ draft, blocks, disabled, onTitle, changeDraft, composing,
         <WritingEditor
           blocks={blocks}
           disabled={disabled}
+          locked={locked}
           onChange={onBlocks}
           onCompositionStart={composing.start}
           onCompositionEnd={composing.end}
@@ -102,7 +128,7 @@ function InboxFields({ draft, blocks, disabled, onTitle, changeDraft, composing,
           onResolveLink={onResolveLink}
         />
       </div>
-      <FolderSelect value={draft.folder_id}
+      <FolderSelect value={draft.folder_id} disabled={disabled || locked === true}
         onChange={(folderId) => changeDraft({ folder_id: folderId })} />
     </>
   )
@@ -113,6 +139,7 @@ interface InboxPanelProps {
   onDirtyChange: (dirty: boolean) => void
   onBusyChange: (busy: boolean) => void
   onFlushReady?: (flush: (() => Promise<FlushResult>) | null) => void
+  onAiLockChange?: (locked: boolean) => void
   onResolveLink: (title: string) => void
   onNavigate: (action: () => void) => void
   onCreated: (inbox: Inbox) => void
@@ -123,7 +150,7 @@ interface InboxPanelProps {
 }
 
 function InboxPanel({
-  panel, onDirtyChange, onBusyChange, onFlushReady, onResolveLink, onNavigate, onCreated, onChanged, onDeleted, onClose, onOpenRecord,
+  panel, onDirtyChange, onBusyChange, onFlushReady, onAiLockChange, onResolveLink, onNavigate, onCreated, onChanged, onDeleted, onClose, onOpenRecord,
 }: InboxPanelProps) {
   const inboxDate = panel.kind === 'create' ? panel.inboxDate : ''
   const inboxId = panel.kind === 'detail' ? panel.id : null
@@ -147,6 +174,15 @@ function InboxPanel({
   const writing = useRef(false)
   /** 服务器最新版本：AI 段删除必须用最新 revision（缺 428 / 旧 409）。 */
   const latestRevisionRef = useRef(0)
+  /** T07：AI 处理中锁（与删除 busy 分开，避免误解锁或死锁）。 */
+  const [aiLocked, setAiLocked] = useState(false)
+  /** 服务器身份同步副本：创建成功后立刻可用（state 更新是异步的）。 */
+  const latestFileIdRef = useRef(0)
+
+  function changeAiLock(locked: boolean): void {
+    setAiLocked(locked)
+    onAiLockChange?.(locked)
+  }
   // 用户在标题框里真正打过字；决定创建请求是省略 title（用日期做默认标题）还是显式提交。
   const titleEditedRef = useRef(false)
   /**
@@ -167,6 +203,7 @@ function InboxPanel({
 
   function rememberServer(inbox: Inbox): void {
     latestRevisionRef.current = inbox.revision
+    latestFileIdRef.current = inbox.id
   }
 
   // 打开已有 Inbox 时真实读取详情；创建面板不发任何读请求。
@@ -254,6 +291,8 @@ function InboxPanel({
   }, [autosave.conflict, isDaily, isCreate, inboxDate])
 
   const busy = deleteStage === 'deleting' || deletingBlockId !== null
+  /** T07：删除 busy 与 AI 处理中锁合起来，只用于界面禁用，不改变各自状态机。 */
+  const uiLocked = busy || aiLocked
   const draft = autosave.draft
   const draftBlocks = draft.blocks ?? []
 
@@ -355,6 +394,51 @@ function InboxPanel({
     } catch { /* 重读失败：保留原草稿与错误提示，不覆盖用户输入。 */ }
   }
 
+  /**
+   * T07 调用前准备：先 flush 最新有效草稿。
+   *
+   * 新建面板同样先**有效创建**取得 id（`create` 走稳定 `client_create_id`），
+   * 不用空文件占位；`flush` 返回 `blocked` 时不发 AI。
+   */
+  async function prepareAiCall(): Promise<AiPrepareResult> {
+    const flushed = await autosave.flush()
+    if (flushed === 'blocked') {
+      return {
+        ok: false,
+        message: '还有未保存的输入、空白正文或版本冲突，已停止调用 AI（不会消耗 Token）。'
+          + '请先写下有效正文并保存成功。',
+      }
+    }
+    const revision = latestRevisionRef.current
+    if (revision < 1 || latestFileIdRef.current === 0) {
+      return { ok: false, message: '还没有创建成功，无法调用 AI。请先写下有效正文让它保存。' }
+    }
+    return { ok: true, revision }
+  }
+
+  /** 后端完整文件 → 刷新基线；蓝块与尾部空续写段都由后端给出。 */
+  function applyAiFile(raw: unknown, origin: 'call' | 'recovery'): void {
+    const parsed = parseAiFileDetail(raw)
+    if (parsed === null) return
+    const inbox = toInbox(parsed)
+    if (origin === 'call') {
+      setFile(inbox)
+      rememberServer(inbox)
+      setStatus('success')
+      autosave.syncFromServer(toFile(inbox))
+      onChanged(inbox)
+      return
+    }
+    if (latestFileIdRef.current === inbox.id) {
+      // recovery：采用后端最新文件作为保存基线（syncFromServer 自己区分
+      // 「有未保存输入」与「没有未保存输入」两种情况，不会覆盖较新的草稿）。
+      setFile(inbox)
+      rememberServer(inbox)
+      autosave.syncFromServer(toFile(inbox))
+      onChanged(inbox)
+    }
+  }
+
   const heading = isCreate ? (isDaily ? '新建当日 Daily Inbox' : '新建 Inbox') : 'Inbox 详情'
   const invalidDraft = autosave.dirty && !autosave.savable
 
@@ -379,7 +463,7 @@ function InboxPanel({
     <section className="journal-editor" aria-label={heading}>
       <div className="detail-header">
         <h2>{heading}</h2>
-        <button type="button" onClick={onClose} disabled={busy}>返回列表</button>
+        <button type="button" onClick={onClose} disabled={uiLocked}>返回列表</button>
       </div>
 
       {mode === 'edit' && (panel.kind === 'create' || (status === 'success' && file)) && (
@@ -392,6 +476,7 @@ function InboxPanel({
           <form className="editor-form" onSubmit={(event) => { event.preventDefault(); void autosave.saveNow() }}>
             <InboxFields draft={draft} blocks={draftBlocks}
               disabled={false}
+              locked={aiLocked}
               onTitle={changeTitle}
               onBlocks={(blocks) => autosave.changeDraft({ blocks, content: projectBlocks(blocks) })}
               changeDraft={autosave.changeDraft}
@@ -406,12 +491,21 @@ function InboxPanel({
               </p>
             )}
             <div className="editor-actions">
-              <button type="submit" disabled={!autosave.dirty}>立即保存</button>
-              <button type="button" onClick={() => isCreate ? onClose() : onNavigate(exitEditing)} disabled={busy}>
+              <button type="submit" disabled={!autosave.dirty || aiLocked}>立即保存</button>
+              <button type="button" onClick={() => isCreate ? onClose() : onNavigate(exitEditing)} disabled={busy || aiLocked}>
                 {isCreate ? '取消新建' : '返回查看'}
               </button>
             </div>
           </form>
+          {/* T07：Inbox 局部陪伴写作；调用期间锁编辑/删除/导航，蓝块由后端附着。 */}
+          <AiWritingActions
+            source={file === null ? null : { type: 'inbox', id: file.id }}
+            disabled={busy}
+            prepare={prepareAiCall}
+            onServerFile={applyAiFile}
+            onLockChange={changeAiLock}
+            onActivity={() => { if (file !== null) onChanged(file) }}
+          />
           {isCreate && isDaily && autosave.conflict && dailyConflict !== null && (
             <div className="detail-confirm" role="alert">
               <p>该日期已经存在 Daily Inbox，未覆盖已有内容；当前未保存的输入仍然保留。</p>
@@ -480,7 +574,8 @@ function InboxPanel({
 }
 
 function InboxPage({
-  onDirtyChange, onBusyChange, onResolveLink, onNavigate, onFlushReady, initialOpen = null, onOpenRequestConsumed,
+  onDirtyChange, onBusyChange, onResolveLink, onNavigate, onFlushReady, onAiLockChange,
+  initialOpen = null, onOpenRequestConsumed,
 }: InboxPageProps) {
   // 初始外部请求直接进入详情；后续同模块链接由下面的 effect 消费。
   const [panel, setPanel] = useState<InboxPanelShape | { kind: 'list' }>(
@@ -507,6 +602,9 @@ function InboxPage({
   const [dailyRevision, setDailyRevision] = useState(0)
 
   const [busy, setBusy] = useState(false)
+  // T07：AI 处理中锁由编辑面板登记；与删除 busy 分开持有，避免互相误解锁。
+  const [aiLocked, setAiLocked] = useState(false)
+  const uiLocked = busy || aiLocked
   const dailyToken = useRef(0)
 
   // 打开请求已消费：通知 App 清空，避免下次挂载重复打开同一条记录。
@@ -523,6 +621,11 @@ function InboxPage({
   function updateBusy(value: boolean) {
     setBusy(value)
     onBusyChange(value)
+  }
+  /** AI 处理中锁：本地留一份用于禁用工具栏，同时上报 App 阻止导航。 */
+  function changeAiLock(locked: boolean) {
+    setAiLocked(locked)
+    onAiLockChange?.(locked)
   }
 
   useEffect(() => {
@@ -658,15 +761,15 @@ function InboxPage({
   return (
     <section className="inbox-page" aria-label="Inbox 模块">
       <section className="app-toolbar" aria-label="Inbox 工具">
-        <button type="button" onClick={newInbox} disabled={busy}>新建 Inbox</button>
-        <button type="button" onClick={openDaily} disabled={busy}>打开今日 Daily</button>
-        <button type="button" onClick={() => onNavigate(showList)} disabled={busy}>Inbox 列表</button>
+        <button type="button" onClick={newInbox} disabled={uiLocked}>新建 Inbox</button>
+        <button type="button" onClick={openDaily} disabled={uiLocked}>打开今日 Daily</button>
+        <button type="button" onClick={() => onNavigate(showList)} disabled={uiLocked}>Inbox 列表</button>
         <label className="app-filter">
           <span>按日期查看</span>
-          <input type="date" value={listFilter} disabled={busy}
+          <input type="date" value={listFilter} disabled={uiLocked}
             onChange={(event) => changeFilter(event.target.value)} />
         </label>
-        <button type="button" onClick={() => changeFilter('')} disabled={busy || listFilter === ''}>清除筛选</button>
+        <button type="button" onClick={() => changeFilter('')} disabled={uiLocked || listFilter === ''}>清除筛选</button>
       </section>
 
       {dailyInfo && (
@@ -681,6 +784,7 @@ function InboxPage({
       {panel.kind === 'create' && (
         <InboxPanel key={`create-${panel.key}`} panel={panel}
           onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onFlushReady={onFlushReady}
+          onAiLockChange={changeAiLock}
           onNavigate={onNavigate} onResolveLink={onResolveLink}
           onCreated={handleCreated} onChanged={handleChanged} onDeleted={handleDeleted}
           onClose={() => onNavigate(showList)} onOpenRecord={openInbox} />
@@ -688,6 +792,7 @@ function InboxPage({
       {panel.kind === 'detail' && (
         <InboxPanel key={`detail-${panel.key}`} panel={panel}
           onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onFlushReady={onFlushReady}
+          onAiLockChange={changeAiLock}
           onNavigate={onNavigate} onResolveLink={onResolveLink}
           onCreated={handleCreated} onChanged={handleChanged} onDeleted={handleDeleted}
           onClose={() => onNavigate(showList)} onOpenRecord={openInbox} />
@@ -698,7 +803,7 @@ function InboxPage({
         {listStatus === 'error' && (
           <div className="app-state app-state-error" role="alert">
             <p>列表加载失败：{listError}</p>
-            <button type="button" onClick={refreshList} disabled={busy}>重试</button>
+            <button type="button" onClick={refreshList} disabled={uiLocked}>重试</button>
           </div>
         )}
         {listStatus === 'success' && listResult && (
@@ -710,13 +815,13 @@ function InboxPage({
                   {listResult.items.map((inbox) => (
                     <li key={`${inbox.type}:${inbox.id}`}>
                       <FileCard file={inbox} onOpen={(value) => openInbox(value.id)}
-                        selected={(panel.kind === 'detail' && panel.id === inbox.id) || (panel.kind === 'create' && panel.savedId === inbox.id)} disabled={busy} />
+                        selected={(panel.kind === 'detail' && panel.id === inbox.id) || (panel.kind === 'create' && panel.savedId === inbox.id)} disabled={uiLocked} />
                     </li>
                   ))}
                 </ul>
               )}
             <Pagination page={listResult.page} total={listResult.total} hasNext={listResult.has_next}
-              onPageChange={changePage} disabled={busy} label="Inbox 列表分页" />
+              onPageChange={changePage} disabled={uiLocked} label="Inbox 列表分页" />
           </>
         )}
       </section>

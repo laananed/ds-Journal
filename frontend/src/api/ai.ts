@@ -2,8 +2,20 @@
  *
  * 只调用后端已有的三个只读/设置接口。这里**不发送** Key、模型名或 base_url：
  * 官方地址与模型固定在后端，浏览器无法参与选择。
+ *
+ * Stage 3 / S3-T07 追加两个接口：局部互动 `POST /api/ai/local` 与请求查询
+ * `GET /api/ai/requests/{request_id}`。两者同样不发送 Key / 模型 / base_url；
+ * 正文、增量与检查点都由后端计算，前端只提交 `request_id` + 源身份 + 问题。
  */
-import type { AICallsPage, AISettings, AISettingsUpdate, AIUsage } from '../types/ai'
+import type {
+  AICallsPage,
+  AILocalRequest,
+  AILocalResult,
+  AIRequestDetail,
+  AISettings,
+  AISettingsUpdate,
+  AIUsage,
+} from '../types/ai'
 
 export class AiApiError extends Error {
   readonly status: number
@@ -11,6 +23,19 @@ export class AiApiError extends Error {
     super(message)
     this.name = 'AiApiError'
     this.status = status
+  }
+}
+
+/**
+ * 调用失败但后端给了可查询的 `request_id`（502/504）。
+ * 客户端据此提示「可能已消耗 Token」，并且**不**自动换新 UUID 重发。
+ */
+export class AiCallError extends AiApiError {
+  readonly requestId: string | null
+  constructor(status: number, message: string, requestId: string | null) {
+    super(status, message)
+    this.name = 'AiCallError'
+    this.requestId = requestId
   }
 }
 
@@ -38,6 +63,18 @@ async function readErrorMessage(response: Response): Promise<string> {
     }
   } catch { /* 非 JSON 响应使用 HTTP 兜底消息。 */ }
   return fallback
+}
+
+/** 502/504 的错误体里带可查询的 request_id；只读取，不写日志、不回显。 */
+async function readErrorRequestId(response: Response): Promise<string | null> {
+  try {
+    const body: unknown = await response.json()
+    if (typeof body !== 'object' || body === null || !('request_id' in body)) return null
+    const requestId = (body as { request_id: unknown }).request_id
+    return typeof requestId === 'string' && requestId !== '' ? requestId : null
+  } catch {
+    return null
+  }
 }
 
 /** 缺设置行时后端返回默认值与 `revision=0`，且不创建任何行。 */
@@ -80,4 +117,51 @@ export async function listFileAICalls(
   const response = await fetch(url, { signal })
   if (!response.ok) throw new AiApiError(response.status, await readErrorMessage(response))
   return await response.json() as AICallsPage
+}
+
+/* -------------------------------------------------------------------------
+ * S3-T07：局部互动与请求恢复
+ * ---------------------------------------------------------------------- */
+
+/**
+ * `POST /api/ai/local`：一次局部陪伴写作调用。
+ *
+ * 调用前必须先 `flush()` 最新有效草稿并完成块转换/封口——后端按**文件当前
+ * 版本**比对 `expected_revision`，源版本过期返回 409，且这个 409 发生在模型
+ * 调用之前（不产生 Token）。
+ *
+ * 后端只在**完全没有任何上游请求**时返回 503/429，因此这两种失败不会计费；
+ * 502/504 会带可查询的 `request_id`，抛出的 `AiCallError` 里保留它，
+ * 由界面提示「可能已消耗 Token」并转入查询而不是重发。
+ */
+export async function postAILocal(
+  payload: AILocalRequest,
+  signal?: AbortSignal,
+): Promise<AILocalResult> {
+  const response = await fetch(`${apiBase()}/api/ai/local`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal,
+  })
+  if (!response.ok) {
+    const message = await readErrorMessage(response)
+    const requestId = await readErrorRequestId(response)
+    throw new AiCallError(response.status, message, requestId)
+  }
+  return { status: response.status, body: await response.json() as AILocalResult['body'] }
+}
+
+/**
+ * `GET /api/ai/requests/{request_id}`：纯读取，不重发、不产生计费。
+ *
+ * 未知 ID 返回 404（调用方据此移除失效的恢复入口，**不**自动 POST 重建）。
+ */
+export async function getAIRequest(
+  requestId: string,
+  signal?: AbortSignal,
+): Promise<AIRequestDetail> {
+  const response = await fetch(`${apiBase()}/api/ai/requests/${encodeURIComponent(requestId)}`, { signal })
+  if (!response.ok) throw new AiApiError(response.status, await readErrorMessage(response))
+  return await response.json() as AIRequestDetail
 }
