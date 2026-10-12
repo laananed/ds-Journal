@@ -45,6 +45,13 @@ function App() {
   const registerFlush = useCallback((flush: (() => Promise<FlushResult>) | null) => {
     flushRef.current = flush
   }, [])
+  // T07：AI 处理中锁（最长 90 秒）。单独持有，不复用 writing busy，避免误解锁或死锁。
+  const aiLockedRef = useRef(false)
+  const [aiLocked, setAiLocked] = useState(false)
+  const registerAiLock = useCallback((locked: boolean) => {
+    aiLockedRef.current = locked
+    setAiLocked(locked)
+  }, [])
   const [leaveBlocked, setLeaveBlocked] = useState(false)
   const confirmDialog = useRef<HTMLDialogElement>(null)
   const [notice, setNotice] = useState('')
@@ -98,6 +105,11 @@ function App() {
    */
   function navigate(action: () => void) {
     if (busyRef.current) return
+    // T07：AI 处理中锁定导航；锁由编辑面板登记，与自动保存 busy 分开。
+    if (aiLockedRef.current) {
+      setNotice('AI 正在处理这篇内容，编辑、删除与导航已临时锁定；处理结束即可继续。')
+      return
+    }
     const run = () => {
       setLinkRequest(null)
       action()
@@ -213,6 +225,9 @@ function App() {
     })
   }
 
+  /** 界面禁用统一口径：写入 busy 或 AI 处理中锁任一成立即视为锁定。 */
+  const uiLocked = busy || aiLocked
+
   return (
     <main className="app">
       <header className="app-header">
@@ -222,7 +237,7 @@ function App() {
       <nav className="app-navigation" aria-label="模块导航">
         {modules.map((item) => (
           <button key={item.id} type="button" aria-pressed={module === item.id}
-            disabled={busy} onClick={() => changeModule(item.id)}>{item.label}</button>
+            disabled={uiLocked} onClick={() => changeModule(item.id)}>{item.label}</button>
         ))}
       </nav>
 
@@ -239,7 +254,7 @@ function App() {
       )}
       {module === 'inbox' && (
         <InboxPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate}
-          onResolveLink={resolveLink} onFlushReady={registerFlush}
+          onResolveLink={resolveLink} onFlushReady={registerFlush} onAiLockChange={registerAiLock}
           initialOpen={crossOpen?.file.type === 'inbox' ? { id: crossOpen.file.id, key: crossOpen.key } : null}
           onOpenRequestConsumed={consumeCrossOpen} />
       )}
@@ -252,25 +267,26 @@ function App() {
       {module === 'journal' && (
         <>
           <section className="app-toolbar" aria-label="Journal 列表工具">
-            <button type="button" onClick={newJournal} disabled={busy}>新建 Journal</button>
-            <button type="button" onClick={() => navigate(showList)} disabled={busy}>Journal 列表</button>
+            <button type="button" onClick={newJournal} disabled={uiLocked}>新建 Journal</button>
+            <button type="button" onClick={() => navigate(showList)} disabled={uiLocked}>Journal 列表</button>
             <label className="app-filter">
               <span>按日期查看</span>
-              <input type="date" value={filterDate} disabled={busy}
+              <input type="date" value={filterDate} disabled={uiLocked}
                 onChange={(event) => changeFilter(event.target.value)} />
             </label>
-            <button type="button" onClick={() => changeFilter('')} disabled={busy || filterDate === ''}>清除筛选</button>
+            <button type="button" onClick={() => changeFilter('')} disabled={uiLocked || filterDate === ''}>清除筛选</button>
           </section>
           {notice && <p className="detail-success" role="status">{notice}</p>}
           {panel.kind === 'create' && (
             <JournalEditor key={panel.key} listFilterDate={filterDate} externalRevision={dataRevision}
               onSaved={() => refreshData()} onOpen={openJournal} onClose={() => navigate(showList)}
-              onDirtyChange={setDirty} onFlushReady={registerFlush} />
+              onDirtyChange={setDirty} onFlushReady={registerFlush} onAiLockChange={registerAiLock} />
           )}
           {panel.kind === 'detail' && (
             <JournalDetail key={`${panel.file.type}:${panel.file.id}:${panel.key}`} journalId={panel.file.id}
               onResolveLink={resolveLink}
               onBusyChange={setWriting} onDirtyChange={setDirty} onFlushReady={registerFlush}
+              onAiLockChange={registerAiLock}
               onNavigate={navigate}
               onClose={() => navigate(showList)} onDataChanged={refreshData}
               onDeleted={() => {
@@ -284,7 +300,7 @@ function App() {
             {status === 'error' && (
               <div className="app-state app-state-error" role="alert">
                 <p>列表加载失败：{errorMessage}</p>
-                <button type="button" onClick={refreshData} disabled={busy}>重试</button>
+                <button type="button" onClick={refreshData} disabled={uiLocked}>重试</button>
               </div>
             )}
             {status === 'success' && result && (
@@ -292,16 +308,16 @@ function App() {
                 {result.items.length === 0
                   ? <p className="app-state">{filterDate ? '该日期没有 Journal 记录。' : '还没有任何 Journal 记录。'}</p>
                   : <JournalList journals={result.items} onOpen={openJournal}
-                    selectedId={panel.kind === 'detail' ? panel.file.id : null} openDisabled={busy} />}
+                    selectedId={panel.kind === 'detail' ? panel.file.id : null} openDisabled={uiLocked} />}
                 <Pagination page={result.page} total={result.total} hasNext={result.has_next}
-                  onPageChange={changePage} disabled={busy} label="Journal 列表分页" />
+                  onPageChange={changePage} disabled={uiLocked} label="Journal 列表分页" />
               </>
             )}
           </section>
         </>
       )}
 
-      {linkRequest && <LinkCandidates key={linkRequest.key} title={linkRequest.title} disabled={busy}
+      {linkRequest && <LinkCandidates key={linkRequest.key} title={linkRequest.title} disabled={uiLocked}
         onOpen={openFile}
         onClose={() => setLinkRequest(null)} />}
 
