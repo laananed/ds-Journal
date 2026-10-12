@@ -1,0 +1,210 @@
+{
+  "head": "b6fac52da99f70a5014f8fc96da85c2ed9269541",
+  "branch": "codex/s03-t08",
+  "tracked_diff": "docs/s3-t08-evidence/tracked.diff",
+  "tracked_diff_sha256": "96e853e2290ca79dd53c17db08aad2cbd2d1cd771a24af531a5ca1cad59f6a6d",
+  "diff_check_exit_code": 0,
+  "untracked_task_files": [
+    "backend/app/ai/review.py",
+    "backend/app/ai/review_save.py",
+    "backend/tests/test_ai_review_api.py",
+    "backend/tests/test_ai_review_evidence.py",
+    "backend/tests/test_ai_review_save.py",
+    "docs/s3-t08-development.md",
+    "docs/s3-t08-evidence/baseline.json",
+    "docs/s3-t08-evidence/context-message-red.log",
+    "docs/s3-t08-evidence/focused.log",
+    "docs/s3-t08-evidence/full-regression-final.log",
+    "docs/s3-t08-evidence/full-regression.log",
+    "docs/s3-t08-evidence/http-db-evidence.json",
+    "docs/s3-t08-evidence/http-server.log",
+    "docs/s3-t08-evidence/http_probe.py",
+    "docs/s3-t08-evidence/incremental-regression.log",
+    "docs/s3-t08-evidence/manifest.json",
+    "docs/s3-t08-evidence/prerequisite-comparison.json",
+    "docs/s3-t08-evidence/resource-final.json",
+    "docs/s3-t08-evidence/search-ledger-regression.log",
+    "docs/s3-t08-evidence/tracked.diff",
+    "docs/s3-t08-evidence/truncated-green.log",
+    "docs/s3-t08-evidence/truncated-red.log",
+    "docs/s3-t08-evidence/truncated-tool-red.log"
+  ],
+  "files": [
+    {
+      "path": "backend/app/ai/prompts.py",
+      "tracked": true,
+      "bytes": 4811,
+      "sha256": "a78747f68c6337bf0448ac33f5528cf795fde02f7703b30e3de75febc98d7ef1"
+    },
+    {
+      "path": "backend/app/ai/requests.py",
+      "tracked": true,
+      "bytes": 4239,
+      "sha256": "0ca48c71366f113c7c4d4c486a15e8e3608f99ca6f53aa95f968be89f0257485"
+    },
+    {
+      "path": "backend/app/ai/review.py",
+      "tracked": false,
+      "bytes": 11838,
+      "sha256": "e21ccbe0272b8167efd1456e073dbd567e4711a1c95936cfd403a22bd3065feb"
+    },
+    {
+      "path": "backend/app/ai/review_save.py",
+      "tracked": false,
+      "bytes": 3974,
+      "sha256": "24898d83161801844cd65acbb18d298bb6211f5898407c74a39f4f7deed2b091"
+    },
+    {
+      "path": "backend/app/ai/router.py",
+      "tracked": true,
+      "bytes": 4967,
+      "sha256": "a5cd5790c3a9ab7202306f7ff0c70c8c6e671f7ae7cc0973577891dad4cc3829"
+    },
+    {
+      "path": "backend/app/ai/schemas.py",
+      "tracked": true,
+      "bytes": 8448,
+      "sha256": "a3bb71c75f7a78b5457d96d5165b360cf578f4e74d65fb39cf99de0f67b5ba17"
+    },
+    {
+      "path": "backend/app/writing/service.py",
+      "tracked": true,
+      "bytes": 9694,
+      "sha256": "94d3fbf2b6df5b9803c9af2b86ecfbf1560769c3467bd06e09258a6686d127b7"
+    },
+    {
+      "path": "backend/tests/test_ai_review_api.py",
+      "tracked": false,
+      "bytes": 11242,
+      "sha256": "c90f4557a55a9e662583bf218f87470d0dc369b847c3ad99d48e0c79fc2f85ad"
+    },
+    {
+      "path": "backend/tests/test_ai_review_evidence.py",
+      "tracked": false,
+      "bytes": 10501,
+      "sha256": "54073960109b2994ff1581fef9e585d72af908cff61156c1ae90a7d78bd17aad"
+    },
+    {
+      "path": "backend/tests/test_ai_review_save.py",
+      "tracked": false,
+      "bytes": 11213,
+      "sha256": "fb5cafc0c63a9059ff4a2cf05e41bba3b2bb967a129dd845ea8113a297ed860e"
+    },
+    {
+      "path": "docs/s3-t08-development.md",
+      "tracked": false,
+      "bytes": 14398,
+      "sha256": "c6020978aa8c96e1a44394240767acf1be3b8775f87468d30aeffec5543255e2"
+    },
+    {
+      "path": "docs/s3-t08-evidence/context-message-red.log",
+      "tracked": false,
+      "bytes": 1558,
+      "sha256": "b10dd7c41c14b3c8459b1a0e7ab2ba5e3208d5dcbf68f1a4c14d1936c97baad3"
+    },
+    {
+      "path": "docs/s3-t08-evidence/focused.log",
+      "tracked": false,
+      "bytes": 102,
+      "sha256": "4d4f98988306ddd59cc3f951f24b42aebf11cb554e23597b56417672a377302e"
+    },
+    {
+      "path": "docs/s3-t08-evidence/full-regression-final.log",
+      "tracked": false,
+      "bytes": 1411,
+      "sha256": "8a2592d8bb13772a0a27cc54d3bb18f3709107a48ace2fce466f4979b81018bc"
+    },
+    {
+      "path": "docs/s3-t08-evidence/full-regression.log",
+      "tracked": false,
+      "bytes": 1410,
+      "sha256": "a4188c66190fc1752cee2e6c2f074eb6d6d962c1aefae0b68685d588d0c33093"
+    },
+    {
+      "path": "docs/s3-t08-evidence/http-db-evidence.json",
+      "tracked": false,
+      "bytes": 1036,
+      "sha256": "87bad4b00c2c22a867a3407dcaf944a2861b1d22bef7f35f1db087f15b09ad80"
+    },
+    {
+      "path": "docs/s3-t08-evidence/http-server.log",
+      "tracked": false,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/s3-t08-evidence/http_probe.py",
+      "tracked": false,
+      "bytes": 9587,
+      "sha256": "5e259ced540ce19b70fe375d33b96127bf8b4f91b4dcf00941baa30f0970864a"
+    },
+    {
+      "path": "docs/s3-t08-evidence/incremental-regression.log",
+      "tracked": false,
+      "bytes": 101,
+      "sha256": "e8e175256fdd2fd3012ff1c58dca2a52b52916775807a752eee496b48866b259"
+    },
+    {
+      "path": "docs/s3-t08-evidence/manifest.json",
+      "tracked": false,
+      "bytes": 202,
+      "sha256": "69fed1d63194d3805ba5cce9586ece2ae63ca5a1c598e091e52dd2d73d2a44ae"
+    },
+    {
+      "path": "docs/s3-t08-evidence/prerequisite-comparison.json",
+      "tracked": false,
+      "bytes": 3434,
+      "sha256": "15defcbf76bdcfb21ce9c72c5680b0ba69983ad209671b698da6e72f8e6bc0ef"
+    },
+    {
+      "path": "docs/s3-t08-evidence/resource-final.json",
+      "tracked": false,
+      "bytes": 393,
+      "sha256": "5e410da3ae7127c67cefb326a8ac0f004d8cf4a04d36047294228e880deefb05"
+    },
+    {
+      "path": "docs/s3-t08-evidence/search-ledger-regression.log",
+      "tracked": false,
+      "bytes": 183,
+      "sha256": "dac261decb45153d5d17818824128fa04255f49d30a37e4249aa5e70d21069e8"
+    },
+    {
+      "path": "docs/s3-t08-evidence/tracked.diff",
+      "tracked": false,
+      "bytes": 16861,
+      "sha256": "96e853e2290ca79dd53c17db08aad2cbd2d1cd771a24af531a5ca1cad59f6a6d"
+    },
+    {
+      "path": "docs/s3-t08-evidence/truncated-green.log",
+      "tracked": false,
+      "bytes": 115,
+      "sha256": "07808140965ea4f04202f8d0ab96a3c83e80e5594e75f66d0a6adbd9410dede4"
+    },
+    {
+      "path": "docs/s3-t08-evidence/truncated-red.log",
+      "tracked": false,
+      "bytes": 2651,
+      "sha256": "75dde48ae4cab3f0995ec3a4e8f29ca39e0fb4c21292749c41a49effc12b363f"
+    },
+    {
+      "path": "docs/s3-t08-evidence/truncated-tool-red.log",
+      "tracked": false,
+      "bytes": 2517,
+      "sha256": "3d5a085d76de057688d8305c42299522f91b43ecceaf50034ec2b4e991783002"
+    },
+    {
+      "path": "docs/stage3-architecture.md",
+      "tracked": true,
+      "bytes": 19717,
+      "sha256": "aa795c5ac0d4f81dcb35ceee3561cae779bcfc73ea1cdde655e0352c8bcdabb2"
+    },
+    {
+      "path": "docs/stage3-tasks.md",
+      "tracked": true,
+      "bytes": 46509,
+      "sha256": "3b9216c3565667050e82eadbeb0311b0b9ac847c42aec4cf540b57ae28a64c3a"
+    }
+  ],
+  "self_hash_excluded": "baseline.json is the manifest itself",
+  "state": "developer self-test passed; independent testing/risk evidence review/user acceptance pending; product writes stopped; test database released"
+}

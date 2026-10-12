@@ -24,13 +24,35 @@ from app.ai.usage import SourceNotFound
 from app.database import get_db
 from app.ai.local import execute_local, LocalError
 from app.ai.requests import request_response
-from app.ai.schemas import LocalRequest, AiRequestResponse, NoopResponse
+from app.ai.schemas import LocalRequest, AiRequestResponse, NoopResponse, ReviewRequest, ReviewSave
+from app.ai.review import execute_review
+from app.ai.review_save import save_review
 from uuid import UUID
 from fastapi import Response
 from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 files_router = APIRouter(prefix="/api/files", tags=["ai"])
+
+
+@router.post('/reviews', response_model=AiRequestResponse)
+def post_review(payload: ReviewRequest, response: Response, db: Session = Depends(get_db)):
+    try:
+        result, status = execute_review(db,payload)
+        response.status_code = status
+        return result
+    except LocalError as error:
+        content = {'detail':str(error)}
+        if error.request_id: content['request_id'] = error.request_id
+        return JSONResponse(status_code=error.status_code,content=content)
+
+
+@router.post('/reviews/{request_id}/save')
+def post_review_save(request_id: UUID, payload: ReviewSave, response: Response,
+                     db: Session = Depends(get_db)):
+    result,status = save_review(db,request_id,payload)
+    response.status_code = status
+    return result
 
 
 @router.post("/local", response_model=AiRequestResponse | NoopResponse)

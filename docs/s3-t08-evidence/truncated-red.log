@@ -1,0 +1,40 @@
+F                                                                        [100%]
+================================== FAILURES ===================================
+________________ test_invalid_outputs_never_advance[truncated] ________________
+
+review_env = (<starlette.testclient.TestClient object at 0x0000023D1F5688F0>, <test_ai_local_api.MockTransport object at 0x0000023D...unction review_env.<locals>.generate at 0x0000023D1F687740>, <function review_env.<locals>.save at 0x0000023D1F6877E0>)
+case = 'truncated'
+
+    @pytest.mark.parametrize('case', ['foreign_source','ai_quote','angles','json','extra','truncated'])
+    def test_invalid_outputs_never_advance(review_env,case):
+        _, transport, create, generate, _ = review_env
+        source = create()
+        output = structured([source])
+        if case=='foreign_source': output['facts'][0]['evidence'][0]['source']['id'] += 9999
+        if case=='ai_quote': output['facts'][0]['evidence'][0]['quote'] = 'AI �ظ�'
+        if case=='angles': output['angles'][1]['title'] = '��֪���ϵ'
+        if case=='extra': output['instruction'] = 'write database'
+        if case=='json': output = '{bad json'
+        if case=='truncated': transport.finish='length'
+        transport.output = output
+        response = generate([source])
+        assert response.status_code==200,response.text
+        assert response.json()['status']=='failed'
+        assert response.json()['usage']['total_tokens']==12
+        assert len(transport.calls)==1
+        with Session(engine) as db:
+            assert db.get(AICheckpoint,('journal',source['id'])) is None
+            if case=='truncated':
+                from app.ai.models import AIRequest
+                from uuid import UUID
+                row=db.get(AIRequest,UUID(response.json()['request_id']))
+>               assert row.result.get('raw_review') is not None
+E               AssertionError: assert None is not None
+E                +  where None = <built-in method get of dict object at 0x0000023D1FA5D5C0>('raw_review')
+E                +    where <built-in method get of dict object at 0x0000023D1FA5D5C0> = {'review': None, 'citations': [], 'web_status': 'not_configured'}.get
+E                +      where {'review': None, 'citations': [], 'web_status': 'not_configured'} = <app.ai.models.AIRequest object at 0x0000023D1F803B90>.result
+
+tests\test_ai_review_evidence.py:61: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_ai_review_evidence.py::test_invalid_outputs_never_advance[truncated]
+1 failed, 12 deselected in 0.36s

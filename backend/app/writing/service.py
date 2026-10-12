@@ -50,6 +50,22 @@ def project_blocks(blocks):
     return "".join(parts)
 
 
+def summary_blocks(markdown, request_id, old_blocks=None, old_content=None):
+    """Server-only summary construction; validates projection and never commits."""
+    from copy import deepcopy
+    from uuid import uuid4
+    from app.journal.schemas import _validate_content
+    blocks = deepcopy(old_blocks) if old_blocks is not None else []
+    if old_blocks is None and old_content is not None:
+        blocks.append({'id':str(uuid4()),'kind':'user','text':old_content})
+    blocks.extend([{'id':str(uuid4()),'kind':'ai_summary','text':markdown,'request_id':str(request_id)},
+                   {'id':str(uuid4()),'kind':'user','text':''}])
+    content = project_blocks(blocks)
+    try: _validate_content(content)
+    except ValueError as error: raise WritingError(str(error)) from error
+    return blocks,content
+
+
 def insert_ai_reply(row, reply, request_id, captured_blocks):
     """Server-only append at the captured user boundary. Does not commit.
 

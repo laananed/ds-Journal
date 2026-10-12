@@ -1,0 +1,40 @@
+F                                                                        [100%]
+================================== FAILURES ===================================
+_______ test_truncated_tool_round_stops_without_search_or_second_model ________
+
+review_env = (<starlette.testclient.TestClient object at 0x0000029800536A20>, <test_ai_local_api.MockTransport object at 0x00000298...unction review_env.<locals>.generate at 0x000002980051B9C0>, <function review_env.<locals>.save at 0x000002980051BA60>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x00000298004B36E0>
+
+    def test_truncated_tool_round_stops_without_search_or_second_model(review_env,monkeypatch):
+        import json
+        from app.ai import client,search
+        _,transport,create,generate,_=review_env
+        source=create();monkeypatch.setenv('BRAVE_SEARCH_API_KEY','synthetic-search')
+        original=transport.post_json
+        count=[0]
+        def tool_transport(url,payload,headers,timeout,max_bytes):
+            if count[0]==0:
+                count[0]+=1;transport.calls.append(payload)
+                body={'id':transport.response_id,'usage':transport.usage,'choices':[{'finish_reason':'length',
+                    'message':{'content':'','tool_calls':[{'id':'partial-call','type':'function','function':
+                    {'name':'web_search','arguments':json.dumps({'public_query':'��������'})}}]}}]}
+                return client.TransportResponse(200,json.dumps(body).encode(),'application/json')
+            return original(url,payload,headers,timeout,max_bytes)
+        monkeypatch.setattr(transport,'post_json',tool_transport)
+        searched=[]
+        def fake_search(query,**kwargs):
+            searched.append(query)
+            return search.SearchOutcome(status='failed',query=query,results=(),requests=1,reason='synthetic')
+        monkeypatch.setattr(search,'search_web',fake_search)
+        response=generate([source])
+        assert response.status_code==200,response.text
+>       assert response.json()['status']=='failed' and response.json()['error']['category']=='truncated'
+E       AssertionError: assert ('ready' == 'failed'
+E         
+E         - failed
+E         + ready)
+
+tests\test_ai_review_evidence.py:208: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_ai_review_evidence.py::test_truncated_tool_round_stops_without_search_or_second_model
+1 failed, 14 deselected in 0.34s

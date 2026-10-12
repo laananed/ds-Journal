@@ -1,0 +1,11 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Programme\demo\SeekJournal\backend
+plugins: anyio-4.15.1
+collected 62 items
+
+tests\test_ai_review_api.py ....................                         [ 32%]
+tests\test_ai_review_evidence.py ...............                         [ 56%]
+tests\test_ai_review_save.py ...........................                 [100%]
+
+============================= 62 passed in 8.61s ==============================

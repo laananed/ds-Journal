@@ -11,7 +11,7 @@ Two deliberate properties:
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -164,3 +164,91 @@ class NoopResponse(BaseModel):
     message: str
     request_id: None = None
     usage: None = None
+
+
+class ReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+    request_id: UUID
+    sources: Annotated[list[LocalSource], Field(min_length=1, max_length=15)]
+
+    @model_validator(mode="after")
+    def unique_sources(self):
+        if len({(s.type, s.id) for s in self.sources}) != len(self.sources):
+            raise ValueError("review sources must be unique")
+        return self
+
+
+class ReviewObject(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+
+ReviewText = Annotated[str, Field(strict=True, min_length=1, max_length=50000)]
+
+
+class EvidenceSource(ReviewObject):
+    type: Literal["journal", "inbox"]
+    id: Annotated[int, Field(strict=True, ge=1)]
+
+
+class ReviewEvidence(ReviewObject):
+    source: EvidenceSource
+    quote: ReviewText
+
+
+class ReviewFact(ReviewObject):
+    text: ReviewText
+    evidence: Annotated[list[ReviewEvidence], Field(min_length=1, max_length=45)]
+
+
+class ReviewHypothesis(ReviewFact):
+    uncertainty: ReviewText
+
+
+class ReviewAngle(ReviewObject):
+    title: Literal["事件与情绪", "选择与行为", "认知与关系"]
+    content: ReviewText
+
+
+class InsightDraft(ReviewObject):
+    title: Annotated[str, Field(strict=True, min_length=1, max_length=80)]
+    viewpoint: ReviewText
+    evidence: Annotated[list[ReviewEvidence], Field(min_length=1, max_length=45)]
+    content: ReviewText
+
+
+class StructuredReview(ReviewObject):
+    facts: Annotated[list[ReviewFact], Field(max_length=45)]
+    emotion_hypotheses: Annotated[list[ReviewHypothesis], Field(max_length=45)]
+    possible_explanations: Annotated[list[ReviewHypothesis], Field(max_length=45)]
+    angles: Annotated[list[ReviewAngle], Field(min_length=3, max_length=3)]
+    logic_chain: Annotated[list[ReviewText], Field(max_length=45)]
+    follow_up_questions: Annotated[list[ReviewText], Field(max_length=15)]
+    insight_drafts: Annotated[list[InsightDraft], Field(max_length=15)]
+
+    @model_validator(mode="after")
+    def fixed_angles(self):
+        if [a.title for a in self.angles] != ["事件与情绪", "选择与行为", "认知与关系"]:
+            raise ValueError("review requires the three fixed angles in order")
+        return self
+
+
+class AppendReviewTarget(ReviewObject):
+    mode: Literal["append_source"]
+
+
+class NewReviewTarget(ReviewObject):
+    mode: Literal["new_journal"]
+    title: Annotated[str, Field(strict=True, max_length=80)] | None = None
+    journal_date: date
+    folder_id: Annotated[int, Field(strict=True, ge=1)] | None = None
+
+
+class ReviewSave(ReviewObject):
+    markdown: ReviewText
+    target: Annotated[AppendReviewTarget | NewReviewTarget, Field(discriminator="mode")]
+
+    @field_validator("markdown")
+    @classmethod
+    def valid_markdown(cls, value):
+        from app.journal.schemas import _validate_content
+        return _validate_content(value)

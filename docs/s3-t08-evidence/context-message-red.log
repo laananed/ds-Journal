@@ -1,0 +1,23 @@
+.F                                                                       [100%]
+================================== FAILURES ===================================
+______ test_upstream_error_replay_unknown_or_known_metering[invalid-502] ______
+
+review_env = (<starlette.testclient.TestClient object at 0x000002A385924680>, <test_ai_local_api.MockTransport object at 0x000002A3...unction review_env.<locals>.generate at 0x000002A3859ACA40>, <function review_env.<locals>.save at 0x000002A3859AC9A0>)
+error = 'invalid', expected = 502
+
+    @pytest.mark.parametrize('error,expected', [('timeout',504),('invalid',502)])
+    def test_upstream_error_replay_unknown_or_known_metering(review_env,error,expected):
+        from app.ai.client import UpstreamTimeout,UpstreamResponseError
+        _,transport,create,generate,_=review_env
+        transport.error=UpstreamTimeout('safe') if error=='timeout' else UpstreamResponseError('safe')
+        ident=uuid4();source=create()
+        first=generate([source],ident)
+        assert first.status_code==expected
+        if error=='invalid':
+>           assert 'reduce selected sources' in first.json()['detail']
+E           AssertionError: assert 'reduce selected sources' in 'Model request failed; query request_id for status'
+
+tests\test_ai_review_api.py:229: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_ai_review_api.py::test_upstream_error_replay_unknown_or_known_metering[invalid-502]
+1 failed, 1 passed, 18 deselected in 0.43s

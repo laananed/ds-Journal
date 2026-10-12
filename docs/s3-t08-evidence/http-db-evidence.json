@@ -1,0 +1,50 @@
+{
+  "before": {
+    "database": "seekjournal_test",
+    "revision": "3aa16300a58a",
+    "other_connections": 0,
+    "tables": {
+      "folders": 0,
+      "journals": 0,
+      "inboxes": 0,
+      "insights": 0,
+      "ai_requests": 0,
+      "ai_checkpoints": 0,
+      "ai_usage": 0,
+      "ai_settings": 0
+    }
+  },
+  "checks": [
+    {
+      "double_confirm_statuses": [
+        200,
+        201
+      ],
+      "same_target": true,
+      "lost_response_replay": 200,
+      "db_atomic_applied": true
+    },
+    {
+      "actual_postgres_fault_http": 500,
+      "zero_half_write": true,
+      "same_body_retry": 201
+    }
+  ],
+  "after": {
+    "database": "seekjournal_test",
+    "revision": "3aa16300a58a",
+    "other_connections": 0,
+    "tables": {
+      "folders": 0,
+      "journals": 0,
+      "inboxes": 0,
+      "insights": 0,
+      "ai_requests": 0,
+      "ai_checkpoints": 0,
+      "ai_usage": 0,
+      "ai_settings": 0
+    }
+  },
+  "server_exit": 1,
+  "port_8031_released": true
+}

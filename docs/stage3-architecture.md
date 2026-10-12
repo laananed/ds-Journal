@@ -93,7 +93,7 @@ Insight 草稿由 review 结果提供，每项有稳定 draft_id、一个观点�
 
 ## 8. 迁移、风险与验证
 
-T01 一次协调线性 Stage 3 Migration 接 M3，字段/四张 AI 表一起建；不修改历史迁移，不回填正文，不新增触发器。Model 注册、测试无残留清单扩展到新表，保存散列/旧 JSON 空值/sequence/时间快照。本期默认 pytest 仍独占 seekjournal_test；不为并行改测试配置层。个人库升级单独授权并先准备备份与恢复检查，不在规划轮进行。
+T01 一次协调线性 Stage 3 Migration 接 M3，字段/四张 AI 表一起建；不修改历史迁移，不回填正文，不新增触发器。Model 注册、测试无残留清单扩展到新表，保存散列/旧 JSON 空值/sequence/时间快照。当前 pytest 由 SEEKJOURNAL_TEST_DB 白名单选库（默认 seekjournal_test，仅允许 seekjournal_test / seekjournal_test_02），每库独占，资源核对与权限见 tasks §15；此为已批准并在 T06 代码落实的选库能力，不扩大白名单或测试架构。个人库升级单独授权并先准备备份与恢复检查，不在规划轮进行。
 
 | 高难度点 | 难处 / 本阶段必需理由 | 更简单替代及舍弃原因 |
 |---|---|---|

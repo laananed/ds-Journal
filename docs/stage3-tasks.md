@@ -167,7 +167,7 @@ Codex 对自身开发项的设计自审不能替代独立测试，WorkBuddy/DSH 
 
 工作目录完整新路径均位于 `C:\Programme\demo\`；现有两树有分支/HEAD，先核对所有者与dirty，未经授权不切换/清理。每个同时写代码Agent自己分支/Worktree；Codex规划目录保持文档单写，main只集成。实际Task启动前填写真实HEAD、完整路径、空闲端口/服务PID、文件责任、DB与环境配置和测试者时段，不能直接把本表建议值当实测值。
 使用进程 `VITE_API_BASE_URL`/`DATABASE_URL`，不改真实.env，不占8000/5173/5432，不自动启动Compose。UI写入前查询实际current_database与revision；测试端口CORS若需要，只在授权fixture/临时包装处理，不放宽生产CORS。已有node_modules/.venv不假定跨树共享，缺环境报告，不擅自安装。
-当前 `get_test_database_url()` 强制seekjournal_test、conftest导入时覆盖DATABASE_URL：后端pytest/迁移/prepare同一时间仅一个Owner。不能设置新库环境就声称pytest隔离；纯Mock后端测试若加载conftest也需预约，不擅自新增配置层。迁移测试用已指定库内私有schema（执行前验证守卫），迁移链单写；独立UI库各自迁移需明确授权。只清自己manifest列出的typed IDs/schema，不清不明数据/重置sequence。
+当前 `get_test_database_url()` 按 `SEEKJOURNAL_TEST_DB` 选择隔离库（默认 seekjournal_test，白名单仅 seekjournal_test / seekjournal_test_02），conftest 在应用导入前覆盖 DATABASE_URL 并核对 Engine 目标。每个库同一时间仅一个 Owner；选库不授权建库/迁移，不新增白名单或配置层。资源表为历史建议，实际分配以当轮授权及 current_database/revision/其他连接检查为准。纯 Mock 测试若加载 conftest 同样需要资源核对；迁移测试仅用指定库内本轮私有 schema，public/个人库升级单独授权。只清自己 manifest 列出的 typed IDs/schema，不清不明数据/重置 sequence。
 
 本段记录规划轮权限：文档改动、只读检查、已有无DB写纯逻辑验证；规划轮禁止业务代码/迁移执行/依赖安装/启动开发Task、创建或调其他Agent、commit/merge/push/tag、切换/新建/清理Worktree或分支。后续 Task 的实际授权与执行见 §17，本次 S3-T01 以用户明确执行指令为准，不沿用规划轮禁止实施作为阻断。后续「开始Task」只覆盖明确点名功能及当轮资源权限；创建Worktree、测试库迁移、真实付费测试、commit、main merge逐项写入授权表，未列即不执行。个人库seekjournal升级单独批准，push/tag/删除分支/工作树清理独立授权。
 前置集成等待Git权限时，保留diff与证据，不偷偷把diff复制覆盖到别树来绕过授权。共享docs/agents/根由Codex维护，Main/App/CSS和API公共类型在每波明确单写者，交接停止写入后再合并；整合后各树由所有者显式同步并复核基线。
@@ -256,4 +256,14 @@ Task 启动、授权识别、自主推进及按需提示词/交接统一引用 `
 - 已记录产品反例、脚本错误和资源变化。资源竞争期间暂停并向用户协调；一次未通过连接守卫却误执行证据脚本的门禁疏漏单独保留，不将污染轮作为通过。重新验证独占后成功轮恢复八表零基线，仅清自建对象；最终 revision=3aa16300a58a、其他连接=0、8033关闭、无私有测试 schema。已发布“已释放seekjournal_test”，发布后不再连库测试。
 - 待测状态为未提交 diff/新文件，未 commit/merge/push/tag、切分支或整合 T04。开发者已停止产品写入，交 WorkBuddy 未参与实现的新对话独立测试，六项风险仍待独立复核、Git整合与用户接受。真实模型连通性/风格、联网、前端集成未验证；Task/Stage 不宣告验收完成。
 - 脱敏证据与文件 SHA256：`.workbuddy/s3-t05/development-report.md`、`handoff.md`、`file-sha256.json`、命令/退出码、实际 HTTP/DB/Mock 消息、状态及释放记录。核心学习点为用户文本检查点、不可回滚付费与正文事务边界、幂等/unknown 查询恢复。
+
+### S3-T08 开发自测交付（2026-10-12，Codex）
+
+- 用户附件明确授权 T08 原范围、自测和必要执行记录；本轮仅单 Agent 在主目录串行开发，分支 `codex/s03-t08` / HEAD `b6fac52da99f70a5014f8fc96da85c2ed9269541`，起始工作区干净。无提交、整合、切分支或其他 Worktree 修改。
+- 实现 POST reviews 的 1～15 typed files/最多7业务日期、全部 user 正文、结构/证据/三个角度/稳定 Insight 草稿；固定源→请求锁序，网络前释放事务，ready 与全部 C 原子提交；save 重新核对快照，目标/状态/hash 原子新建或追加，同体重放回同一目标。无 Insight 自动创建、前端、迁移或新依赖。
+- 读取 Work-02 T05/T06 开发/独立报告与接口说明；T06 17 个前置文件在当前起始 HEAD 与归档正文一致（CRLF/LF 规范化），本轮实际 T05 回归34、搜索/计量/删除回归136均退出0。历史独立技术报告不替代本轮或全部风险/用户接受门禁。
+- 开发自测最终：T08 聚焦62 passed，全量1185 passed（107.89s），退出0；真实 PostgreSQL 两 Session/无长锁、ready+C与save SQL故障全回滚；独立于pytest的8031 TCP HTTP/DB Mock证据退出0，双确认201/200同目标、丢响应重放200、故障500零半写及重试201。截断原始结果保留、截断工具零后续调用反例与修复记录见报告。
+- 只用 seekjournal_test，最终 revision/head `3aa16300a58a`、八表0、其他连接0、仅public；8031已停止，已释放测试库，只清本轮自建对象。未连个人库、未prepare/升级public/建库/启Compose/安装依赖/改.env。§15/architecture §8按已批准的双库白名单能力同步旧说明，未扩大选库权限。
+- 结果仅“开发自测通过，待独立测试/风险证据审核及用户接受”；五项开发者风险自查通过不称独立审核。产品代码已停止写入，未提交diff/新文件与散列交WorkBuddy未参与实现的新会话。真实付费模型/搜索/风格及UI未验证，不宣布T08/Stage完成。
+- 详细报告：`docs/s3-t08-development.md`；冻结HEAD/tracked diff/未跟踪文件清单及SHA256、命令日志、HTTP/DB与资源释放证据：`docs/s3-t08-evidence/`。
 

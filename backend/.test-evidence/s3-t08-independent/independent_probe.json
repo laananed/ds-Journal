@@ -1,0 +1,101 @@
+{
+  "passed": 19,
+  "total": 19,
+  "results": [
+    {
+      "name": "db_guard_exclusive",
+      "passed": true,
+      "detail": "other_backends_incl_idle=0 baseline={'journals': 0, 'inboxes': 0, 'folders': 0, 'insights': 0, 'ai_requests': 0, 'ai_usage': 0, 'ai_checkpoints': 0, 'ai_settings': 0}"
+    },
+    {
+      "name": "http_model_input_full_user_and_excludes_ai",
+      "passed": true,
+      "detail": "has_user=True no_ai_reply=True no_ai_summary=True"
+    },
+    {
+      "name": "http_generate_zero_sources_422",
+      "passed": true,
+      "detail": "status=422"
+    },
+    {
+      "name": "http_generate_16_sources_422",
+      "passed": true,
+      "detail": "status=422"
+    },
+    {
+      "name": "http_boundary_zero_model_calls",
+      "passed": true,
+      "detail": "calls=0"
+    },
+    {
+      "name": "http_generate_single_200",
+      "passed": true,
+      "detail": "status=200 body.status=ready"
+    },
+    {
+      "name": "http_append_preserves_source",
+      "passed": true,
+      "detail": "status=200 rev=2 same_id=True delta=0"
+    },
+    {
+      "name": "http_source_not_moved_after_save",
+      "passed": true,
+      "detail": "exists=True"
+    },
+    {
+      "name": "http_two_session_double_confirm_once",
+      "passed": true,
+      "detail": "codes=[200, 201] same_target=True delta_journals=1 both_in_flight=True"
+    },
+    {
+      "name": "http_replay_after_success_idempotent_same_target",
+      "passed": true,
+      "detail": "first=201 replay=200 diff=409 same_target=True delta=1"
+    },
+    {
+      "name": "lost_response_new_journal_replay_same_target_once",
+      "passed": true,
+      "detail": "client_rcvd=None(aborted) db_committed=True(req_status=applied saved_target={'id': 4486, 'type': 'journal'} journals_delta=1) replay=200 diff=409 journals_delta_after_replay=1 same_target=True (replay_tid=4486 saved_target_id=4486)"
+    },
+    {
+      "name": "lost_response_append_source_replay_single_append_once",
+      "passed": true,
+      "detail": "client_rcvd=None(aborted) db_committed=True(req_status=applied saved_target={'id': 4487, 'type': 'journal'} src_rev=2) replay=200 diff=409 same_source=True rev=1->2 ai_summary=0->1"
+    },
+    {
+      "name": "http_nonready_save_rejected_409",
+      "passed": true,
+      "detail": "status=409"
+    },
+    {
+      "name": "http_draft_ids_stable_no_insight",
+      "passed": true,
+      "detail": "n=2 distinct=2 replay_match=True insights=0"
+    },
+    {
+      "name": "http_scoped_cleanup_no_owned_residual",
+      "passed": true,
+      "detail": "residual=none counts={'journals': 0, 'inboxes': 0, 'folders': 0, 'insights': 0, 'ai_requests': 0, 'ai_usage': 0, 'ai_checkpoints': 0, 'ai_settings': 0}"
+    },
+    {
+      "name": "fault_ready_checkpoint_rolls_back_all",
+      "passed": true,
+      "detail": "status=failed cat=storage review_kept=True cp_a=False cp_b=False"
+    },
+    {
+      "name": "fault_save_zero_half_write",
+      "passed": true,
+      "detail": "http=500 delta_journals=0 src_rev=1 req_status=ready saved_target=False"
+    },
+    {
+      "name": "fault_save_recover_201",
+      "passed": true,
+      "detail": "status=201"
+    },
+    {
+      "name": "final_scoped_cleanup_no_owned_residual",
+      "passed": true,
+      "detail": "residual=none counts={'journals': 0, 'inboxes': 0, 'folders': 0, 'insights': 0, 'ai_requests': 0, 'ai_usage': 0, 'ai_checkpoints': 0, 'ai_settings': 0}"
+    }
+  ]
+}

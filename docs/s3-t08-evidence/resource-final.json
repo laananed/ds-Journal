@@ -1,0 +1,22 @@
+{
+  "database": "seekjournal_test",
+  "revision": "3aa16300a58a",
+  "heads": [
+    "3aa16300a58a"
+  ],
+  "other_connections": 0,
+  "schemas": [
+    "public"
+  ],
+  "tables": {
+    "folders": 0,
+    "journals": 0,
+    "inboxes": 0,
+    "insights": 0,
+    "ai_requests": 0,
+    "ai_checkpoints": 0,
+    "ai_usage": 0,
+    "ai_settings": 0
+  },
+  "port_8031_released": true
+}

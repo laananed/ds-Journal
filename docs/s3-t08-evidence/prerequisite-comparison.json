@@ -1,0 +1,104 @@
+[
+  {
+    "path": "backend/app/ai/client.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  },
+  {
+    "path": "backend/app/ai/local.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  },
+  {
+    "path": "backend/app/ai/prompts.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": false
+  },
+  {
+    "path": "backend/app/ai/requests.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": false
+  },
+  {
+    "path": "backend/app/ai/usage.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  },
+  {
+    "path": "backend/scripts/prepare_test_db.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  },
+  {
+    "path": "backend/tests/conftest.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  },
+  {
+    "path": "backend/tests/test_ai_local_api.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  },
+  {
+    "path": "backend/tests/test_daily_inbox_api.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  },
+  {
+    "path": "backend/tests/test_folder_concurrency.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  },
+  {
+    "path": "backend/tests/test_stage2_migrations.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  },
+  {
+    "path": "backend/tests/test_test_database.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  },
+  {
+    "path": "backend/app/ai/search.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  },
+  {
+    "path": "backend/app/ai/tool_calls.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  },
+  {
+    "path": "backend/tests/test_ai_search.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  },
+  {
+    "path": "backend/tests/test_ai_search_privacy.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  },
+  {
+    "path": "backend/tests/test_ai_tool_calls.py",
+    "evidence_hash_matches_work02": true,
+    "baseline_matches_evidence_normalized": true,
+    "current_matches_baseline_normalized": true
+  }
+]

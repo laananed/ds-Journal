@@ -14,6 +14,7 @@ class RequestNotFound(WritingError):
 
 
 ERROR_MESSAGES = {
+    'review_invalid': '复盘结构或原文证据无效，检查点未推进。',
     'source_changed': '源文件已修改或删除，结果未附着。',
     'expired': '请求状态不明，可能已消耗 Token；请勿自动重发。',
     'restart': '应用重启，先前请求状态不明，可能已消耗 Token。',
