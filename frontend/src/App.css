@@ -326,3 +326,107 @@
   .app .ai-actions { padding: 10px; }
   .app .ai-actions-buttons button { flex: 1 1 auto; }
 }
+
+/* ------------------------------------------------------------------ */
+/* T09 完整复盘：选源 / 可编辑预览 / 一次确认                          */
+/* ------------------------------------------------------------------ */
+
+.review-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.review-page h2 { margin: 0; font-size: 18px; }
+.review-picker,
+.review-preview,
+.review-recovery {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e5e2ea;
+  border-radius: 10px;
+  background: #faf9fc;
+  min-width: 0;
+}
+.review-preview { border-color: #cfc9d6; background: #f4f1f9; }
+.review-tabs, .review-selection-actions, .review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.review-tabs button[aria-pressed='true'] { background: #eae3f4; border-color: #9c8fb5; }
+.review-source-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.review-source-list li { min-width: 0; }
+.app .review-source-item {
+  width: 100%;
+  display: block;
+  text-align: left;
+  color: inherit;
+  padding: 12px;
+  border-color: #e5e2ea;
+  border-radius: 10px;
+}
+.app .review-source-item:hover:not(:disabled) { border-color: #9c8fb5; background: #fcfaff; }
+.app .review-source-item[aria-pressed='true'] { box-shadow: 0 0 0 1px #9c8fb5 inset; background: #f8f5fd; }
+.review-selection-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #d8d3de;
+}
+.review-selection-summary { margin: 0; font-size: 14px; color: #4a4453; overflow-wrap: anywhere; }
+.app .review-generate { border-color: #9c8fb5; background: #efe9f8; }
+.review-recovery-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.review-recovery-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.review-recovery-id { font-size: 13px; color: #4a4453; overflow-wrap: anywhere; }
+.review-preview-head { display: flex; flex-direction: column; gap: 4px; }
+.review-preview-title { margin: 0; font-size: 16px; }
+.review-preview-hint { margin: 0; font-size: 12px; color: #6b6375; overflow-wrap: anywhere; }
+.review-section { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.review-section-title { margin: 0; font-size: 14px; color: #4a4453; }
+.review-points, .review-angles, .review-drafts, .review-evidence { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.review-point, .review-angle, .review-draft {
+  padding: 8px 10px;
+  border: 1px solid #e5e2ea;
+  border-radius: 8px;
+  background: #fff;
+  min-width: 0;
+}
+.review-point-text, .review-angle-content, .review-draft-content { margin: 0; font-size: 14px; color: #332c3d; overflow-wrap: anywhere; }
+.review-point-uncertainty { margin: 4px 0 0; font-size: 12px; color: #7a5a12; }
+.review-angle-title, .review-draft-title { margin: 0 0 4px; font-size: 14px; color: #4a4453; }
+.review-draft-viewpoint { margin: 0 0 4px; font-size: 13px; color: #695185; overflow-wrap: anywhere; }
+.review-evidence { margin-top: 6px; font-size: 12px; color: #6b6375; }
+.review-evidence li { overflow-wrap: anywhere; }
+.app .review-draft-add { margin-top: 8px; padding: 4px 10px; font-size: 13px; }
+.review-draft-pending { margin: 8px 0 0; font-size: 12px; color: #7a5a12; overflow-wrap: anywhere; }
+.app .review-markdown {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid #cfc9d6;
+  border-radius: 6px;
+  background: #fff;
+  line-height: 1.55;
+  min-width: 0;
+  resize: vertical;
+}
+.review-target { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 12px; border: 1px solid #e5e2ea; border-radius: 8px; background: #fff; }
+.review-target legend { padding: 0 6px; font-size: 14px; color: #4a4453; }
+.review-target-option { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; color: #332c3d; }
+.app .review-confirm { border-color: #9c8fb5; background: #efe9f8; }
+.review-retry {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e6d9b8;
+  border-left: 4px solid #b58a2f;
+  border-radius: 8px;
+  background: #fffaf0;
+  color: #6b5320;
+  font-size: 13px;
+}
+.review-retry p { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .review-picker, .review-preview, .review-recovery { padding: 12px; }
+  .review-selection-bar { align-items: flex-start; flex-direction: column; }
+}

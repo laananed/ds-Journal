@@ -18,6 +18,7 @@ import {
 import { legacyBlocksFromContent, projectBlocks } from '../utils/writingBlocks'
 import { parseAiFileDetail, type AiFileDetail } from '../utils/aiRequestState'
 import type { Journal, JournalUpdate } from '../types/journal'
+import type { FileIdentity } from '../types/file'
 import type { Block } from '../types/writing'
 
 interface JournalDetailProps {
@@ -29,6 +30,8 @@ interface JournalDetailProps {
   /** T07：把 AI 处理中锁交给 App；与自动保存 busy 分开，避免误解锁或死锁。 */
   onAiLockChange?: (locked: boolean) => void
   onNavigate: (action: () => void) => void
+  /** T09：单篇入口——把这篇作为完整复盘的预选源；App 会先 flush 再导航。 */
+  onStartReview: (file: FileIdentity) => void
   onClose: () => void
   onDataChanged: () => void
   onDeleted: () => void
@@ -83,7 +86,7 @@ function toJournal(detail: AiFileDetail): Journal {
 }
 
 function JournalDetail({
-  journalId, onBusyChange, onDirtyChange, onFlushReady, onAiLockChange, onNavigate, onClose, onDataChanged, onDeleted, onResolveLink,
+  journalId, onBusyChange, onDirtyChange, onFlushReady, onAiLockChange, onNavigate, onStartReview, onClose, onDataChanged, onDeleted, onResolveLink,
 }: JournalDetailProps) {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [detail, setDetail] = useState<Journal | null>(null)
@@ -346,6 +349,9 @@ function JournalDetail({
             onLink={onResolveLink} disabled={busy} />
           <div className="detail-actions">
             <button type="button" onClick={startEditing} disabled={busy}>修改</button>
+            {/* T09 单篇入口：进入完整复盘并把本篇作为预选源；先 flush 再导航（由 App 统一保护）。 */}
+            <button type="button" onClick={() => onStartReview({ type: 'journal', id: detail.id })}
+              disabled={busy || aiLocked}>复盘这篇</button>
             {deleteStage === 'idle' && <button type="button" className="detail-danger"
               onClick={() => setDeleteStage('confirming')} disabled={busy}>移入回收箱</button>}
           </div>

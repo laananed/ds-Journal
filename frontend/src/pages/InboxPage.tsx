@@ -16,6 +16,7 @@ import WritingContent from '../components/WritingContent'
 import WritingEditor from '../components/WritingEditor'
 import Pagination from '../components/Pagination'
 import type { Inbox, InboxCreate, InboxPage as InboxPageData, InboxUpdate } from '../types/inbox'
+import type { FileIdentity } from '../types/file'
 import { useAutosave, type AutosaveFile, type FlushResult } from '../hooks/useAutosave'
 import {
   autosaveHint,
@@ -43,6 +44,8 @@ interface InboxPageProps {
   onFlushReady?: (flush: (() => Promise<FlushResult>) | null) => void
   /** T07：把 AI 处理中锁交给 App（与删除 busy 分开）。 */
   onAiLockChange?: (locked: boolean) => void
+  /** T09：单篇入口——把这篇 Inbox 作为完整复盘的预选源；App 会先 flush 再导航。 */
+  onStartReview: (file: FileIdentity) => void
   /** Folder/Search/内部链接请求打开真实 Inbox；也支持同模块的新请求。 */
   initialOpen?: { id: number; key: number } | null
   onOpenRequestConsumed?: () => void
@@ -147,10 +150,12 @@ interface InboxPanelProps {
   onDeleted: (inbox: Inbox) => void
   onClose: () => void
   onOpenRecord: (id: number) => void
+  /** T09：单篇入口（已由 App 包好 flush 导航）。 */
+  onStartReview: (file: FileIdentity) => void
 }
 
 function InboxPanel({
-  panel, onDirtyChange, onBusyChange, onFlushReady, onAiLockChange, onResolveLink, onNavigate, onCreated, onChanged, onDeleted, onClose, onOpenRecord,
+  panel, onDirtyChange, onBusyChange, onFlushReady, onAiLockChange, onResolveLink, onNavigate, onCreated, onChanged, onDeleted, onClose, onOpenRecord, onStartReview,
 }: InboxPanelProps) {
   const inboxDate = panel.kind === 'create' ? panel.inboxDate : ''
   const inboxId = panel.kind === 'detail' ? panel.id : null
@@ -550,6 +555,9 @@ function InboxPanel({
             onLink={onResolveLink} disabled={busy} />
           <div className="detail-actions">
             <button type="button" onClick={startEditing} disabled={busy}>修改</button>
+            {/* T09 单篇入口：Inbox 单篇复盘默认新建 Journal，不改动本文。 */}
+            <button type="button" onClick={() => onStartReview({ type: 'inbox', id: file.id })}
+              disabled={uiLocked}>复盘这篇</button>
             {deleteStage === 'idle' && (
               <button type="button" className="detail-danger"
                 onClick={() => setDeleteStage('confirming')} disabled={busy}>永久删除</button>
@@ -574,7 +582,7 @@ function InboxPanel({
 }
 
 function InboxPage({
-  onDirtyChange, onBusyChange, onResolveLink, onNavigate, onFlushReady, onAiLockChange,
+  onDirtyChange, onBusyChange, onResolveLink, onNavigate, onFlushReady, onAiLockChange, onStartReview,
   initialOpen = null, onOpenRequestConsumed,
 }: InboxPageProps) {
   // 初始外部请求直接进入详情；后续同模块链接由下面的 effect 消费。
@@ -787,7 +795,7 @@ function InboxPage({
           onAiLockChange={changeAiLock}
           onNavigate={onNavigate} onResolveLink={onResolveLink}
           onCreated={handleCreated} onChanged={handleChanged} onDeleted={handleDeleted}
-          onClose={() => onNavigate(showList)} onOpenRecord={openInbox} />
+          onClose={() => onNavigate(showList)} onOpenRecord={openInbox} onStartReview={onStartReview} />
       )}
       {panel.kind === 'detail' && (
         <InboxPanel key={`detail-${panel.key}`} panel={panel}
@@ -795,7 +803,7 @@ function InboxPage({
           onAiLockChange={changeAiLock}
           onNavigate={onNavigate} onResolveLink={onResolveLink}
           onCreated={handleCreated} onChanged={handleChanged} onDeleted={handleDeleted}
-          onClose={() => onNavigate(showList)} onOpenRecord={openInbox} />
+          onClose={() => onNavigate(showList)} onOpenRecord={openInbox} onStartReview={onStartReview} />
       )}
 
       <section className="journal-results" aria-label="Inbox 列表">

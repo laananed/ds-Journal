@@ -12,6 +12,9 @@ import type {
   AILocalRequest,
   AILocalResult,
   AIRequestDetail,
+  AIReviewRequest,
+  AIReviewSaveRequest,
+  AIReviewSaveResult,
   AISettings,
   AISettingsUpdate,
   AIUsage,
@@ -164,4 +167,59 @@ export async function getAIRequest(
   const response = await fetch(`${apiBase()}/api/ai/requests/${encodeURIComponent(requestId)}`, { signal })
   if (!response.ok) throw new AiApiError(response.status, await readErrorMessage(response))
   return await response.json() as AIRequestDetail
+}
+
+/* -------------------------------------------------------------------------
+ * S3-T09：完整复盘生成与一次确认保存
+ * ---------------------------------------------------------------------- */
+
+/**
+ * `POST /api/ai/reviews`：一次完整复盘生成（1～15 个唯一 typed sources）。
+ *
+ * 只发送 `request_id` + typed sources（含 `expected_revision`）；正文/日期由后端
+ * 从源文件算出，前端**不自报全文或日期**。所有校验（0/16 源、重复源、8 个日期、
+ * 版本过期）都在付费调用之前完成，因此 409/422/404 不会消耗 Token。
+ *
+ * 返回 200（`status=ready`，含完整 `review`）或 202（同键重放且仍在处理）；
+ * 502/504 会带可查询的 `request_id`，抛出的 `AiCallError` 里保留它，
+ * 由界面转入「查询状态」而**不**自动换新 UUID 重发。
+ */
+export async function postAIReview(
+  payload: AIReviewRequest,
+  signal?: AbortSignal,
+): Promise<{ status: number; body: AIRequestDetail }> {
+  const response = await fetch(`${apiBase()}/api/ai/reviews`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal,
+  })
+  if (!response.ok) {
+    const message = await readErrorMessage(response)
+    const requestId = await readErrorRequestId(response)
+    throw new AiCallError(response.status, message, requestId)
+  }
+  return { status: response.status, body: await response.json() as AIRequestDetail }
+}
+
+/**
+ * `POST /api/ai/reviews/{request_id}/save`：**唯一一次确认**。
+ *
+ * `expected_revision` 不在这里发送：后端按生成时冻结的源快照核对，源变化返回 409
+ * 并保留预览（不能把过期分析当最新总结）。同一请求同体重放回同一 target；
+ * 不同 body 409。
+ */
+export async function saveAIReview(
+  requestId: string,
+  payload: AIReviewSaveRequest,
+  signal?: AbortSignal,
+): Promise<AIReviewSaveResult> {
+  const response = await fetch(`${apiBase()}/api/ai/reviews/${encodeURIComponent(requestId)}/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal,
+  })
+  if (!response.ok) throw new AiApiError(response.status, await readErrorMessage(response))
+  return await response.json() as AIReviewSaveResult
 }

@@ -9,18 +9,20 @@ import LinkCandidates from './components/LinkCandidates'
 import FolderPage from './pages/FolderPage'
 import InboxPage from './pages/InboxPage'
 import InsightPage from './pages/InsightPage'
+import ReviewPage from './pages/ReviewPage'
 import TrashPage from './pages/TrashPage'
 import SearchPage from './pages/SearchPage'
 import type { FileIdentity } from './types/file'
 import type { JournalPage } from './types/journal'
 import type { SearchConditions } from './types/search'
 import type { FlushResult } from './hooks/useAutosave'
+import type { ReviewSource } from './utils/reviewSelection'
 import { nearestValidPage } from './utils/pagination'
 
-type Module = 'journal' | 'inbox' | 'insight' | 'search' | 'trash' | 'folder'
+type Module = 'journal' | 'inbox' | 'insight' | 'search' | 'trash' | 'folder' | 'review'
 type Panel = { kind: 'list' } | { kind: 'create'; key: number } | { kind: 'detail'; file: FileIdentity; key: number }
 const modules: { id: Module; label: string }[] = [
-  { id: 'inbox', label: 'Inbox' }, { id: 'journal', label: 'Journal' },
+  { id: 'inbox', label: 'Inbox' }, { id: 'journal', label: 'Journal' }, { id: 'review', label: '复盘' },
   { id: 'insight', label: 'Insight' }, { id: 'search', label: 'Search' },
   { id: 'trash', label: 'Trash' }, { id: 'folder', label: 'Folder' },
 ]
@@ -61,6 +63,9 @@ function App() {
   // Folder 混合卡片的一次性打开请求：交给对应模块消费后清空。
   const [crossOpen, setCrossOpen] = useState<{ file: FileIdentity; key: number } | null>(null)
   const consumeCrossOpen = useCallback(() => setCrossOpen(null), [])
+  // T09：详情页「复盘这篇」的一次性预选源；ReviewPage 消费后清空。
+  const [reviewSeed, setReviewSeed] = useState<{ source: ReviewSource; key: number } | null>(null)
+  const consumeReviewSeed = useCallback(() => setReviewSeed(null), [])
 
   useEffect(() => {
     if (module !== 'journal') return
@@ -225,6 +230,45 @@ function App() {
     })
   }
 
+  /**
+   * T09 单篇入口：Journal 详情 / Inbox 详情点「复盘这篇」。
+   *
+   * 只登记一次性预选源并切到复盘模块；**不**在这里直接调 navigate——调用方
+   * 已经把它包在 `navigate(() => startReview(file))` 里，因此「先 flush 最新
+   * 有效待保存输入、失败则停留」的导航保护对单篇入口同样生效。
+   */
+  function startReview(file: FileIdentity) {
+    if (file.type === 'insight') return
+    dirtyRef.current = false
+    setNotice('')
+    showList()
+    const nextKey = editorKey + 1
+    setEditorKey(nextKey)
+    setReviewSeed({
+      source: { type: file.type === 'inbox' ? 'inbox' : 'journal', id: file.id },
+      key: nextKey,
+    })
+    setModule('review')
+  }
+
+  /**
+   * T09 保存成功后的目标导航：按后端返回的 target 打开真实 Journal。
+   *
+   * 走统一 `navigate`（含 flush 保护）并给出一条成功提示；刷新列表但不重发保存。
+   */
+  function openReviewTarget(id: number) {
+    navigate(() => {
+      dirtyRef.current = false
+      showList()
+      setModule('journal')
+      const nextKey = editorKey + 1
+      setEditorKey(nextKey)
+      setPanel({ kind: 'detail', file: { type: 'journal', id }, key: nextKey })
+      setNotice(`复盘已保存到 Journal ${id}。`)
+      refreshData()
+    })
+  }
+
   /** 界面禁用统一口径：写入 busy 或 AI 处理中锁任一成立即视为锁定。 */
   const uiLocked = busy || aiLocked
 
@@ -252,9 +296,19 @@ function App() {
         <FolderPage onDirtyChange={setDirty} onBusyChange={setWriting}
           onNavigate={navigate} onOpenFile={openFile} />
       )}
+      {module === 'review' && (
+        <ReviewPage
+          initialSource={reviewSeed?.source ?? null}
+          initialSourceKey={reviewSeed?.key ?? 0}
+          onInitialSourceConsumed={consumeReviewSeed}
+          onNavigate={navigate}
+          onOpenJournal={openReviewTarget}
+          onAiLockChange={registerAiLock} />
+      )}
       {module === 'inbox' && (
         <InboxPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate}
           onResolveLink={resolveLink} onFlushReady={registerFlush} onAiLockChange={registerAiLock}
+          onStartReview={(file) => navigate(() => startReview(file))}
           initialOpen={crossOpen?.file.type === 'inbox' ? { id: crossOpen.file.id, key: crossOpen.key } : null}
           onOpenRequestConsumed={consumeCrossOpen} />
       )}
@@ -288,6 +342,7 @@ function App() {
               onBusyChange={setWriting} onDirtyChange={setDirty} onFlushReady={registerFlush}
               onAiLockChange={registerAiLock}
               onNavigate={navigate}
+              onStartReview={(file) => navigate(() => startReview(file))}
               onClose={() => navigate(showList)} onDataChanged={refreshData}
               onDeleted={() => {
                 showList()
