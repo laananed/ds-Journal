@@ -2,9 +2,9 @@
 
 SeekJournal 是一个以个人认知成长为核心、生活与情感记录为辅的个人记录与复盘软件。
 
-**当前进入 Stage 3 正式规划，尚未授权功能开发。** 阶段路线与状态以 [stage3.md](docs/stage3.md) §1 为准；Stage 2 技术验收与待接受/复核项见 [stage2-tasks.md](docs/stage2-tasks.md) §20，历史记录不等于本轮实测。
-本地源码已有三类文件、Daily、Folder、搜索、回收箱、Markdown 和内部链接；AI/自动保存仍是规划。Stage 3 文档入口：[需求](docs/stage3.md)、[API](docs/stage3-api.md)、[架构](docs/stage3-architecture.md)、[Task/Agent/并行安排](docs/stage3-tasks.md)。
-以下运行章节含早期阶段快照（例如测试数量、数组列表和无搜索限制），请以对应阶段权威契约及实际代码为准；不得凭本页历史描述判定当前缺失或完成。本轮只更新规划入口，不安装依赖、不运行迁移、不自动 Git 发布。
+**Stage 3 正在组合验收，2026-10-13 的 S3-T11 验收未通过。** 当前代码已有三类自动保存、版本/创建幂等、AI块与局部互动、复盘生成和一次保存。实际复盘草稿→Insight尚未接线，SettingsPage尚未挂载；真实DeepSeek/Brave链路与风格、必要独立风险复核及用户接受未验证，不能宣布Stage3完成。逐项证据与缺陷见 [本轮验收报告](docs/s3-acceptance.md)。
+本轮当前集成基线后端1185项回归、前端build/lint及18份纯逻辑测试通过；真实HTTP/DB/浏览器使用合成数据与上游Mock，未调用付费服务、未升级个人库、未修改产品代码或发布。阶段路线以 [stage3.md](docs/stage3.md) §1 为准；Stage2历史接受/复核状态继续见 [stage2-tasks.md](docs/stage2-tasks.md) §20。
+Stage3文档入口：[需求](docs/stage3.md)、[API](docs/stage3-api.md)、[架构](docs/stage3-architecture.md)、[Task与执行记录](docs/stage3-tasks.md)。以下运行章节含早期阶段快照（例如测试数量、数组列表和无搜索限制）；当前行为以对应阶段契约、实际代码和上述验收矩阵为准。
 
 已跑通的开发链路：
 
@@ -47,7 +47,7 @@ Stage 1.5（已完成，只修复 Stage 1 体验问题、未新增功能）：
   **旧 Journal 数据完整保留**：数据库里的超长 / 空白历史记录仍可正常读取，
   只改其它合法字段时也不会被连带清洗或截断。
 
-Stage 2 当前基线与任务树状态：
+Stage 2 早期任务树快照（当前受影响回归见本轮 S3-T11 报告）：
 
 - **T01 已完成**：Folder/Inbox/Insight表与Journal可空关联/删除列，M1 `52c8e94a365c` → M2 `a8d98342e603`；旧Journal原六字段保留。
 - **T02 已完成**：Journal分页envelope、统一display_title、软删除API。Stage1历史“数组与硬删除”不再是当前后端契约。
@@ -55,8 +55,7 @@ Stage 2 当前基线与任务树状态：
 - Inbox前端、手动Insight、Folder业务、Markdown阅读、Search、Trash页面/恢复、内部链接等后续任务未实施。T03导航对这些模块显示未开放，不伪造数据。
 - Inbox全部硬删除，不进入回收箱；Journal/Insight仍按软删除规划。Inbox→Journal、操作记录与内容版本历史已取消。
 
-未来功能尚未实现：注册 / 登录 / 多用户 / 权限、图片、标签、AI、同步、云部署等。
-阶段路线与 Non-goals 以 `docs/stage2.md` 为准。
+注册 / 登录 / 多用户 / 权限、图片、标签、同步、云部署仍不属于当前交付。AI现有实现与未通过项见页首；当前阶段路线与Non-goals以 `docs/stage3.md` 为准。
 
 ## 2. 环境要求
 

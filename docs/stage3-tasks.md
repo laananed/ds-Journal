@@ -267,3 +267,33 @@ Task 启动、授权识别、自主推进及按需提示词/交接统一引用 `
 - 结果仅“开发自测通过，待独立测试/风险证据审核及用户接受”；五项开发者风险自查通过不称独立审核。产品代码已停止写入，未提交diff/新文件与散列交WorkBuddy未参与实现的新会话。真实付费模型/搜索/风格及UI未验证，不宣布T08/Stage完成。
 - 详细报告：`docs/s3-t08-development.md`；冻结HEAD/tracked diff/未跟踪文件清单及SHA256、命令日志、HTTP/DB与资源释放证据：`docs/s3-t08-evidence/`。
 
+### S3-T11 Codex 主验收与阶段交付（2026-10-13）
+
+- 用户明确授权本轮Codex执行T11，代替§2旧主验收配置；产品零修改、只写验收文档与必要测试证据，不调用其他Agent、不跨客户端派发、不执行Git提交/整合。后续独立复核由用户另启未参与实现的新Codex会话；既有交叉证据与风险门禁不取消。本文件页首“规划/未授权”是历史规划快照，不代表本轮授权状态。
+- 实际基线：`C:\Programme\demo\SeekJournal`，`codex/s03-t11`，HEAD `47cdc444a704bb52401e13b2bff93a02dac96899`，起始干净。与提示词main分支不同但HEAD相同，未自动切换；main/Work-01/02同HEAD。Codex App运行时模型ID无法独立核实，未将指定GPT-6.1-Sol记为实测。用户确认其他执行者停止产品修改并释放测试库；全产品文件散列前后无漂移。
+- 本轮独立执行完整后端回归一次：1185 passed（92.47s）、退出0；现有私有schema合成旧数据迁移/回退、公有保护守卫实际运行。进程DATABASE_URL安全指向seekjournal_test后Alembic heads/current/check均0、3aa16300a58a、无漂移。前端build/lint与18份utils均0，lint保留6 warnings；git diff --check退出0。历史开发数量不是本轮证据。
+- 实际Chromium→5181→8031→PostgreSQL与进程内上游Mock验证三类创建丢响应原payload重放→真实PATCH、UI/DB最终正文相等；Daily04:00、导航flush、两标签CAS、交错/删除、全文/增量/修订/续聊/noop、失败/冲突C不变、总结后增量、1/15file与7/8日期、混合跨页源、ready+C/一次save、FK/长度/SQL故障零半写、预览/保存丢响应恢复、真实普通搜索、源删匿名usage及独立文本保留。设置API进程重启后保持；750k仅Mock。浏览器失败中4项为测试脚本选错恢复对象或选择器，已定向纠正，不修产品、未循环重跑全套。
+- **阶段验收未通过**：T11-F01，真实ReviewPreview无“添加为Insight”回调，仍显示待T10接线，T09 C19补验失败；T11-F02，App未挂载SettingsPage，无法从UI设置联网开关/提示词。分别退回T09/T10和T03原Task，未开始修复。用户此前确认T09/T10完成不替代本轮当前行为证据；T10旧独立89项是DEV注入模块级，不能套用为真接线通过。
+- T01/T02/T03目录再次核对，修复报告明示开发自测；T04隔离报告明确非独立，S3-T08只有开发报告；完整独立/风险记录仍待核实。T05/T06/T07已有历史交叉报告保留并与当前冻结文件、历史blob及实际diff映射。本轮Codex定向测试不冒充自己历史实施项的独立风险审核，后续新会话复核仍必要。Stage2§20未闭环状态保留。
+- 本轮没有真实付费授权，最初Key存在性均false；真实DeepSeek/Brave/usage账单/五情境风格未验证，Mock与真实分列。不外发真实日记，未连接或升级个人库、未prepare/public upgrade/建库/Compose/安装依赖/修改真实.env或记忆。
+- 收尾按manifest精确清29 Journal、16 Inbox、4 Insight、1 Folder、16 request、22 checkpoint、17 usage及本轮settings；首次cleanup的inbox类型映射脚本错误在DELETE前被守卫拒绝、事务回滚，修正后成功。八表零摘要恢复、revision不变、无其他连接/私有schema，sequence清理前后相等。只停自建5181/8031，用户5173/8000/5432原PID保持；已释放测试库。产品代码/其他树零修改，交付文档diff、无commit/merge/push/tag；学习三问、用户接受与后续独立复核待确认，不宣布T11或Stage3完成。
+- 主报告：`C:\Programme\demo\SeekJournal\docs\s3-acceptance.md`；本轮脱敏命令/退出码、HTTP/SQL/浏览器/风险对应、清理与冻结交接：`C:\Programme\demo\SeekJournal\.workbuddy\s3-t11-codex\`（已忽略）。
+
+### S3-T11 修复后独立验收及剩余门禁收口（2026-10-13，Codex）
+
+- 用户明确授权继续当前未参与修复的独立会话补齐全部剩余验收，旧“仅测两入口”范围限制撤销；禁止产品修改、其他Agent及未经授权Git/费用操作。规范指定GPT-6.1-Sol，活动模型ID仍无法核验，不声称模型多样性。
+- 当前基线codex/s03-t11 / 47cdc444a704bb52401e13b2bff93a02dac96899，三个未提交前端修复及既有文档diff纳入；起点冻结SHA均匹配。上一轮`.workbuddy/s3-t11-final-independent/report.md`已独立关闭T11-F01/F02，本轮不重复；旧失败保留为历史，不再列当前缺陷。
+- 已将T01～T10完整技术条目逐项映射；旧独立299项与HTTP/SQL/浏览器、本轮46项固定客户端/安全错误/作者投影及剩余UI证据足够关闭迁移/CAS防丢字、作者与检查点、搜索计量Mock技术、复盘事务专项风险。后端/测试与旧独立字节相同，T01～T10报告SHA均核实；不为单独报告形式重跑完整回归/build/lint。
+- 本轮真实5181→8031→seekjournal_test，模型仅Mock，补D1/D2/F-1、Daily04:00与未保存草稿日期、跨文件隔离/失败CAS/导航flush、旧文/summary保kind/Trash/安全阅读/键盘、Token累计/单调用/分页/known/unknown/重放/匿名保留；模拟composition不等于实体IME，合成长按不等于实体触屏。脚本时序、structured payload、恢复索引序列化及选择器错误保留并定向补齐，没有产品修复。
+- **新缺陷T11-F03（P2）退回T10**：正式review草稿保存后无“明确另加一份”操作；重选并修改仍用原创建键，真实POST409，无新文件且原文件不变。F01正式入口仍为已关闭，草稿切换/flush通过；T10及A09不可整体验收。当前矩阵和最小复现见`docs/s3-acceptance.md`§9及剩余报告。
+- 无本轮付费预算授权、DeepSeek/Brave Key存在性均false；真实局部/受限搜索/单多复盘/Insight质量/官方usage和五类风格未验证，真实调用0。学习三问、Stage2历史接受/学习/复核与Stage3最终接受仍留用户确认；Git修复未提交/整合，无commit/merge/push/tag/分支/worktree操作。
+- 本轮manifest清理后八表摘要恢复、revision3aa16300a58a、其他连接0、仅public；sequence未重置。只停自建5640/18620/50140，原5173/8000/5432 PID保持。无个人库连接/public迁移/依赖安装/prepare/Compose/真实.env改动；共享文档授权追加，产品SHA不变。资源已释放，交付后停止写入。
+- 剩余独立报告/Task及导航矩阵/风险关闭记录/脱敏证据：`C:\Programme\demo\SeekJournal\.workbuddy\s3-t11-remaining-independent\report.md`。当前阶段仍未通过；不要以技术风险收口代替F03修复、真实验收、整合与用户接受。
+
+
+### T11-F03独立补测关闭（2026-10-13，Codex）
+
+- 仅按用户授权补测F03，未参与修复的新会话独立执行；分支codex/s03-t11、HEAD47cdc444a704bb52401e13b2bff93a02dac96899，全部tracked散列及repair/full diff与交接冻结一致，两项修复SHA匹配。没有产品修改、其他Agent调用或Git写操作。
+- 真实正式UI→5181→8031→seekjournal_test，模型Mock；14项定向检查退出0。原Insight1463、副本1464、再次另加1465三键三文件；首次POST201提交后丢响应，显式重试POST200同键/原payload/同ID且仅一行，真实PATCH200与UI/DB最新正文相等；原Insight全字段/来源不变。生成/查看、未编辑副本及放弃零写，导航flush通过。F03独立关闭，A09软件技术通过；旧失败记录保留，未重跑F01/F02及其他无关测试。
+- 仅清本轮manifest，八表摘要恢复、revision3aa16300a58a、其他连接0、仅public，序列未重置；停自建33312/49208，5181/8031释放，原5173/8000/5432保持。产品散列不变，修复仍未提交/整合。
+- 真实供应商/官方usage/五类风格、实体IME/触屏、学习及用户接受、Stage2历史接受/复核与Git授权整合各自保留；Stage3仍未完成。当前记录见docs/s3-acceptance.md§10；本轮证据与报告：C:\Programme\demo\SeekJournal\.workbuddy\s3-t11-f03-independent\report.md。

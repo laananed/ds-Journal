@@ -7,7 +7,7 @@
  *   但可以带**多个依据**（每项含真实来源身份与用户原文引用）。
  * - **只查看零写入**：展开、收起、看依据都不发任何写请求；本组件只读草稿 props，
  *   也不在挂载时做任何自动保存。
- * - 只有用户主动点「添加为 Insight」才回调父级，由既有 Insight 编辑器进入编辑。
+ * - 用户主动点「添加为 Insight」或「另加一份」才进入既有编辑器；另加时换新键。
  * - 相似内容用**普通搜索** `GET /api/search`：只帮用户把**观点关键词**填进搜索框，
  *   显示真实命中与错误/重试；不做语义去重、不自动合并、不在前端假装相似。
  *
@@ -18,7 +18,7 @@
 import { useEffect, useState } from 'react'
 import { SearchApiError, searchFiles } from '../api/search.ts'
 import type { SearchItem, SearchPageData } from '../types/search.ts'
-import { SEARCH_KEYWORD_MAX, type InsightDraftSeed } from '../utils/insightAiDraft.ts'
+import { duplicateSeed, SEARCH_KEYWORD_MAX, type InsightDraftSeed } from '../utils/insightAiDraft.ts'
 import './InsightDrafts.css'
 
 export interface InsightDraftsProps {
@@ -194,7 +194,7 @@ function InsightDrafts({
         <h3>{title}</h3>
         <p className="insight-drafts-hint">
           一次复盘可能提炼出零份或多份独立观点。查看不会创建文件，
-          只有你主动「添加为 Insight」后才会进入编辑。
+          主动选择「添加为 Insight」后进入编辑；要再创建独立文件，请选择「另加一份」。
         </p>
         {onDismiss && (
           <button type="button" onClick={onDismiss} disabled={busy}>收起草稿</button>
@@ -251,6 +251,11 @@ function InsightDrafts({
                     <button type="button" className="insight-draft-add"
                       onClick={() => onAddInsight(seed)} disabled={busy}>
                       添加为 Insight
+                    </button>
+                    {/* 只在明确另加时换键；种子交给编辑器后，保存重试沿用该键。 */}
+                    <button type="button" disabled={busy}
+                      onClick={() => onAddInsight(duplicateSeed(seed, crypto.randomUUID()))}>
+                      另加一份
                     </button>
                     <button type="button" onClick={() => openSearchFor(seed)} disabled={busy}
                       aria-expanded={isSearchOpen}>

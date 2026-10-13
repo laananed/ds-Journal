@@ -11,6 +11,7 @@
 
 import {
   deriveDraftKey,
+  duplicateSeed,
   draftFallbackKey,
   draftSourceLabel,
   insightDraftToSeed,
@@ -277,6 +278,19 @@ test('依据来源归一化只接受 journal/inbox，非法类型不进入正文
   check(!seed.content.includes('AI 回复不能当依据'), 'insight 来源不进入正文')
   check(!seed.content.includes('非法 id'), '非法 id 不进入正文')
   check(seed.content.includes('真实用户原文'), '合法依据保留')
+})
+
+test('明确另加一份仅换创建键，不修改原草稿或后续重试的键', () => {
+  const original = insightDraftToSeed(draft())
+  const before = JSON.stringify(original)
+  const key = '33333333-3333-4333-8333-333333333333'
+  const copy = duplicateSeed(original, key)
+  check(copy !== original, '副本是独立 seed 对象')
+  expectEqual(JSON.stringify(original), before, '原草稿完全不变')
+  expectEqual(copy, { ...original, createKey: key }, '只更换创建键，保留观点和依据')
+  expectEqual([copy.title, copy.content, copy.folder_id],
+    [original.title, original.content, original.folder_id], '编辑器初始内容不变')
+  expectEqual(copy.createKey, key, '读取与重试使用已生成的新键')
 })
 
 runCases()

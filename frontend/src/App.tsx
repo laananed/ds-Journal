@@ -8,8 +8,9 @@ import Pagination from './components/Pagination'
 import LinkCandidates from './components/LinkCandidates'
 import FolderPage from './pages/FolderPage'
 import InboxPage from './pages/InboxPage'
-import InsightPage from './pages/InsightPage'
+import InsightPage, { type InsightDraftRequest } from './pages/InsightPage'
 import ReviewPage from './pages/ReviewPage'
+import SettingsPage from './pages/SettingsPage'
 import TrashPage from './pages/TrashPage'
 import SearchPage from './pages/SearchPage'
 import type { FileIdentity } from './types/file'
@@ -18,41 +19,16 @@ import type { SearchConditions } from './types/search'
 import type { FlushResult } from './hooks/useAutosave'
 import type { ReviewSource } from './utils/reviewSelection'
 import { nearestValidPage } from './utils/pagination'
-import { reviewDraftsToSeeds, type InsightDraftLike } from './utils/insightAiDraft'
+import type { InsightDraftSeed } from './utils/insightAiDraft'
 
-type Module = 'journal' | 'inbox' | 'insight' | 'search' | 'trash' | 'folder' | 'review'
+type Module = 'journal' | 'inbox' | 'insight' | 'search' | 'trash' | 'folder' | 'review' | 'settings'
 type Panel = { kind: 'list' } | { kind: 'create'; key: number } | { kind: 'detail'; file: FileIdentity; key: number }
 const modules: { id: Module; label: string }[] = [
   { id: 'inbox', label: 'Inbox' }, { id: 'journal', label: 'Journal' }, { id: 'review', label: '复盘' },
   { id: 'insight', label: 'Insight' }, { id: 'search', label: 'Search' },
   { id: 'trash', label: 'Trash' }, { id: 'folder', label: 'Folder' },
+  { id: 'settings', label: 'Settings' },
 ]
-
-/**
- * 开发自查入口（T10）：从 `?t10drafts=<base64url(JSON)>` 读取一组合成观点草稿，
- * 交给 Insight 模块，用来在真实浏览器里检查草稿面板、添加与普通搜索。
- *
- * - 只在开发构建生效；生产构建直接返回空数组，因此线上没有任何读取入口；
- * - 只解析本地 URL，不读服务器数据，也不改变草稿内容；
- * - 用 base64url（查询串里 `+` 会被解析成空格，标准 base64 不可靠）；
- * - 草稿形状与 T09 复盘预览将要提供的 `insight_drafts` 一致，最多 15 份。
- */
-function readDraftPreview(): ReturnType<typeof reviewDraftsToSeeds> {
-  if (!import.meta.env.DEV) return []
-  const raw = new URLSearchParams(window.location.search).get('t10drafts')
-  if (raw === null || raw === '') return []
-  try {
-    const normalized = raw.replace(/-/g, '+').replace(/_/g, '/')
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
-    const decoded = atob(padded)
-    const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0))
-    const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes))
-    if (!Array.isArray(parsed)) return []
-    return reviewDraftsToSeeds(parsed.slice(0, 15) as InsightDraftLike[])
-  } catch {
-    return []
-  }
-}
 
 function App() {
   const [module, setModule] = useState<Module>('journal')
@@ -87,8 +63,10 @@ function App() {
   const [linkRequest, setLinkRequest] = useState<{ title: string; key: number } | null>(null)
   const linkKey = useRef(0)
   const [searchConditions, setSearchConditions] = useState<SearchConditions>({ q: '', type: 'all', page: 1 })
-  // T10 开发自查：只解析一次 URL，正常访问（无参数）恒为空数组。
-  const [previewDrafts] = useState(readDraftPreview)
+  // 用户在真实复盘预览主动选中的一次性 Insight 编辑请求。
+  const [insightDraft, setInsightDraft] = useState<InsightDraftRequest | null>(null)
+  const consumeInsightDraft = useCallback(() => setInsightDraft(null), [])
+  const [reviewDrafts, setReviewDrafts] = useState<InsightDraftSeed[]>([])
   // Folder 混合卡片的一次性打开请求：交给对应模块消费后清空。
   const [crossOpen, setCrossOpen] = useState<{ file: FileIdentity; key: number } | null>(null)
   const consumeCrossOpen = useCallback(() => setCrossOpen(null), [])
@@ -285,9 +263,10 @@ function App() {
    *
    * 走统一 `navigate`（含 flush 保护）并给出一条成功提示；刷新列表但不重发保存。
    */
-  function openReviewTarget(id: number) {
+  function openReviewTarget(id: number, drafts: InsightDraftSeed[]) {
     navigate(() => {
       dirtyRef.current = false
+      setReviewDrafts(drafts)
       showList()
       setModule('journal')
       const nextKey = editorKey + 1
@@ -295,6 +274,18 @@ function App() {
       setPanel({ kind: 'detail', file: { type: 'journal', id }, key: nextKey })
       setNotice(`复盘已保存到 Journal ${id}。`)
       refreshData()
+    })
+  }
+
+  function addReviewInsight(seed: InsightDraftSeed) {
+    navigate(() => {
+      showList()
+      setNotice('')
+      setCrossOpen(null)
+      const nextKey = editorKey + 1
+      setEditorKey(nextKey)
+      setInsightDraft({ seed, key: nextKey })
+      setModule('insight')
     })
   }
 
@@ -325,6 +316,7 @@ function App() {
         <FolderPage onDirtyChange={setDirty} onBusyChange={setWriting}
           onNavigate={navigate} onOpenFile={openFile} />
       )}
+      {module === 'settings' && <SettingsPage disabled={uiLocked} />}
       {module === 'review' && (
         <ReviewPage
           initialSource={reviewSeed?.source ?? null}
@@ -332,6 +324,8 @@ function App() {
           onInitialSourceConsumed={consumeReviewSeed}
           onNavigate={navigate}
           onOpenJournal={openReviewTarget}
+          onAddInsight={addReviewInsight}
+          onOpenInsight={(id) => openFile({ type: 'insight', id })}
           onAiLockChange={registerAiLock} />
       )}
       {module === 'inbox' && (
@@ -344,7 +338,8 @@ function App() {
       {module === 'insight' && (
         <InsightPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate}
           onResolveLink={resolveLink} onFlushReady={registerFlush}
-          drafts={previewDrafts}
+          initialDraft={insightDraft} onAddDraftConsumed={consumeInsightDraft}
+          drafts={reviewDrafts}
           initialOpen={crossOpen?.file.type === 'insight' ? { id: crossOpen.file.id, key: crossOpen.key } : null}
           onOpenRequestConsumed={consumeCrossOpen} />
       )}

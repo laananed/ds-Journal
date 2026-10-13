@@ -10,12 +10,13 @@
  * - **一次确认**：保存只有一个按钮，防双击由上层 `disabled` 控制；
  * - **结构化要点只读**：事实/推测/角度/逻辑链/追问只用于核对依据，
  *   推测额外显示不确定性；`evidence.quote` 由后端保证是所选用户正文的子串；
- * - **T10 接入点**：`onAddInsight` 是给 Insight 草稿添加预留的回调。**未接入时
- *   不渲染按钮**，只展示草稿——查看草稿绝不触发 Insight 写入。
+ * - **T10 接线**：复用观点草稿组件，只有主动添加才导航到既有 Insight 编辑器。
  */
 
 import FolderSelect from './FolderSelect'
-import type { AIInsightDraft, AIReviewObject, AIReviewPoint } from '../types/ai'
+import InsightDrafts from './InsightDrafts'
+import type { AIReviewObject, AIReviewPoint } from '../types/ai'
+import { reviewDraftsToSeeds, type InsightDraftSeed } from '../utils/insightAiDraft'
 import type { ReviewTargetDraft } from '../utils/reviewSelection'
 import { countCodePoints } from '../utils/contentValidation'
 
@@ -41,11 +42,9 @@ export interface ReviewPreviewProps {
   error: string
   /**
    * T10 接入点：用户**明确点击**「添加为 Insight」时回调该草稿。
-   * 未提供时按钮不出现，仅展示草稿。
    */
-  onAddInsight?: (draft: AIInsightDraft) => void
-  /** T10 接入后由上层给出的可用性（例如仍在编辑中则禁用）。 */
-  insightDisabled?: boolean
+  onAddInsight: (seed: InsightDraftSeed) => void
+  onOpenInsight: (id: number) => void
 }
 
 /** 一条要点：正文 + 不确定性 + 逐条依据（来源与原文引用）。 */
@@ -81,7 +80,7 @@ function PointList({ title, points, hint }: {
 
 function ReviewPreview({
   review, markdown, onMarkdownChange, target, onTargetChange,
-  appendAllowed, disabled, onConfirm, onCancel, saving, error, onAddInsight, insightDisabled,
+  appendAllowed, disabled, onConfirm, onCancel, saving, error, onAddInsight, onOpenInsight,
 }: ReviewPreviewProps) {
   const markdownLength = countCodePoints(markdown)
   const editingLocked = disabled || saving
@@ -133,42 +132,10 @@ function ReviewPreview({
         </section>
       )}
 
-      <section className="review-section" aria-label="Insight 草稿">
-        <h4 className="review-section-title">Insight 草稿（{review.insight_drafts.length} 份，一个观点一份）</h4>
-        {review.insight_drafts.length === 0
-          ? <p className="review-preview-hint">这次没有可提炼的独立观点，草稿可以是零份。</p>
-          : (
-            <ul className="review-drafts">
-              {review.insight_drafts.map((draft) => (
-                <li key={draft.draft_id} className="review-draft">
-                  <h5 className="review-draft-title">{draft.title}</h5>
-                  <p className="review-draft-viewpoint">观点：{draft.viewpoint}</p>
-                  <p className="review-draft-content">{draft.content}</p>
-                  <ul className="review-evidence">
-                    {draft.evidence.map((evidence, index) => (
-                      <li key={`${draft.draft_id}-${index}`}>
-                        依据 [{evidence.source.type}:{evidence.source.id}]：{evidence.quote}
-                      </li>
-                    ))}
-                  </ul>
-                  {onAddInsight !== undefined
-                    ? (
-                      <button type="button" className="review-draft-add"
-                        onClick={() => onAddInsight(draft)}
-                        disabled={editingLocked || insightDisabled === true}>
-                        添加为 Insight
-                      </button>
-                    )
-                    : (
-                      <p className="review-draft-pending" role="note">
-                        添加为 Insight 待与 T10 组件整合后组合复测；本轮不接入，查看草稿不会写入任何 Insight 文件。
-                      </p>
-                    )}
-                </li>
-              ))}
-            </ul>
-          )}
-      </section>
+      <InsightDrafts drafts={reviewDraftsToSeeds(review.insight_drafts)}
+        title={`Insight 草稿（${review.insight_drafts.length} 份，一个观点一份）`}
+        busy={editingLocked} onAddInsight={onAddInsight}
+        onOpenFile={(file) => onOpenInsight(file.id)} />
 
       <label className="editor-field">
         <span>完整复盘正文（可编辑；确认保存的就是这份文本，共 {markdownLength} 字）</span>

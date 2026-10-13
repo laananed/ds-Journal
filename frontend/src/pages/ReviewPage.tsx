@@ -36,6 +36,7 @@ import {
 } from '../utils/aiRequestState'
 import { validateContent } from '../utils/contentValidation'
 import { defaultJournalDate } from '../utils/journalDate'
+import { reviewDraftsToSeeds, type InsightDraftSeed } from '../utils/insightAiDraft'
 import {
   REVIEW_MAX_DATES,
   REVIEW_MAX_SOURCES,
@@ -85,7 +86,10 @@ interface ReviewPageProps {
   /** 所有离开出口都走 App 的 flush 保护。 */
   onNavigate: (action: () => void) => void
   /** 保存成功后导航到后端返回的目标 Journal。 */
-  onOpenJournal: (id: number) => void
+  onOpenJournal: (id: number, drafts: InsightDraftSeed[]) => void
+  /** 用户主动添加草稿或打开普通搜索命中，交 App 导航到既有 Insight 模块。 */
+  onAddInsight: (seed: InsightDraftSeed) => void
+  onOpenInsight: (id: number) => void
   /** 生成/轮询/保存期间交给 App 的在途锁（阻止中途离开丢状态）。 */
   onAiLockChange?: (locked: boolean) => void
 }
@@ -108,6 +112,8 @@ function ReviewPage({
   onInitialSourceConsumed,
   onNavigate,
   onOpenJournal,
+  onAddInsight,
+  onOpenInsight,
   onAiLockChange,
 }: ReviewPageProps) {
   /* ------------------------------------------------------------ 选源 */
@@ -319,7 +325,8 @@ function ReviewPage({
       setMessage('这次复盘已经保存过，不会再次创建目标。')
       const targetId = detail.saved_target !== null && detail.saved_target !== undefined
         ? detail.saved_target.id : null
-      if (targetId !== null) onOpenJournal(targetId)
+      const savedReview = parseReviewObject(detail.review)
+      if (targetId !== null) onOpenJournal(targetId, reviewDraftsToSeeds(savedReview?.insight_drafts ?? []))
       return
     }
     if (detail.status === 'conflict') {
@@ -571,7 +578,7 @@ function ReviewPage({
       setMessage(`复盘已保存到 Journal ${targetId ?? '（目标未知）'}。`)
       // 同步释放在途锁，否则 App 会把「导航到目标」当成处理中而拦下。
       onAiLockChange?.(false)
-      if (targetId !== null) onOpenJournal(targetId)
+      if (targetId !== null) onOpenJournal(targetId, reviewDraftsToSeeds(review.insight_drafts))
       return
     } catch (error: unknown) {
       if (!mountedRef.current) return
@@ -712,6 +719,8 @@ function ReviewPage({
           error={saveError}
           onConfirm={() => void confirmSave()}
           onCancel={() => onNavigate(removeAllFromSelection)}
+          onAddInsight={onAddInsight}
+          onOpenInsight={onOpenInsight}
         />
       )}
 
