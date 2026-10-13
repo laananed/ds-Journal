@@ -16,6 +16,7 @@ import type { JournalPage } from './types/journal'
 import type { SearchConditions } from './types/search'
 import type { FlushResult } from './hooks/useAutosave'
 import { nearestValidPage } from './utils/pagination'
+import { reviewDraftsToSeeds, type InsightDraftLike } from './utils/insightAiDraft'
 
 type Module = 'journal' | 'inbox' | 'insight' | 'search' | 'trash' | 'folder'
 type Panel = { kind: 'list' } | { kind: 'create'; key: number } | { kind: 'detail'; file: FileIdentity; key: number }
@@ -24,6 +25,32 @@ const modules: { id: Module; label: string }[] = [
   { id: 'insight', label: 'Insight' }, { id: 'search', label: 'Search' },
   { id: 'trash', label: 'Trash' }, { id: 'folder', label: 'Folder' },
 ]
+
+/**
+ * 开发自查入口（T10）：从 `?t10drafts=<base64url(JSON)>` 读取一组合成观点草稿，
+ * 交给 Insight 模块，用来在真实浏览器里检查草稿面板、添加与普通搜索。
+ *
+ * - 只在开发构建生效；生产构建直接返回空数组，因此线上没有任何读取入口；
+ * - 只解析本地 URL，不读服务器数据，也不改变草稿内容；
+ * - 用 base64url（查询串里 `+` 会被解析成空格，标准 base64 不可靠）；
+ * - 草稿形状与 T09 复盘预览将要提供的 `insight_drafts` 一致，最多 15 份。
+ */
+function readDraftPreview(): ReturnType<typeof reviewDraftsToSeeds> {
+  if (!import.meta.env.DEV) return []
+  const raw = new URLSearchParams(window.location.search).get('t10drafts')
+  if (raw === null || raw === '') return []
+  try {
+    const normalized = raw.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+    const decoded = atob(padded)
+    const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0))
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes))
+    if (!Array.isArray(parsed)) return []
+    return reviewDraftsToSeeds(parsed.slice(0, 15) as InsightDraftLike[])
+  } catch {
+    return []
+  }
+}
 
 function App() {
   const [module, setModule] = useState<Module>('journal')
@@ -58,6 +85,8 @@ function App() {
   const [linkRequest, setLinkRequest] = useState<{ title: string; key: number } | null>(null)
   const linkKey = useRef(0)
   const [searchConditions, setSearchConditions] = useState<SearchConditions>({ q: '', type: 'all', page: 1 })
+  // T10 开发自查：只解析一次 URL，正常访问（无参数）恒为空数组。
+  const [previewDrafts] = useState(readDraftPreview)
   // Folder 混合卡片的一次性打开请求：交给对应模块消费后清空。
   const [crossOpen, setCrossOpen] = useState<{ file: FileIdentity; key: number } | null>(null)
   const consumeCrossOpen = useCallback(() => setCrossOpen(null), [])
@@ -261,6 +290,7 @@ function App() {
       {module === 'insight' && (
         <InsightPage onDirtyChange={setDirty} onBusyChange={setWriting} onNavigate={navigate}
           onResolveLink={resolveLink} onFlushReady={registerFlush}
+          drafts={previewDrafts}
           initialOpen={crossOpen?.file.type === 'insight' ? { id: crossOpen.file.id, key: crossOpen.key } : null}
           onOpenRequestConsumed={consumeCrossOpen} />
       )}

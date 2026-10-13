@@ -9,6 +9,7 @@ import {
 } from '../api/insights'
 import FileCard from '../components/FileCard'
 import FolderSelect from '../components/FolderSelect'
+import InsightDrafts from '../components/InsightDrafts'
 import MarkdownContent from '../components/MarkdownContent'
 import Pagination from '../components/Pagination'
 import type { Insight, InsightCreate, InsightPage as InsightPageData, InsightUpdate } from '../types/insight'
@@ -21,8 +22,20 @@ import {
   statusLabel,
   type DraftSnapshot,
 } from '../utils/autosave'
+import type { InsightDraftSeed } from '../utils/insightAiDraft'
 import { formatServerTimestamp } from '../utils/journalDetail'
 import { nearestValidPage } from '../utils/pagination'
+
+/**
+ * 由复盘预览（T09）发起的一次「添加为 Insight」请求。
+ *
+ * `key` 单调递增，用于区分「同一次请求的重复渲染」与「用户又点了一份」；
+ * 消费后由 `onAddDraftConsumed` 通知父级清空。
+ */
+export interface InsightDraftRequest {
+  seed: InsightDraftSeed
+  key: number
+}
 
 interface InsightPageProps {
   onDirtyChange: (dirty: boolean) => void
@@ -34,11 +47,30 @@ interface InsightPageProps {
   /** 其他模块（Folder 混合卡片）请求打开某条 Insight；同模块后续请求也消费。 */
   initialOpen?: { id: number; key: number } | null
   onOpenRequestConsumed?: () => void
+  /**
+   * T10：父级（复盘预览 / App）已经在展示的草稿列表。
+   * 只用于展示与「添加为 Insight」，查看本身零写入。
+   */
+  drafts?: InsightDraftSeed[]
+  /**
+   * T10：用户主动「添加为 Insight」的回调。
+   * 在 Insight 模块内由本页直接进入编辑器；跨模块（复盘预览）由父级接线后
+   * 用 `initialDraft` 再次进入。
+   */
+  onAddDraft?: (seed: InsightDraftSeed) => void
+  /** T10：父级直接要求用这份草稿进入编辑器（已消费时传 null）。 */
+  initialDraft?: InsightDraftRequest | null
+  onAddDraftConsumed?: () => void
 }
 
 type InsightPanelShape =
-  | { kind: 'create'; key: number; savedId?: number }
+  | { kind: 'create'; key: number; savedId?: number; seed?: InsightDraftSeed }
   | { kind: 'detail'; key: number; id: number }
+
+/** 草稿 → 自动保存草稿快照：Insight 没有业务日期，`date` 恒为空串。 */
+function seedToSnapshot(seed: InsightDraftSeed): DraftSnapshot {
+  return draftToSnapshot({ title: seed.title, content: seed.content, folder_id: seed.folder_id }, '')
+}
 
 function toSnapshot(insight: Insight): DraftSnapshot {
   // Insight 没有业务日期：归一化快照的 date 恒为空串。
@@ -96,6 +128,8 @@ function InsightPanel({
   panel, onDirtyChange, onBusyChange, onFlushReady, onResolveLink, onNavigate, onCreated, onChanged, onDeleted, onClose,
 }: InsightPanelProps) {
   const insightId = panel.kind === 'detail' ? panel.id : null
+  // T10：来自 AI 草稿的首次创建；种子只用于初始化编辑内容与创建键，之后完全由用户编辑。
+  const seed = panel.kind === 'create' ? panel.seed : undefined
 
   const [status, setStatus] = useState<'ready' | 'loading' | 'success' | 'error'>(panel.kind === 'create' ? 'ready' : 'loading')
   const [file, setFile] = useState<Insight | null>(null)
@@ -130,8 +164,10 @@ function InsightPanel({
 
   const autosave = useAutosave<Insight>({
     enabled: mode === 'edit',
-    initialDraft: { title: '', content: '', date: '', folder_id: null },
+    initialDraft: seed ? seedToSnapshot(seed) : { title: '', content: '', date: '', folder_id: null },
     initialFile: null,
+    // T10：草稿创建键从 draft_id 稳定派生；重复响应 / 重试复活同一份文件。
+    ...(seed ? { createKey: seed.createKey } : {}),
     create: async (draft, createKey) => {
       const payload: InsightCreate = {
         content: draft.content,
@@ -236,13 +272,19 @@ function InsightPanel({
   return (
     <section className="journal-editor" aria-label={isCreate ? '新建 Insight' : 'Insight 详情'}>
       <div className="detail-header">
-        <h2>{isCreate ? '新建 Insight' : 'Insight 详情'}</h2>
+        <h2>{isCreate ? (seed ? '添加 AI 草稿为 Insight' : '新建 Insight') : 'Insight 详情'}</h2>
         <button type="button" onClick={onClose} disabled={busy}>返回列表</button>
       </div>
 
       {mode === 'edit' && (panel.kind === 'create' || (status === 'success' && file)) && (
         <>
           <p className="detail-hint">Insight 没有所属日期，也不需要来源或 AI 信息，只有标题与正文。</p>
+          {seed && (
+            <p className="detail-hint" role="status">
+              这份内容来自复盘的 AI 草稿，只包含一个观点和它的依据。你可以先改观点、补事实、换 Folder，
+              也可以直接放弃；只有第一次有效内容保存成功后才会创建文件。
+            </p>
+          )}
           {statusBanner}
           <form className="editor-form" onSubmit={(event) => { event.preventDefault(); void autosave.saveNow() }}>
             <InsightFields draft={draft} disabled={false}
@@ -258,7 +300,7 @@ function InsightPanel({
             <div className="editor-actions">
               <button type="submit" disabled={!autosave.dirty}>立即保存</button>
               <button type="button" onClick={() => isCreate ? onClose() : onNavigate(exitEditing)} disabled={busy}>
-                {isCreate ? '取消新建' : '返回查看'}
+                {isCreate ? (seed ? '放弃这份草稿' : '取消新建') : '返回查看'}
               </button>
             </div>
           </form>
@@ -319,6 +361,7 @@ function InsightPanel({
 
 function InsightPage({
   onDirtyChange, onBusyChange, onResolveLink, onNavigate, onFlushReady, initialOpen = null, onOpenRequestConsumed,
+  drafts = [], onAddDraft = undefined, initialDraft = null, onAddDraftConsumed,
 }: InsightPageProps) {
   // 初始外部请求直接进入详情；后续同模块链接由下面的 effect 消费。
   const [panel, setPanel] = useState<InsightPanelShape | { kind: 'list' }>(
@@ -358,6 +401,20 @@ function InsightPage({
     }
     onOpenRequestConsumed?.()
   }, [initialOpen, onOpenRequestConsumed])
+
+  // T10：父级（复盘预览接线后）要求用某份草稿进入编辑器；同 key 只消费一次。
+  const consumedDraftKey = useRef<number | null>(null)
+  useEffect(() => {
+    if (!initialDraft) return
+    if (consumedDraftKey.current !== initialDraft.key) {
+      consumedDraftKey.current = initialDraft.key
+      keyRef.current += 1
+      setNotice('')
+      setActionError('')
+      setPanel({ kind: 'create', key: keyRef.current, seed: initialDraft.seed })
+    }
+    onAddDraftConsumed?.()
+  }, [initialDraft, onAddDraftConsumed])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -410,6 +467,16 @@ function InsightPage({
       setPanel({ kind: 'create', key: nextKey() })
     })
   }
+  /** T10：用 AI 草稿进入既有 Insight 编辑器；查看草稿本身零写入。 */
+  function addDraftInsight(draftSeed: InsightDraftSeed) {
+    onAddDraft?.(draftSeed)
+    onNavigate(() => {
+      onDirtyChange(false)
+      setNotice('')
+      setActionError('')
+      setPanel({ kind: 'create', key: nextKey(), seed: draftSeed })
+    })
+  }
   function changePage(value: number) {
     onNavigate(() => {
       showList()
@@ -444,6 +511,14 @@ function InsightPage({
 
       {notice && <p className="detail-success" role="status">{notice}</p>}
       {actionError && <p className="detail-error" role="alert">{actionError}</p>}
+
+      {/* T10：父级（复盘预览 / App）已提供草稿时才展示；列表态才展示，避免与编辑器抢注意力。 */}
+      {panel.kind === 'list' && drafts.length > 0 && (
+        <InsightDrafts drafts={drafts} busy={busy}
+          onAddInsight={addDraftInsight}
+          onOpenFile={(file) => openInsight(file.id)}
+          onDismiss={() => onNavigate(showList)} />
+      )}
 
       {panel.kind === 'create' && (
         <InsightPanel key={`create-${panel.key}`} panel={panel}
