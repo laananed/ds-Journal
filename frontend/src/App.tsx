@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { listJournals } from './api/journals'
+import { searchFiles } from './api/search'
+import { journalSearchConditions } from './utils/homeSearch'
 import JournalDetail from './components/JournalDetail'
 import JournalEditor from './components/JournalEditor'
 import JournalList from './components/JournalList'
@@ -15,7 +17,7 @@ import TrashPage from './pages/TrashPage'
 import SearchPage from './pages/SearchPage'
 import type { FileIdentity } from './types/file'
 import type { JournalPage } from './types/journal'
-import type { SearchConditions } from './types/search'
+import type { SearchConditions, SearchPageData } from './types/search'
 import type { FlushResult } from './hooks/useAutosave'
 import type { ReviewSource } from './utils/reviewSelection'
 import { nearestValidPage } from './utils/pagination'
@@ -24,14 +26,22 @@ import type { InsightDraftSeed } from './utils/insightAiDraft'
 type Module = 'journal' | 'inbox' | 'insight' | 'search' | 'trash' | 'folder' | 'review' | 'settings'
 type Panel = { kind: 'list' } | { kind: 'create'; key: number } | { kind: 'detail'; file: FileIdentity; key: number }
 const modules: { id: Module; label: string }[] = [
-  { id: 'inbox', label: 'Inbox' }, { id: 'journal', label: 'Journal' }, { id: 'review', label: '复盘' },
-  { id: 'insight', label: 'Insight' }, { id: 'search', label: 'Search' },
-  { id: 'trash', label: 'Trash' }, { id: 'folder', label: 'Folder' },
-  { id: 'settings', label: 'Settings' },
+  { id: 'journal', label: '所有日记' }, { id: 'inbox', label: '收件箱' }, { id: 'review', label: '复盘' },
+  { id: 'insight', label: '洞察' }, { id: 'search', label: '全部搜索' },
+  { id: 'trash', label: '回收箱' }, { id: 'folder', label: '文件夹' },
+  { id: 'settings', label: '设置' },
 ]
 
 function App() {
   const [module, setModule] = useState<Module>('journal')
+  const [dark, setDark] = useState(() => localStorage.getItem('seekjournal-theme') === 'dark')
+  const [homeInput, setHomeInput] = useState('')
+  const [homeQuery, setHomeQuery] = useState('')
+  const [homePage, setHomePage] = useState(1)
+  const [homeResult, setHomeResult] = useState<SearchPageData | null>(null)
+  const [homeStatus, setHomeStatus] = useState<'loading' | 'success' | 'error'>('loading')
+  const [homeError, setHomeError] = useState('')
+  const [homeRevision, setHomeRevision] = useState(0)
   const [panel, setPanel] = useState<Panel>({ kind: 'list' })
   const [editorKey, setEditorKey] = useState(0)
   const [filterDate, setFilterDate] = useState('')
@@ -94,6 +104,30 @@ function App() {
     })
     return () => controller.abort()
   }, [module, filterDate, page, dataRevision])
+
+  useEffect(() => {
+    localStorage.setItem('seekjournal-theme', dark ? 'dark' : 'light')
+  }, [dark])
+
+  useEffect(() => {
+    const conditions = journalSearchConditions(homeQuery, homePage)
+    if (module !== 'journal' || !conditions) return
+    const controller = new AbortController()
+    setHomeStatus('loading')
+    searchFiles(conditions, controller.signal).then((data) => {
+      if (controller.signal.aborted) return
+      const valid = nearestValidPage(data.page, data.total)
+      if (valid !== data.page) { setHomePage(valid); return }
+      setHomeResult(data)
+      setHomeStatus('success')
+    }).catch((error: unknown) => {
+      if (controller.signal.aborted) return
+      setHomeResult(null)
+      setHomeError(error instanceof Error ? error.message : '搜索失败，请稍后重试')
+      setHomeStatus('error')
+    })
+    return () => controller.abort()
+  }, [module, homeQuery, homePage, homeRevision, dataRevision])
 
   useEffect(() => {
     const dialog = confirmDialog.current
@@ -293,17 +327,19 @@ function App() {
   const uiLocked = busy || aiLocked
 
   return (
-    <main className="app">
-      <header className="app-header">
-        <h1>SeekJournal</h1>
-        <p className="app-subtitle">记录经历与思考</p>
-      </header>
+    <main className={`app ${dark ? 'theme-dark' : ''}`}>
+      <aside className="app-sidebar">
+        <header className="app-header"><h1>SeekJournal</h1><p className="app-subtitle">记录经历与思考</p></header>
+        <button className="home-new" type="button" disabled={uiLocked} onClick={() => { if (module === 'journal') newJournal(); else navigate(() => { dirtyRef.current = false; setNotice(''); setModule('journal'); setPanel({ kind: 'create', key: editorKey + 1 }); setEditorKey(editorKey + 1); beginLoading() }) }}>新建记录</button>
       <nav className="app-navigation" aria-label="模块导航">
         {modules.map((item) => (
           <button key={item.id} type="button" aria-pressed={module === item.id}
             disabled={uiLocked} onClick={() => changeModule(item.id)}>{item.label}</button>
         ))}
       </nav>
+      <button className="theme-toggle" type="button" onClick={() => setDark(!dark)}>{dark ? '切换亮色' : '切换暗色'}</button>
+      </aside>
+      <div className="app-content">
 
       {module === 'search' && (
         <SearchPage conditions={searchConditions} onConditionsChange={setSearchConditions}
@@ -345,16 +381,24 @@ function App() {
       )}
       {module === 'journal' && (
         <>
-          <section className="app-toolbar" aria-label="Journal 列表工具">
-            <button type="button" onClick={newJournal} disabled={uiLocked}>新建 Journal</button>
-            <button type="button" onClick={() => navigate(showList)} disabled={uiLocked}>Journal 列表</button>
+          {panel.kind === 'list' && <>
+          <div className="home-heading"><h2>{homeQuery ? '搜索结果' : '所有日记'}</h2><span>{homeQuery ? (homeStatus === 'success' ? `${homeResult?.total ?? 0} 条匹配` : '') : (status === 'success' ? `${result?.total ?? 0} 篇日记` : '')}</span></div>
+          <form className="home-search" onSubmit={(event) => { event.preventDefault(); const value = homeInput.trim(); setHomePage(1); setHomeQuery(value); if (value === homeQuery && value) setHomeRevision((v) => v + 1) }}>
+            <label className="sr-only" htmlFor="home-search">搜索日记标题和正文</label>
+            <input id="home-search" type="search" value={homeInput} onChange={(event) => setHomeInput(event.target.value)} placeholder="搜索日记标题和正文" />
+            <button type="submit">搜索</button>
+          </form>
+          {homeQuery && <button className="clear-search" type="button" onClick={() => { setHomeQuery(''); setHomeInput(''); setHomePage(1) }}>清除搜索</button>}
+          </>}
+          {!homeQuery && <section className="app-toolbar" aria-label="Journal 列表工具">
+            {panel.kind !== 'list' && <button type="button" onClick={() => navigate(showList)} disabled={uiLocked}>返回日记列表</button>}
             <label className="app-filter">
               <span>按日期查看</span>
               <input type="date" value={filterDate} disabled={uiLocked}
                 onChange={(event) => changeFilter(event.target.value)} />
             </label>
             <button type="button" onClick={() => changeFilter('')} disabled={uiLocked || filterDate === ''}>清除筛选</button>
-          </section>
+          </section>}
           {notice && <p className="detail-success" role="status">{notice}</p>}
           {panel.kind === 'create' && (
             <JournalEditor key={panel.key} listFilterDate={filterDate} externalRevision={dataRevision}
@@ -375,7 +419,15 @@ function App() {
                 refreshData()
               }} />
           )}
-          <section className="journal-results" aria-label="Journal 列表">
+          {panel.kind === 'list' && homeQuery && <section className="journal-results" aria-label="搜索结果">
+            {homeStatus === 'loading' && <p className="app-state" role="status">正在搜索……</p>}
+            {homeStatus === 'error' && <div className="app-state app-state-error" role="alert"><p>{homeError}</p><button type="button" onClick={() => setHomeRevision((v) => v + 1)}>重试</button></div>}
+            {homeStatus === 'success' && homeResult && <>
+              {homeResult.items.length === 0 ? <p className="app-state">没有找到匹配的日记，请尝试其他关键词。</p> : <JournalList journals={homeResult.items.filter((item): item is import('./types/journal').Journal => item.type === 'journal')} onOpen={openJournal} openDisabled={uiLocked} />}
+              <Pagination page={homeResult.page} total={homeResult.total} hasNext={homeResult.has_next} onPageChange={setHomePage} disabled={uiLocked} label="搜索结果分页" />
+            </>}
+          </section>}
+          {!homeQuery && <section className="journal-results" aria-label="Journal 列表">
             {status === 'loading' && <p className="app-state" role="status">加载中……</p>}
             {status === 'error' && (
               <div className="app-state app-state-error" role="alert">
@@ -393,10 +445,11 @@ function App() {
                   onPageChange={changePage} disabled={uiLocked} label="Journal 列表分页" />
               </>
             )}
-          </section>
+          </section>}
         </>
       )}
 
+      </div>
       {linkRequest && <LinkCandidates key={linkRequest.key} title={linkRequest.title} disabled={uiLocked}
         onOpen={openFile}
         onClose={() => setLinkRequest(null)} />}
