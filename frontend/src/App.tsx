@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
+import './components/JournalPage.css'
 import { listJournals } from './api/journals'
 import { searchFiles } from './api/search'
 import { journalSearchConditions } from './utils/homeSearch'
@@ -390,8 +391,7 @@ function App() {
           </form>
           {homeQuery && <button className="clear-search" type="button" onClick={() => { setHomeQuery(''); setHomeInput(''); setHomePage(1) }}>清除搜索</button>}
           </>}
-          {!homeQuery && <section className="app-toolbar" aria-label="Journal 列表工具">
-            {panel.kind !== 'list' && <button type="button" onClick={() => navigate(showList)} disabled={uiLocked}>返回日记列表</button>}
+          {panel.kind === 'list' && !homeQuery && <section className="app-toolbar" aria-label="日记列表工具">
             <label className="app-filter">
               <span>按日期查看</span>
               <input type="date" value={filterDate} disabled={uiLocked}
@@ -415,7 +415,7 @@ function App() {
               onClose={() => navigate(showList)} onDataChanged={refreshData}
               onDeleted={() => {
                 showList()
-                setNotice('已移入回收箱，可以恢复。可到 Trash 页面查看或恢复。')
+                setNotice('已移入回收箱，可以恢复。可到回收箱页面查看或恢复。')
                 refreshData()
               }} />
           )}
@@ -427,7 +427,7 @@ function App() {
               <Pagination page={homeResult.page} total={homeResult.total} hasNext={homeResult.has_next} onPageChange={setHomePage} disabled={uiLocked} label="搜索结果分页" />
             </>}
           </section>}
-          {!homeQuery && <section className="journal-results" aria-label="Journal 列表">
+          {panel.kind === 'list' && !homeQuery && <section className="journal-results" aria-label="日记列表">
             {status === 'loading' && <p className="app-state" role="status">加载中……</p>}
             {status === 'error' && (
               <div className="app-state app-state-error" role="alert">
@@ -438,9 +438,9 @@ function App() {
             {status === 'success' && result && (
               <>
                 {result.items.length === 0
-                  ? <p className="app-state">{filterDate ? '该日期没有 Journal 记录。' : '还没有任何 Journal 记录。'}</p>
+                  ? <p className="app-state">{filterDate ? '这一天还没有日记，试试其他日期。' : '还没有日记。点击「新建记录」，写下今天的第一句话。'}</p>
                   : <JournalList journals={result.items} onOpen={openJournal}
-                    selectedId={panel.kind === 'detail' ? panel.file.id : null} openDisabled={uiLocked} />}
+                    openDisabled={uiLocked} />}
                 <Pagination page={result.page} total={result.total} hasNext={result.has_next}
                   onPageChange={changePage} disabled={uiLocked} label="Journal 列表分页" />
               </>

@@ -385,21 +385,33 @@ export function useAutosave<F>(options: UseAutosaveOptions<F>): UseAutosaveResul
   const reloadServerVersion = useCallback(async (): Promise<void> => {
     const refetch = optionsRef.current.refetch
     if (!refetch) return
-    const file = await refetch()
-    const identity = optionsRef.current.toFile(file)
-    coreRef.current = adoptServer(coreRef.current, identity, identity.draft)
-    setDraft(identity.draft)
+    try {
+      const file = await refetch()
+      const identity = optionsRef.current.toFile(file)
+      coreRef.current = adoptServer(coreRef.current, identity, identity.draft)
+      setDraft(identity.draft)
+      // 已采用服务器内容：同步页面详情及列表，退出编辑后不能显示旧快照。
+      optionsRef.current.onSaved?.(file)
+    } catch (error: unknown) {
+      // 重读失败仍保持冲突与本地草稿，不能把未捕获的拒绝交给页面。
+      coreRef.current = { ...coreRef.current, error: `重新读取失败：${errorMessage(error)}。草稿已保留，请稍后重试。` }
+    }
     publish()
   }, [publish])
 
   const resubmitAfterConflict = useCallback(async (): Promise<void> => {
     const refetch = optionsRef.current.refetch
     if (!refetch) return
-    const file = await refetch()
-    const identity = optionsRef.current.toFile(file)
-    coreRef.current = rebaseRevision(coreRef.current, identity.id, identity.revision)
-    publish()
-    await saveNow()
+    try {
+      const file = await refetch()
+      const identity = optionsRef.current.toFile(file)
+      coreRef.current = rebaseRevision(coreRef.current, identity.id, identity.revision)
+      publish()
+      await saveNow()
+    } catch (error: unknown) {
+      coreRef.current = { ...coreRef.current, error: `重新读取失败：${errorMessage(error)}。草稿已保留，请稍后重试。` }
+      publish()
+    }
   }, [publish, saveNow])
 
   const changeDraft = useCallback((update: Partial<DraftSnapshot>): void => {

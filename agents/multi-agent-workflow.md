@@ -8,7 +8,7 @@
 | Agent / 执行端 | 模型与接入 | 职责入口 |
 |---|---|---|
 | Codex / Codex App 或 CLI | GPT-6.1-Sol | Lead、架构与重要决策、任务分析/拆分/分配、复杂实现、疑难接管、必要风险审核与 Git 整合协调；`gpt-lead.md` |
-| WorkBuddy / WorkBuddy 客户端 | GLM-5.3-Flash（Stage 3 本轮用户指定）；活动会话/客户端 ID 未验证，开始前只读核对 | 常规开发与独立测试；`ds-developer.md` |
+| WorkBuddy / WorkBuddy 客户端 | GLM-5.3-Flash（Stage 3 用户指定的配置记录）；Stage 4 活动会话/客户端 ID 未验证，开始前只读核对 | 常规开发与独立测试；`ds-developer.md` |
 | DSH / DeepSeek Harness | DeepSeek V4.1 Flash，经 DeepSeek 官方 API；推荐官方 ID `deepseek-flash`，本地仍使用兼容 ID，见下 | 常规开发与独立测试，与 WorkBuddy 同级；`dsh-developer.md` |
 
 DSH 是 Agent 执行框架，DeepSeek V4.1 Flash 是其调用的模型；不能把执行框架名称当作模型名称。模型和执行端信息只在本节维护，角色文件与提示词引用它。
@@ -24,7 +24,7 @@ User 是 Product Owner，决定产品方向、批准重大变化和开始实施�
 
 最多三个 Agent 同时开发，包含正在写代码的 Codex；日常优先两个。用户已批准三路并发能力，有三个可独立执行的工作项且文件、分支/Worktree、端口、数据库、进程及测试资源隔离满足时可安排三路，不重复申请人数许可。每个具体 Task 按 §3 核对授权、依赖与资源并推进；本轮配置授权不启动额外 Agent、不授权新 Task。独立测试同样遵守资源隔离和同目录单写者规则；不引入任务调度服务、自动编排框架或新的运行依赖，不擅自调用或创建其他 Agent。
 
-Stage 3 本轮特定计划默认最多两个同时开发，波次/文件与测试资源见 `docs/stage3-tasks.md` §14～15；不自动使用通用三路能力。规划授权仅修改文档，不启动任务或 Agent。
+Stage 3 历史特定计划默认最多两个同时开发，保留于 `docs/stage3-tasks.md` §14～15。当前 Stage 4 的执行端和活动对话上限、Task/Wave 与资源唯一见 `docs/stage4-tasks.md` §2～7；开发、测试和审核都计入。Stage 4 规划不启动功能 Task 或 Agent，人数许可不等于数据库写入窗口或任务授权。下方 A/B 是跨阶段通用示例，不覆盖 Stage 4 当前限定的执行端。
 
 | 模式 | 安排与使用条件 |
 |---|---|
@@ -240,7 +240,7 @@ main 合并不会自动改变其他 Worktree 的文件。Codex 先确认对方�
 
 - 每个服务使用独立端口和进程环境；不复制覆盖真实 .env，不输出带密码的连接串。浏览器写入前证明实际连接测试库。
 - 复用已有 PostgreSQL，默认不启动 Compose、不动既有 5173/8000/5432 服务；确需变化先纳入方案授权。
-- 可用独立测试库并行时，必须确认迁移版本和测试 fixture 支持该库；当前固定指向 seekjournal_test 的后端 pytest 同一时刻只能一个流程使用，不能假定设置 DATABASE_URL 就能改它。
+- 可用独立测试库并行时，必须确认迁移版本和 fixture 实际支持该库。当前 `prepare_test_db.py` / conftest 以 `SEEKJOURNAL_TEST_DB` 白名单选择 seekjournal_test 或 seekjournal_test_02；同一库同一时刻只能一个迁移/pytest/HTTP/UI写入流程独占。Alembic/真实后端还需核实实际进程 DATABASE_URL，不能以fixture或仅库名变量证明它们的目标。不得因三路人数许可自行扩白名单/建第三库。
 - 无法隔离的测试/迁移/UI 写入排队执行；个人库 seekjournal 默认只读，真实库升级单独授权。每轮只清理自建对象并核对无残留。
 - Codex 负责协调共享文档；同步前核对基线与对方改动，只同步授权变更，不覆盖整个文件树。历史 T03/T04 的路径/端口/库见既有记录，不能自动用于新 Task。
 

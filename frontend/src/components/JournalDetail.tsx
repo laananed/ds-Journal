@@ -317,15 +317,15 @@ function JournalDetail({
 
   const invalidDraft = autosave.dirty && !autosave.savable
   return (
-    <section className="journal-detail" aria-label="Journal 详情">
+    <section className="journal-detail journal-page" aria-label="日记详情">
       <div className="detail-header">
-        <h2>Journal 详情</h2>
+        <h2>{mode === 'edit' ? '编辑日记' : '阅读日记'}</h2>
         <button type="button" onClick={onClose} disabled={busy || aiLocked}>返回列表</button>
       </div>
       {status === 'loading' && <p className="detail-state" role="status">正在读取详情……</p>}
       {status === 'error' && (
         <div className="detail-state detail-state-error" role="alert">
-          <p>{notFound ? `该 Journal 不存在（id ${journalId}），可能已移入回收箱。` : `读取详情失败：${loadError}`}</p>
+          <p>{notFound ? '找不到这篇日记，可能已移入回收箱。你可以返回列表或前往回收箱查看。' : `读取详情失败：${loadError}`}</p>
           <button type="button" disabled={busy} onClick={() => {
             setStatus('loading')
             setDetail(null)
@@ -338,6 +338,8 @@ function JournalDetail({
       {status === 'success' && detail && mode === 'view' && (
         <>
           <h3 className="detail-title">{detail.display_title}</h3>
+          <p className="journal-date"><time dateTime={detail.journal_date}>{detail.journal_date}</time><span> · 日记</span></p>
+          <details className="journal-info"><summary>记录信息</summary>
           <dl className="detail-meta">
             <div className="detail-meta-row"><dt>id</dt><dd>{detail.id}</dd></div>
             <div className="detail-meta-row"><dt>版本</dt><dd>{detail.revision}</dd></div>
@@ -345,10 +347,12 @@ function JournalDetail({
             <div className="detail-meta-row"><dt>创建时间</dt><dd>{formatServerTimestamp(detail.created_at)}</dd></div>
             <div className="detail-meta-row"><dt>修改时间</dt><dd>{formatServerTimestamp(detail.updated_at)}</dd></div>
           </dl>
+          </details>
+          {detail.content.trim() === '' && <p className="detail-state">这篇日记还没有正文。</p>}
           <WritingContent blocks={detail.content_blocks} content={detail.content}
             onLink={onResolveLink} disabled={busy} />
           <div className="detail-actions">
-            <button type="button" onClick={startEditing} disabled={busy}>修改</button>
+            <button className="journal-primary" type="button" onClick={startEditing} disabled={busy}>修改</button>
             {/* T09 单篇入口：进入完整复盘并把本篇作为预选源；先 flush 再导航（由 App 统一保护）。 */}
             <button type="button" onClick={() => onStartReview({ type: 'journal', id: detail.id })}
               disabled={busy || aiLocked}>复盘这篇</button>
@@ -356,8 +360,10 @@ function JournalDetail({
               onClick={() => setDeleteStage('confirming')} disabled={busy}>移入回收箱</button>}
           </div>
           {deleteStage === 'confirming' && (
-            <div className="detail-confirm">
-              <p>这篇 Journal 将移入回收箱，可以恢复，也可在 Trash 页面永久删除。确定要移入回收箱吗？</p>
+            <div className="detail-confirm" role="region" aria-label="删除确认">
+              <h3>将这篇日记移入回收箱？</h3>
+              <p className="journal-delete-title">「{detail.display_title}」</p>
+              <p>日期：{detail.journal_date}。移入后会从日记列表隐藏；可以到回收箱恢复。永久删除需在回收箱中另行确认。</p>
               <div className="detail-confirm-actions">
                 <button type="button" className="detail-danger" onClick={confirmDelete} disabled={busy}>确认移入回收箱</button>
                 <button type="button" onClick={() => setDeleteStage('idle')} disabled={busy}>取消</button>
@@ -391,12 +397,14 @@ function JournalDetail({
             </label>
             <label className="editor-field"><span>标题（留空表示没有标题）</span>
               <input type="text" value={draft.title} disabled={aiLocked}
+                placeholder="日记标题（可留空）" aria-describedby="edit-journal-title-hint"
                 onChange={(event) => autosave.changeDraft({ title: event.target.value })}
                 onCompositionStart={autosave.onCompositionStart}
                 onCompositionEnd={autosave.onCompositionEnd} />
             </label>
+            <p id="edit-journal-title-hint" className="detail-hint">标题最多 80 个字符；有效输入会自动保存。返回查看也会先尝试保存。</p>
             <div className="editor-field">
-              <span>正文（用户文字与 AI 段分开显示）</span>
+              <span>正文</span>
               <WritingEditor
                 blocks={draftBlocks}
                 locked={aiLocked}
@@ -417,11 +425,13 @@ function JournalDetail({
               </p>
             )}
             <div className="editor-actions">
-              <button type="submit" disabled={!autosave.dirty || aiLocked}>立即保存</button>
+              <button className="journal-primary" type="submit" disabled={!autosave.dirty || !autosave.savable || autosave.saving || aiLocked}>立即保存</button>
               <button type="button" onClick={() => onNavigate(exitEditing)} disabled={aiLocked}>返回查看</button>
             </div>
           </form>
           {/* T07：局部陪伴写作入口，只在编辑态出现；调用期间本页编辑/删除/导航被锁。 */}
+          <details className="journal-tools"><summary>陪伴写作与调用记录</summary>
+          <p className="detail-hint">主动发起 AI 分析会调用已配置的模型；只写日记无需使用。</p>
           <AiWritingActions
             source={{ type: 'journal', id: detail.id }}
             disabled={busy}
@@ -430,6 +440,7 @@ function JournalDetail({
             onLockChange={changeAiLock}
             onActivity={onDataChanged}
           />
+          </details>
         </>
       )}
     </section>

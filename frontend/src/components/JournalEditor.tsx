@@ -303,15 +303,16 @@ function JournalEditor({
   const outsideFilter = lastSaved !== null && listFilterDate !== '' && listFilterDate !== lastSaved.journal_date
 
   return (
-    <section className="journal-editor" aria-label="新建 Journal">
+    <section className="journal-editor journal-page" aria-label="新建日记">
       <div className="detail-header">
-        <h2>新建 Journal</h2>
+        <h2>写一篇日记</h2>
         <button type="button" onClick={onClose}>返回列表</button>
       </div>
-      <div className={`autosave-status autosave-${autosave.status}`} role="status" aria-live="polite">
-        <span className="autosave-label">{statusLabel(autosave.status)}</span>
+      <p className="journal-intro">从此刻的想法开始。有效输入会自动保存，标题也可以留空。</p>
+      <div className={`autosave-status autosave-${lastSaved === null && autosave.status === 'saved' ? 'idle' : autosave.status}`} role="status" aria-live="polite">
+        <span className="autosave-label">{lastSaved === null && autosave.status === 'saved' ? '尚未创建' : statusLabel(autosave.status)}</span>
         <span className="autosave-hint">{autosave.status === 'failed' || autosave.status === 'conflict'
-          ? autosave.error : autosaveHint(autosave.status)}</span>
+          ? autosave.error : lastSaved === null && autosave.status === 'saved' ? '写下正文后自动创建，不会保存空白日记。' : autosaveHint(autosave.status)}</span>
         {autosave.status === 'saved' && lastSaved !== null && (
           <span className="autosave-hint">已保存：{lastSaved.display_title}</span>
         )}
@@ -332,10 +333,12 @@ function JournalEditor({
         </label>
         <label className="editor-field"><span>标题（可留空）</span>
           <input type="text" value={draft.title} disabled={aiLocked}
+            placeholder="给今天起个标题，也可以留空" aria-describedby="new-journal-title-hint"
             onChange={(event) => autosave.changeDraft({ title: event.target.value })}
             onCompositionStart={autosave.onCompositionStart}
             onCompositionEnd={autosave.onCompositionEnd} />
         </label>
+        <p id="new-journal-title-hint" className="detail-hint">标题最多 80 个字符；留空时按日期显示。</p>
         <div className="editor-field">
           <span>正文</span>
           <WritingEditor
@@ -360,11 +363,13 @@ function JournalEditor({
           <p className="detail-hint">当前列表筛选的是 {listFilterDate}，这篇不在当前列表中。</p>
         )}
         <div className="editor-actions">
-          <button type="submit" disabled={!autosave.dirty || aiLocked}>立即保存</button>
+          <button className="journal-primary" type="submit" disabled={!autosave.dirty || !autosave.savable || autosave.saving || aiLocked}>立即保存</button>
           <button type="button" onClick={onClose} disabled={aiLocked}>返回列表</button>
         </div>
       </form>
       {/* T07：新文件先有效创建取得 id 再调用 AI，不用空文件占位。 */}
+      <details className="journal-tools"><summary>陪伴写作与调用记录</summary>
+      <p className="detail-hint">主动发起 AI 分析会调用已配置的模型；只写日记无需使用。</p>
       <AiWritingActions
         source={lastSaved === null ? null : { type: 'journal', id: lastSaved.id }}
         // 删除某个 AI 段期间禁用 AI 入口，避免两类在途操作互相竞争。
@@ -374,7 +379,8 @@ function JournalEditor({
         onLockChange={changeAiLock}
         onActivity={() => { if (lastSaved !== null) onSaved(lastSaved) }}
       />
-      <div className="editor-day" aria-label="当天已有记录">
+      </details>
+      <details className="editor-day" aria-label="当天已有记录"><summary>看看这一天的其他日记</summary>
         <p className="editor-day-title">
           {draft.date === '' ? '先选择日期，才能查看该日期已有记录。'
             : visibleDayStatus === 'loading' ? '正在读取该日期已有记录……'
@@ -395,7 +401,7 @@ function JournalEditor({
               }} disabled={false} label="当天已有记录分页" />
           </>
         )}
-      </div>
+      </details>
     </section>
   )
 }

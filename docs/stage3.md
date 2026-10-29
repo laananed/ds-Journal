@@ -2,12 +2,13 @@
 
 > 2026-10-10。状态：正式规划已编制；逐 Task 授权、执行及未完成门禁见 `stage3-tasks.md` §17。
 > 本文维护产品边界与阶段验收；API、实现方案、Task 分别见 `stage3-api.md`、`stage3-architecture.md`、`stage3-tasks.md`。技术推荐不是实施、迁移、付费调用或 Git 操作授权。
+> 2026-10-30 当前状态说明：用户已确认 Stage 3 / S03-T11 最终验收通过。本文保留 Stage 3 历史契约；当前路线及 Stage 4 明确覆盖项以 `stage4.md` 为准，不把旧 textarea/导航锁/Inbox 等规则用于否定已确认 Stage 4 需求。
 
 ## 1. 目标与阶段入口
 
 Stage 3 实现「AI 陪伴写作 + 单篇/多篇复盘 + Insight 辅助提炼」，继续本地单用户 Web 与既有三类文件、Folder、普通搜索、回收箱和 Markdown 阅读。
 
-阶段路线当前以本节为唯一来源：Stage 1/1.5 已完成；Stage 2 为基础记录版，技术验收记录见 `stage2-tasks.md` §20，用户最终接受与所列独立复核仍需核实；Stage 3 为 AI 陪伴写作、复盘与 Insight 辅助提炼，具体 Task 授权与执行见 `stage3-tasks.md` §17；Stage 4 完整 UI 重构；Stage 5 云端部署；Stage 6 AI 增强（RAG、语义去重、长期记忆、情绪趋势等）。后续阶段只登记方向，不编制或实施其功能；历史路线由本轮路线替代。
+本节现为 Stage 3 历史入口；当前阶段路线唯一来源已迁至 `stage4.md` §1。Stage 3 范围、实现与当轮验收证据仍由本阶段文档维护；Stage 4 的 UI、富文本、Ritual 与非阻塞保存/AI 等升级以新阶段契约覆盖，不重复维护另一份路线。
 
 进入 Stage 3 开发前检查 Stage 2 实际集成基线、接受状态及遗留问题。规划可以完成，不能以规划宣布 Stage 2 已整体验收。Stage 2 保留行为除本文明确升级的自动保存、结构化 AI 内容及关联 API 外继续有效。
 
