@@ -1,0 +1,29 @@
+[PASS] preflight.target_database_is_seekjournal_test_03 :: ('seekjournal_test_03', 'public')
+[PASS] preflight.no_other_connections_on_target_db :: 其他连接数=0
+[PASS] preflight.no_previous_c01_schema :: []
+[PASS] preflight.public_has_no_schedules_table :: False
+[PASS] preflight.ai_usage_row_present :: 1
+[PASS] migration.single_head :: ['c01a7e421b50']
+[PASS] migration.linear_chain_from_pinned_base :: ['c01a7e421b50', '4f8e1a3c9d02', '9e7a6c42d011', '3aa16300a58a', '18ecf7e09da6', 'a8d98342e603', '52c8e94a365c', '3a70890ddb10']
+[PASS] migration.child_process_stayed_in_private_schema :: ('seekjournal_test_03', 'c01it_0f031793')
+[PASS] migration.upgraded_to_head_in_private_schema :: c01a7e421b50
+[PASS] migration.private_schema_isolated_from_public :: public 未出现 schedules
+[PASS] schema.table_shape_matches_contract :: {"id": ["integer", "NO"], "title": ["text", "NO"], "starts_at": ["timestamp with time zone", "NO"], "ends_at": ["timestamp with time zone", "YES"], "completed": ["boolean", "NO"], "revision": ["bigint", "NO"], "client_create_id": ["uuid", "NO"], "create_payload_hash": ["text", "NO"], "created_at": [
+[PASS] schema.pk_and_unique_client_create_id :: [('ck_schedule_time_order', 'c', 'CHECK (((ends_at IS NULL) OR (ends_at > starts_at)))'), ('schedules_pkey', 'p', 'PRIMARY KEY (id)'), ('schedules_client_create_id_key', 'u', 'UNIQUE (client_create_id)')]
+[PASS] schema.check_end_after_start_present :: ['CHECK (((ends_at IS NULL) OR (ends_at > starts_at)))']
+[PASS] schema.no_foreign_keys :: schedules 无外键即与 Set/End 目标解耦
+[PASS] schema.index_starts_at_id_present :: ['ix_schedules_starts_at_id', 'schedules_client_create_id_key', 'schedules_pkey']
+[FAIL] public_entry.main_import_ok :: Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+AttributeError: '_IncludedRouter' object has no attribute 'path'
+
+[FAIL] harness.unexpected_error :: Traceback (most recent call last):
+  File "C:\Programme\demo\SeekJournal-Work-01\s04-c01-independent\run_indep_tests.py", line 751, in main
+    test_create(ctx)
+  File "C:\Programme\demo\SeekJournal-Work-01\s04-c01-independent\run_indep_tests.py", line 238, in test_create
+    clear_rows(schema)
+  Fi
+[PASS] cleanup.test_schema_dropped :: 残留 c01* schema 数=0
+[PASS] cleanup.public_snapshot_unchanged :: revision 4f8e1a3c9d02；ai_usage 行数 1
+[PASS] cleanup.ai_usage_preserved :: ai_usage 唯一行内容散列未变
+{"pass": 18, "fail": 2}

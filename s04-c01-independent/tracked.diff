@@ -1,0 +1,12 @@
+diff --git a/backend/alembic/env.py b/backend/alembic/env.py
+index 40d7512..24f905a 100644
+--- a/backend/alembic/env.py
++++ b/backend/alembic/env.py
+@@ -23,6 +23,7 @@ from app.inbox import models  # noqa: F401
+ from app.insight import models  # noqa: F401
+ from app.journal import models  # noqa: F401
+ from app.ritual import models  # noqa: F401
++from app.schedule import models  # noqa: F401
+ 
+ # Alembic Config 对象，对应正在使用的 alembic.ini。
+ config = context.config

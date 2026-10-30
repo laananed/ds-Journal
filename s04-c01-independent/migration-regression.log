@@ -1,0 +1,717 @@
+EEEEEEEEEFE                                                              [100%]
+=================================== ERRORS ====================================
+___ ERROR at setup of test_revision_chain_is_single_head_and_unchanged_base ___
+
+    @pytest.fixture(scope='module')
+    def migration_check() -> MigrationCheck:
+        from uuid import uuid4
+        schema = f'{CHECK_DB_PREFIX}_{os.getpid()}_{uuid4().hex[:8]}'
+        assert not _schema_exists(schema), 'Refusing to reuse an unknown schema'
+        before_public = _public_snapshot()
+        _create_schema(schema)
+        engine = None
+        try:
+            chain = _linear_revision_chain()
+            _run_alembic(schema, 'upgrade', chain[0])
+            engine = create_engine(_sqlalchemy_url(schema))
+            with engine.connect() as connection:
+                assert connection.execute(text('SELECT current_database(), current_schema()')).one() == (get_test_database_name(), schema)
+            _seed_legacy_rows(engine)
+            baseline = _snapshot_six_fields(engine)
+            check = MigrationCheck(dbname=get_test_database_name(), schema=schema, engine=engine, chain=chain, baseline=baseline)
+            for revision in chain[1:]:
+                _run_alembic(schema, 'upgrade', revision)
+                engine.dispose()
+                check.snapshots[revision] = _snapshot_six_fields(engine)
+            print(f'[migration_check] db={get_test_database_name()} schema={schema} chain={chain} legacy_rows={len(baseline)}')
+            for revision, rows in check.snapshots.items():
+                print(f'[migration_check] revision={revision} preserved={rows == baseline} rows={len(rows)}')
+>           _run_alembic(schema, 'check')
+
+tests\test_stage2_migrations.py:344: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+schema = 's2t04_migcheck_39648_3c95cdc2', args = ('check',)
+
+    def _run_alembic(schema: str, *args: str) -> None:
+        """Run Alembic in the private migration schema of seekjournal_test.
+    
+        关键是 `DATABASE_URL` 通过**子进程环境变量**传入：
+        Alembic 的 env.py 会重新导入 `app.database`，
+        因此子进程里新建的 Engine uses the private search_path, not public tables.
+        """
+        env = os.environ.copy()
+        env["DATABASE_URL"] = _sqlalchemy_url(schema)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+    
+        probe = subprocess.run(
+            [sys.executable, '-B', '-c', "from app.database import engine; from sqlalchemy import text; c=engine.connect(); print(c.execute(text('select current_database(), current_schema()')).one()); c.close()"],
+            cwd=BACKEND_DIR, env=env, capture_output=True, text=True,
+        )
+        assert probe.returncode == 0, 'search_path connection probe failed'
+        assert probe.stdout.strip() == repr((get_test_database_name(), schema)), 'Alembic child escaped the migration schema'
+    
+        result = subprocess.run(
+            [sys.executable, "-B", "-m", "alembic", *args],
+            cwd=BACKEND_DIR,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+>           raise AssertionError(
+                f"alembic {' '.join(args)} 退出码 {result.returncode}；"
+                f"stderr 末尾：{_sanitize(result.stderr)[-400:]}"
+            )
+E           AssertionError: alembic check 退出码 4294967295；stderr 末尾：tting
+E           INFO  [alembic.autogenerate.compare.constraints] Detected removed index 'ix_schedules_starts_at_id' on 'schedules'
+E           ERROR [alembic.util.messaging] New upgrade operations detected: [('remove_index', Index('ix_schedules_starts_at_id', Column('starts_at', TIMESTAMP(timezone=True), table=<schedules>, nullable=False), Column('id', INTEGER(), table=<schedules>, primary_key=True, nullable=False)))]
+
+tests\test_stage2_migrations.py:160: AssertionError
+---------------------------- Captured stdout setup ----------------------------
+[migration_check] db=seekjournal_test_03 schema=s2t04_migcheck_39648_3c95cdc2 chain=['3a70890ddb10', '52c8e94a365c', 'a8d98342e603', '18ecf7e09da6', '3aa16300a58a', '9e7a6c42d011', '4f8e1a3c9d02', 'c01a7e421b50'] legacy_rows=8
+[migration_check] revision=52c8e94a365c preserved=True rows=8
+[migration_check] revision=a8d98342e603 preserved=True rows=8
+[migration_check] revision=18ecf7e09da6 preserved=True rows=8
+[migration_check] revision=3aa16300a58a preserved=True rows=8
+[migration_check] revision=9e7a6c42d011 preserved=True rows=8
+[migration_check] revision=4f8e1a3c9d02 preserved=True rows=8
+[migration_check] revision=c01a7e421b50 preserved=True rows=8
+______________ ERROR at setup of test_only_expected_tables_exist ______________
+
+    @pytest.fixture(scope='module')
+    def migration_check() -> MigrationCheck:
+        from uuid import uuid4
+        schema = f'{CHECK_DB_PREFIX}_{os.getpid()}_{uuid4().hex[:8]}'
+        assert not _schema_exists(schema), 'Refusing to reuse an unknown schema'
+        before_public = _public_snapshot()
+        _create_schema(schema)
+        engine = None
+        try:
+            chain = _linear_revision_chain()
+            _run_alembic(schema, 'upgrade', chain[0])
+            engine = create_engine(_sqlalchemy_url(schema))
+            with engine.connect() as connection:
+                assert connection.execute(text('SELECT current_database(), current_schema()')).one() == (get_test_database_name(), schema)
+            _seed_legacy_rows(engine)
+            baseline = _snapshot_six_fields(engine)
+            check = MigrationCheck(dbname=get_test_database_name(), schema=schema, engine=engine, chain=chain, baseline=baseline)
+            for revision in chain[1:]:
+                _run_alembic(schema, 'upgrade', revision)
+                engine.dispose()
+                check.snapshots[revision] = _snapshot_six_fields(engine)
+            print(f'[migration_check] db={get_test_database_name()} schema={schema} chain={chain} legacy_rows={len(baseline)}')
+            for revision, rows in check.snapshots.items():
+                print(f'[migration_check] revision={revision} preserved={rows == baseline} rows={len(rows)}')
+>           _run_alembic(schema, 'check')
+
+tests\test_stage2_migrations.py:344: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+schema = 's2t04_migcheck_39648_3c95cdc2', args = ('check',)
+
+    def _run_alembic(schema: str, *args: str) -> None:
+        """Run Alembic in the private migration schema of seekjournal_test.
+    
+        关键是 `DATABASE_URL` 通过**子进程环境变量**传入：
+        Alembic 的 env.py 会重新导入 `app.database`，
+        因此子进程里新建的 Engine uses the private search_path, not public tables.
+        """
+        env = os.environ.copy()
+        env["DATABASE_URL"] = _sqlalchemy_url(schema)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+    
+        probe = subprocess.run(
+            [sys.executable, '-B', '-c', "from app.database import engine; from sqlalchemy import text; c=engine.connect(); print(c.execute(text('select current_database(), current_schema()')).one()); c.close()"],
+            cwd=BACKEND_DIR, env=env, capture_output=True, text=True,
+        )
+        assert probe.returncode == 0, 'search_path connection probe failed'
+        assert probe.stdout.strip() == repr((get_test_database_name(), schema)), 'Alembic child escaped the migration schema'
+    
+        result = subprocess.run(
+            [sys.executable, "-B", "-m", "alembic", *args],
+            cwd=BACKEND_DIR,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+>           raise AssertionError(
+                f"alembic {' '.join(args)} 退出码 {result.returncode}；"
+                f"stderr 末尾：{_sanitize(result.stderr)[-400:]}"
+            )
+E           AssertionError: alembic check 退出码 4294967295；stderr 末尾：tting
+E           INFO  [alembic.autogenerate.compare.constraints] Detected removed index 'ix_schedules_starts_at_id' on 'schedules'
+E           ERROR [alembic.util.messaging] New upgrade operations detected: [('remove_index', Index('ix_schedules_starts_at_id', Column('starts_at', TIMESTAMP(timezone=True), table=<schedules>, nullable=False), Column('id', INTEGER(), table=<schedules>, primary_key=True, nullable=False)))]
+
+tests\test_stage2_migrations.py:160: AssertionError
+_______ ERROR at setup of test_legacy_six_fields_survive_every_upgrade ________
+
+    @pytest.fixture(scope='module')
+    def migration_check() -> MigrationCheck:
+        from uuid import uuid4
+        schema = f'{CHECK_DB_PREFIX}_{os.getpid()}_{uuid4().hex[:8]}'
+        assert not _schema_exists(schema), 'Refusing to reuse an unknown schema'
+        before_public = _public_snapshot()
+        _create_schema(schema)
+        engine = None
+        try:
+            chain = _linear_revision_chain()
+            _run_alembic(schema, 'upgrade', chain[0])
+            engine = create_engine(_sqlalchemy_url(schema))
+            with engine.connect() as connection:
+                assert connection.execute(text('SELECT current_database(), current_schema()')).one() == (get_test_database_name(), schema)
+            _seed_legacy_rows(engine)
+            baseline = _snapshot_six_fields(engine)
+            check = MigrationCheck(dbname=get_test_database_name(), schema=schema, engine=engine, chain=chain, baseline=baseline)
+            for revision in chain[1:]:
+                _run_alembic(schema, 'upgrade', revision)
+                engine.dispose()
+                check.snapshots[revision] = _snapshot_six_fields(engine)
+            print(f'[migration_check] db={get_test_database_name()} schema={schema} chain={chain} legacy_rows={len(baseline)}')
+            for revision, rows in check.snapshots.items():
+                print(f'[migration_check] revision={revision} preserved={rows == baseline} rows={len(rows)}')
+>           _run_alembic(schema, 'check')
+
+tests\test_stage2_migrations.py:344: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+schema = 's2t04_migcheck_39648_3c95cdc2', args = ('check',)
+
+    def _run_alembic(schema: str, *args: str) -> None:
+        """Run Alembic in the private migration schema of seekjournal_test.
+    
+        关键是 `DATABASE_URL` 通过**子进程环境变量**传入：
+        Alembic 的 env.py 会重新导入 `app.database`，
+        因此子进程里新建的 Engine uses the private search_path, not public tables.
+        """
+        env = os.environ.copy()
+        env["DATABASE_URL"] = _sqlalchemy_url(schema)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+    
+        probe = subprocess.run(
+            [sys.executable, '-B', '-c', "from app.database import engine; from sqlalchemy import text; c=engine.connect(); print(c.execute(text('select current_database(), current_schema()')).one()); c.close()"],
+            cwd=BACKEND_DIR, env=env, capture_output=True, text=True,
+        )
+        assert probe.returncode == 0, 'search_path connection probe failed'
+        assert probe.stdout.strip() == repr((get_test_database_name(), schema)), 'Alembic child escaped the migration schema'
+    
+        result = subprocess.run(
+            [sys.executable, "-B", "-m", "alembic", *args],
+            cwd=BACKEND_DIR,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+>           raise AssertionError(
+                f"alembic {' '.join(args)} 退出码 {result.returncode}；"
+                f"stderr 末尾：{_sanitize(result.stderr)[-400:]}"
+            )
+E           AssertionError: alembic check 退出码 4294967295；stderr 末尾：tting
+E           INFO  [alembic.autogenerate.compare.constraints] Detected removed index 'ix_schedules_starts_at_id' on 'schedules'
+E           ERROR [alembic.util.messaging] New upgrade operations detected: [('remove_index', Index('ix_schedules_starts_at_id', Column('starts_at', TIMESTAMP(timezone=True), table=<schedules>, nullable=False), Column('id', INTEGER(), table=<schedules>, primary_key=True, nullable=False)))]
+
+tests\test_stage2_migrations.py:160: AssertionError
+___ ERROR at setup of test_journal_new_columns_are_null_for_all_legacy_rows ___
+
+    @pytest.fixture(scope='module')
+    def migration_check() -> MigrationCheck:
+        from uuid import uuid4
+        schema = f'{CHECK_DB_PREFIX}_{os.getpid()}_{uuid4().hex[:8]}'
+        assert not _schema_exists(schema), 'Refusing to reuse an unknown schema'
+        before_public = _public_snapshot()
+        _create_schema(schema)
+        engine = None
+        try:
+            chain = _linear_revision_chain()
+            _run_alembic(schema, 'upgrade', chain[0])
+            engine = create_engine(_sqlalchemy_url(schema))
+            with engine.connect() as connection:
+                assert connection.execute(text('SELECT current_database(), current_schema()')).one() == (get_test_database_name(), schema)
+            _seed_legacy_rows(engine)
+            baseline = _snapshot_six_fields(engine)
+            check = MigrationCheck(dbname=get_test_database_name(), schema=schema, engine=engine, chain=chain, baseline=baseline)
+            for revision in chain[1:]:
+                _run_alembic(schema, 'upgrade', revision)
+                engine.dispose()
+                check.snapshots[revision] = _snapshot_six_fields(engine)
+            print(f'[migration_check] db={get_test_database_name()} schema={schema} chain={chain} legacy_rows={len(baseline)}')
+            for revision, rows in check.snapshots.items():
+                print(f'[migration_check] revision={revision} preserved={rows == baseline} rows={len(rows)}')
+>           _run_alembic(schema, 'check')
+
+tests\test_stage2_migrations.py:344: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+schema = 's2t04_migcheck_39648_3c95cdc2', args = ('check',)
+
+    def _run_alembic(schema: str, *args: str) -> None:
+        """Run Alembic in the private migration schema of seekjournal_test.
+    
+        关键是 `DATABASE_URL` 通过**子进程环境变量**传入：
+        Alembic 的 env.py 会重新导入 `app.database`，
+        因此子进程里新建的 Engine uses the private search_path, not public tables.
+        """
+        env = os.environ.copy()
+        env["DATABASE_URL"] = _sqlalchemy_url(schema)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+    
+        probe = subprocess.run(
+            [sys.executable, '-B', '-c', "from app.database import engine; from sqlalchemy import text; c=engine.connect(); print(c.execute(text('select current_database(), current_schema()')).one()); c.close()"],
+            cwd=BACKEND_DIR, env=env, capture_output=True, text=True,
+        )
+        assert probe.returncode == 0, 'search_path connection probe failed'
+        assert probe.stdout.strip() == repr((get_test_database_name(), schema)), 'Alembic child escaped the migration schema'
+    
+        result = subprocess.run(
+            [sys.executable, "-B", "-m", "alembic", *args],
+            cwd=BACKEND_DIR,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+>           raise AssertionError(
+                f"alembic {' '.join(args)} 退出码 {result.returncode}；"
+                f"stderr 末尾：{_sanitize(result.stderr)[-400:]}"
+            )
+E           AssertionError: alembic check 退出码 4294967295；stderr 末尾：tting
+E           INFO  [alembic.autogenerate.compare.constraints] Detected removed index 'ix_schedules_starts_at_id' on 'schedules'
+E           ERROR [alembic.util.messaging] New upgrade operations detected: [('remove_index', Index('ix_schedules_starts_at_id', Column('starts_at', TIMESTAMP(timezone=True), table=<schedules>, nullable=False), Column('id', INTEGER(), table=<schedules>, primary_key=True, nullable=False)))]
+
+tests\test_stage2_migrations.py:160: AssertionError
+_ ERROR at setup of test_journal_keeps_original_columns_and_adds_exactly_two __
+
+    @pytest.fixture(scope='module')
+    def migration_check() -> MigrationCheck:
+        from uuid import uuid4
+        schema = f'{CHECK_DB_PREFIX}_{os.getpid()}_{uuid4().hex[:8]}'
+        assert not _schema_exists(schema), 'Refusing to reuse an unknown schema'
+        before_public = _public_snapshot()
+        _create_schema(schema)
+        engine = None
+        try:
+            chain = _linear_revision_chain()
+            _run_alembic(schema, 'upgrade', chain[0])
+            engine = create_engine(_sqlalchemy_url(schema))
+            with engine.connect() as connection:
+                assert connection.execute(text('SELECT current_database(), current_schema()')).one() == (get_test_database_name(), schema)
+            _seed_legacy_rows(engine)
+            baseline = _snapshot_six_fields(engine)
+            check = MigrationCheck(dbname=get_test_database_name(), schema=schema, engine=engine, chain=chain, baseline=baseline)
+            for revision in chain[1:]:
+                _run_alembic(schema, 'upgrade', revision)
+                engine.dispose()
+                check.snapshots[revision] = _snapshot_six_fields(engine)
+            print(f'[migration_check] db={get_test_database_name()} schema={schema} chain={chain} legacy_rows={len(baseline)}')
+            for revision, rows in check.snapshots.items():
+                print(f'[migration_check] revision={revision} preserved={rows == baseline} rows={len(rows)}')
+>           _run_alembic(schema, 'check')
+
+tests\test_stage2_migrations.py:344: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+schema = 's2t04_migcheck_39648_3c95cdc2', args = ('check',)
+
+    def _run_alembic(schema: str, *args: str) -> None:
+        """Run Alembic in the private migration schema of seekjournal_test.
+    
+        关键是 `DATABASE_URL` 通过**子进程环境变量**传入：
+        Alembic 的 env.py 会重新导入 `app.database`，
+        因此子进程里新建的 Engine uses the private search_path, not public tables.
+        """
+        env = os.environ.copy()
+        env["DATABASE_URL"] = _sqlalchemy_url(schema)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+    
+        probe = subprocess.run(
+            [sys.executable, '-B', '-c', "from app.database import engine; from sqlalchemy import text; c=engine.connect(); print(c.execute(text('select current_database(), current_schema()')).one()); c.close()"],
+            cwd=BACKEND_DIR, env=env, capture_output=True, text=True,
+        )
+        assert probe.returncode == 0, 'search_path connection probe failed'
+        assert probe.stdout.strip() == repr((get_test_database_name(), schema)), 'Alembic child escaped the migration schema'
+    
+        result = subprocess.run(
+            [sys.executable, "-B", "-m", "alembic", *args],
+            cwd=BACKEND_DIR,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+>           raise AssertionError(
+                f"alembic {' '.join(args)} 退出码 {result.returncode}；"
+                f"stderr 末尾：{_sanitize(result.stderr)[-400:]}"
+            )
+E           AssertionError: alembic check 退出码 4294967295；stderr 末尾：tting
+E           INFO  [alembic.autogenerate.compare.constraints] Detected removed index 'ix_schedules_starts_at_id' on 'schedules'
+E           ERROR [alembic.util.messaging] New upgrade operations detected: [('remove_index', Index('ix_schedules_starts_at_id', Column('starts_at', TIMESTAMP(timezone=True), table=<schedules>, nullable=False), Column('id', INTEGER(), table=<schedules>, primary_key=True, nullable=False)))]
+
+tests\test_stage2_migrations.py:160: AssertionError
+______________ ERROR at setup of test_foreign_keys_are_no_action ______________
+
+    @pytest.fixture(scope='module')
+    def migration_check() -> MigrationCheck:
+        from uuid import uuid4
+        schema = f'{CHECK_DB_PREFIX}_{os.getpid()}_{uuid4().hex[:8]}'
+        assert not _schema_exists(schema), 'Refusing to reuse an unknown schema'
+        before_public = _public_snapshot()
+        _create_schema(schema)
+        engine = None
+        try:
+            chain = _linear_revision_chain()
+            _run_alembic(schema, 'upgrade', chain[0])
+            engine = create_engine(_sqlalchemy_url(schema))
+            with engine.connect() as connection:
+                assert connection.execute(text('SELECT current_database(), current_schema()')).one() == (get_test_database_name(), schema)
+            _seed_legacy_rows(engine)
+            baseline = _snapshot_six_fields(engine)
+            check = MigrationCheck(dbname=get_test_database_name(), schema=schema, engine=engine, chain=chain, baseline=baseline)
+            for revision in chain[1:]:
+                _run_alembic(schema, 'upgrade', revision)
+                engine.dispose()
+                check.snapshots[revision] = _snapshot_six_fields(engine)
+            print(f'[migration_check] db={get_test_database_name()} schema={schema} chain={chain} legacy_rows={len(baseline)}')
+            for revision, rows in check.snapshots.items():
+                print(f'[migration_check] revision={revision} preserved={rows == baseline} rows={len(rows)}')
+>           _run_alembic(schema, 'check')
+
+tests\test_stage2_migrations.py:344: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+schema = 's2t04_migcheck_39648_3c95cdc2', args = ('check',)
+
+    def _run_alembic(schema: str, *args: str) -> None:
+        """Run Alembic in the private migration schema of seekjournal_test.
+    
+        关键是 `DATABASE_URL` 通过**子进程环境变量**传入：
+        Alembic 的 env.py 会重新导入 `app.database`，
+        因此子进程里新建的 Engine uses the private search_path, not public tables.
+        """
+        env = os.environ.copy()
+        env["DATABASE_URL"] = _sqlalchemy_url(schema)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+    
+        probe = subprocess.run(
+            [sys.executable, '-B', '-c', "from app.database import engine; from sqlalchemy import text; c=engine.connect(); print(c.execute(text('select current_database(), current_schema()')).one()); c.close()"],
+            cwd=BACKEND_DIR, env=env, capture_output=True, text=True,
+        )
+        assert probe.returncode == 0, 'search_path connection probe failed'
+        assert probe.stdout.strip() == repr((get_test_database_name(), schema)), 'Alembic child escaped the migration schema'
+    
+        result = subprocess.run(
+            [sys.executable, "-B", "-m", "alembic", *args],
+            cwd=BACKEND_DIR,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+>           raise AssertionError(
+                f"alembic {' '.join(args)} 退出码 {result.returncode}；"
+                f"stderr 末尾：{_sanitize(result.stderr)[-400:]}"
+            )
+E           AssertionError: alembic check 退出码 4294967295；stderr 末尾：tting
+E           INFO  [alembic.autogenerate.compare.constraints] Detected removed index 'ix_schedules_starts_at_id' on 'schedules'
+E           ERROR [alembic.util.messaging] New upgrade operations detected: [('remove_index', Index('ix_schedules_starts_at_id', Column('starts_at', TIMESTAMP(timezone=True), table=<schedules>, nullable=False), Column('id', INTEGER(), table=<schedules>, primary_key=True, nullable=False)))]
+
+tests\test_stage2_migrations.py:160: AssertionError
+____________ ERROR at setup of test_inboxes_and_insights_structure ____________
+
+    @pytest.fixture(scope='module')
+    def migration_check() -> MigrationCheck:
+        from uuid import uuid4
+        schema = f'{CHECK_DB_PREFIX}_{os.getpid()}_{uuid4().hex[:8]}'
+        assert not _schema_exists(schema), 'Refusing to reuse an unknown schema'
+        before_public = _public_snapshot()
+        _create_schema(schema)
+        engine = None
+        try:
+            chain = _linear_revision_chain()
+            _run_alembic(schema, 'upgrade', chain[0])
+            engine = create_engine(_sqlalchemy_url(schema))
+            with engine.connect() as connection:
+                assert connection.execute(text('SELECT current_database(), current_schema()')).one() == (get_test_database_name(), schema)
+            _seed_legacy_rows(engine)
+            baseline = _snapshot_six_fields(engine)
+            check = MigrationCheck(dbname=get_test_database_name(), schema=schema, engine=engine, chain=chain, baseline=baseline)
+            for revision in chain[1:]:
+                _run_alembic(schema, 'upgrade', revision)
+                engine.dispose()
+                check.snapshots[revision] = _snapshot_six_fields(engine)
+            print(f'[migration_check] db={get_test_database_name()} schema={schema} chain={chain} legacy_rows={len(baseline)}')
+            for revision, rows in check.snapshots.items():
+                print(f'[migration_check] revision={revision} preserved={rows == baseline} rows={len(rows)}')
+>           _run_alembic(schema, 'check')
+
+tests\test_stage2_migrations.py:344: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+schema = 's2t04_migcheck_39648_3c95cdc2', args = ('check',)
+
+    def _run_alembic(schema: str, *args: str) -> None:
+        """Run Alembic in the private migration schema of seekjournal_test.
+    
+        关键是 `DATABASE_URL` 通过**子进程环境变量**传入：
+        Alembic 的 env.py 会重新导入 `app.database`，
+        因此子进程里新建的 Engine uses the private search_path, not public tables.
+        """
+        env = os.environ.copy()
+        env["DATABASE_URL"] = _sqlalchemy_url(schema)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+    
+        probe = subprocess.run(
+            [sys.executable, '-B', '-c', "from app.database import engine; from sqlalchemy import text; c=engine.connect(); print(c.execute(text('select current_database(), current_schema()')).one()); c.close()"],
+            cwd=BACKEND_DIR, env=env, capture_output=True, text=True,
+        )
+        assert probe.returncode == 0, 'search_path connection probe failed'
+        assert probe.stdout.strip() == repr((get_test_database_name(), schema)), 'Alembic child escaped the migration schema'
+    
+        result = subprocess.run(
+            [sys.executable, "-B", "-m", "alembic", *args],
+            cwd=BACKEND_DIR,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+>           raise AssertionError(
+                f"alembic {' '.join(args)} 退出码 {result.returncode}；"
+                f"stderr 末尾：{_sanitize(result.stderr)[-400:]}"
+            )
+E           AssertionError: alembic check 退出码 4294967295；stderr 末尾：tting
+E           INFO  [alembic.autogenerate.compare.constraints] Detected removed index 'ix_schedules_starts_at_id' on 'schedules'
+E           ERROR [alembic.util.messaging] New upgrade operations detected: [('remove_index', Index('ix_schedules_starts_at_id', Column('starts_at', TIMESTAMP(timezone=True), table=<schedules>, nullable=False), Column('id', INTEGER(), table=<schedules>, primary_key=True, nullable=False)))]
+
+tests\test_stage2_migrations.py:160: AssertionError
+___________ ERROR at setup of test_database_matches_model_metadata ____________
+
+    @pytest.fixture(scope='module')
+    def migration_check() -> MigrationCheck:
+        from uuid import uuid4
+        schema = f'{CHECK_DB_PREFIX}_{os.getpid()}_{uuid4().hex[:8]}'
+        assert not _schema_exists(schema), 'Refusing to reuse an unknown schema'
+        before_public = _public_snapshot()
+        _create_schema(schema)
+        engine = None
+        try:
+            chain = _linear_revision_chain()
+            _run_alembic(schema, 'upgrade', chain[0])
+            engine = create_engine(_sqlalchemy_url(schema))
+            with engine.connect() as connection:
+                assert connection.execute(text('SELECT current_database(), current_schema()')).one() == (get_test_database_name(), schema)
+            _seed_legacy_rows(engine)
+            baseline = _snapshot_six_fields(engine)
+            check = MigrationCheck(dbname=get_test_database_name(), schema=schema, engine=engine, chain=chain, baseline=baseline)
+            for revision in chain[1:]:
+                _run_alembic(schema, 'upgrade', revision)
+                engine.dispose()
+                check.snapshots[revision] = _snapshot_six_fields(engine)
+            print(f'[migration_check] db={get_test_database_name()} schema={schema} chain={chain} legacy_rows={len(baseline)}')
+            for revision, rows in check.snapshots.items():
+                print(f'[migration_check] revision={revision} preserved={rows == baseline} rows={len(rows)}')
+>           _run_alembic(schema, 'check')
+
+tests\test_stage2_migrations.py:344: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+schema = 's2t04_migcheck_39648_3c95cdc2', args = ('check',)
+
+    def _run_alembic(schema: str, *args: str) -> None:
+        """Run Alembic in the private migration schema of seekjournal_test.
+    
+        关键是 `DATABASE_URL` 通过**子进程环境变量**传入：
+        Alembic 的 env.py 会重新导入 `app.database`，
+        因此子进程里新建的 Engine uses the private search_path, not public tables.
+        """
+        env = os.environ.copy()
+        env["DATABASE_URL"] = _sqlalchemy_url(schema)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+    
+        probe = subprocess.run(
+            [sys.executable, '-B', '-c', "from app.database import engine; from sqlalchemy import text; c=engine.connect(); print(c.execute(text('select current_database(), current_schema()')).one()); c.close()"],
+            cwd=BACKEND_DIR, env=env, capture_output=True, text=True,
+        )
+        assert probe.returncode == 0, 'search_path connection probe failed'
+        assert probe.stdout.strip() == repr((get_test_database_name(), schema)), 'Alembic child escaped the migration schema'
+    
+        result = subprocess.run(
+            [sys.executable, "-B", "-m", "alembic", *args],
+            cwd=BACKEND_DIR,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+>           raise AssertionError(
+                f"alembic {' '.join(args)} 退出码 {result.returncode}；"
+                f"stderr 末尾：{_sanitize(result.stderr)[-400:]}"
+            )
+E           AssertionError: alembic check 退出码 4294967295；stderr 末尾：tting
+E           INFO  [alembic.autogenerate.compare.constraints] Detected removed index 'ix_schedules_starts_at_id' on 'schedules'
+E           ERROR [alembic.util.messaging] New upgrade operations detected: [('remove_index', Index('ix_schedules_starts_at_id', Column('starts_at', TIMESTAMP(timezone=True), table=<schedules>, nullable=False), Column('id', INTEGER(), table=<schedules>, primary_key=True, nullable=False)))]
+
+tests\test_stage2_migrations.py:160: AssertionError
+_ ERROR at setup of test_new_tables_are_writable_via_orm_in_isolated_transaction _
+
+    @pytest.fixture(scope='module')
+    def migration_check() -> MigrationCheck:
+        from uuid import uuid4
+        schema = f'{CHECK_DB_PREFIX}_{os.getpid()}_{uuid4().hex[:8]}'
+        assert not _schema_exists(schema), 'Refusing to reuse an unknown schema'
+        before_public = _public_snapshot()
+        _create_schema(schema)
+        engine = None
+        try:
+            chain = _linear_revision_chain()
+            _run_alembic(schema, 'upgrade', chain[0])
+            engine = create_engine(_sqlalchemy_url(schema))
+            with engine.connect() as connection:
+                assert connection.execute(text('SELECT current_database(), current_schema()')).one() == (get_test_database_name(), schema)
+            _seed_legacy_rows(engine)
+            baseline = _snapshot_six_fields(engine)
+            check = MigrationCheck(dbname=get_test_database_name(), schema=schema, engine=engine, chain=chain, baseline=baseline)
+            for revision in chain[1:]:
+                _run_alembic(schema, 'upgrade', revision)
+                engine.dispose()
+                check.snapshots[revision] = _snapshot_six_fields(engine)
+            print(f'[migration_check] db={get_test_database_name()} schema={schema} chain={chain} legacy_rows={len(baseline)}')
+            for revision, rows in check.snapshots.items():
+                print(f'[migration_check] revision={revision} preserved={rows == baseline} rows={len(rows)}')
+>           _run_alembic(schema, 'check')
+
+tests\test_stage2_migrations.py:344: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+schema = 's2t04_migcheck_39648_3c95cdc2', args = ('check',)
+
+    def _run_alembic(schema: str, *args: str) -> None:
+        """Run Alembic in the private migration schema of seekjournal_test.
+    
+        关键是 `DATABASE_URL` 通过**子进程环境变量**传入：
+        Alembic 的 env.py 会重新导入 `app.database`，
+        因此子进程里新建的 Engine uses the private search_path, not public tables.
+        """
+        env = os.environ.copy()
+        env["DATABASE_URL"] = _sqlalchemy_url(schema)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+    
+        probe = subprocess.run(
+            [sys.executable, '-B', '-c', "from app.database import engine; from sqlalchemy import text; c=engine.connect(); print(c.execute(text('select current_database(), current_schema()')).one()); c.close()"],
+            cwd=BACKEND_DIR, env=env, capture_output=True, text=True,
+        )
+        assert probe.returncode == 0, 'search_path connection probe failed'
+        assert probe.stdout.strip() == repr((get_test_database_name(), schema)), 'Alembic child escaped the migration schema'
+    
+        result = subprocess.run(
+            [sys.executable, "-B", "-m", "alembic", *args],
+            cwd=BACKEND_DIR,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+>           raise AssertionError(
+                f"alembic {' '.join(args)} 退出码 {result.returncode}；"
+                f"stderr 末尾：{_sanitize(result.stderr)[-400:]}"
+            )
+E           AssertionError: alembic check 退出码 4294967295；stderr 末尾：tting
+E           INFO  [alembic.autogenerate.compare.constraints] Detected removed index 'ix_schedules_starts_at_id' on 'schedules'
+E           ERROR [alembic.util.messaging] New upgrade operations detected: [('remove_index', Index('ix_schedules_starts_at_id', Column('starts_at', TIMESTAMP(timezone=True), table=<schedules>, nullable=False), Column('id', INTEGER(), table=<schedules>, primary_key=True, nullable=False)))]
+
+tests\test_stage2_migrations.py:160: AssertionError
+_ ERROR at setup of test_daily_unique_index_matches_metadata_and_has_no_deleted_filter _
+
+    @pytest.fixture(scope='module')
+    def migration_check() -> MigrationCheck:
+        from uuid import uuid4
+        schema = f'{CHECK_DB_PREFIX}_{os.getpid()}_{uuid4().hex[:8]}'
+        assert not _schema_exists(schema), 'Refusing to reuse an unknown schema'
+        before_public = _public_snapshot()
+        _create_schema(schema)
+        engine = None
+        try:
+            chain = _linear_revision_chain()
+            _run_alembic(schema, 'upgrade', chain[0])
+            engine = create_engine(_sqlalchemy_url(schema))
+            with engine.connect() as connection:
+                assert connection.execute(text('SELECT current_database(), current_schema()')).one() == (get_test_database_name(), schema)
+            _seed_legacy_rows(engine)
+            baseline = _snapshot_six_fields(engine)
+            check = MigrationCheck(dbname=get_test_database_name(), schema=schema, engine=engine, chain=chain, baseline=baseline)
+            for revision in chain[1:]:
+                _run_alembic(schema, 'upgrade', revision)
+                engine.dispose()
+                check.snapshots[revision] = _snapshot_six_fields(engine)
+            print(f'[migration_check] db={get_test_database_name()} schema={schema} chain={chain} legacy_rows={len(baseline)}')
+            for revision, rows in check.snapshots.items():
+                print(f'[migration_check] revision={revision} preserved={rows == baseline} rows={len(rows)}')
+>           _run_alembic(schema, 'check')
+
+tests\test_stage2_migrations.py:344: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+schema = 's2t04_migcheck_39648_3c95cdc2', args = ('check',)
+
+    def _run_alembic(schema: str, *args: str) -> None:
+        """Run Alembic in the private migration schema of seekjournal_test.
+    
+        关键是 `DATABASE_URL` 通过**子进程环境变量**传入：
+        Alembic 的 env.py 会重新导入 `app.database`，
+        因此子进程里新建的 Engine uses the private search_path, not public tables.
+        """
+        env = os.environ.copy()
+        env["DATABASE_URL"] = _sqlalchemy_url(schema)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+    
+        probe = subprocess.run(
+            [sys.executable, '-B', '-c', "from app.database import engine; from sqlalchemy import text; c=engine.connect(); print(c.execute(text('select current_database(), current_schema()')).one()); c.close()"],
+            cwd=BACKEND_DIR, env=env, capture_output=True, text=True,
+        )
+        assert probe.returncode == 0, 'search_path connection probe failed'
+        assert probe.stdout.strip() == repr((get_test_database_name(), schema)), 'Alembic child escaped the migration schema'
+    
+        result = subprocess.run(
+            [sys.executable, "-B", "-m", "alembic", *args],
+            cwd=BACKEND_DIR,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+>           raise AssertionError(
+                f"alembic {' '.join(args)} 退出码 {result.returncode}；"
+                f"stderr 末尾：{_sanitize(result.stderr)[-400:]}"
+            )
+E           AssertionError: alembic check 退出码 4294967295；stderr 末尾：tting
+E           INFO  [alembic.autogenerate.compare.constraints] Detected removed index 'ix_schedules_starts_at_id' on 'schedules'
+E           ERROR [alembic.util.messaging] New upgrade operations detected: [('remove_index', Index('ix_schedules_starts_at_id', Column('starts_at', TIMESTAMP(timezone=True), table=<schedules>, nullable=False), Column('id', INTEGER(), table=<schedules>, primary_key=True, nullable=False)))]
+
+tests\test_stage2_migrations.py:160: AssertionError
+================================== FAILURES ===================================
+________ test_m3_extends_m2_and_original_migrations_are_byte_unchanged ________
+
+    def test_m3_extends_m2_and_original_migrations_are_byte_unchanged():
+        chain = _linear_revision_chain()
+        assert chain[:4] == ['3a70890ddb10', '52c8e94a365c', 'a8d98342e603', '18ecf7e09da6']
+>       assert chain[4:] == ['3aa16300a58a', '9e7a6c42d011', '4f8e1a3c9d02']
+E       AssertionError: assert ['3aa16300a58...c01a7e421b50'] == ['3aa16300a58...4f8e1a3c9d02']
+E         
+E         Left contains one more item: 'c01a7e421b50'
+E         Use -v to get more diff
+
+tests\test_stage2_migrations.py:605: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_stage2_migrations.py::test_m3_extends_m2_and_original_migrations_are_byte_unchanged
+ERROR tests/test_stage2_migrations.py::test_revision_chain_is_single_head_and_unchanged_base
+ERROR tests/test_stage2_migrations.py::test_only_expected_tables_exist - Asse...
+ERROR tests/test_stage2_migrations.py::test_legacy_six_fields_survive_every_upgrade
+ERROR tests/test_stage2_migrations.py::test_journal_new_columns_are_null_for_all_legacy_rows
+ERROR tests/test_stage2_migrations.py::test_journal_keeps_original_columns_and_adds_exactly_two
+ERROR tests/test_stage2_migrations.py::test_foreign_keys_are_no_action - Asse...
+ERROR tests/test_stage2_migrations.py::test_inboxes_and_insights_structure - ...
+ERROR tests/test_stage2_migrations.py::test_database_matches_model_metadata
+ERROR tests/test_stage2_migrations.py::test_new_tables_are_writable_via_orm_in_isolated_transaction
+ERROR tests/test_stage2_migrations.py::test_daily_unique_index_matches_metadata_and_has_no_deleted_filter
+1 failed, 10 errors in 24.25s
