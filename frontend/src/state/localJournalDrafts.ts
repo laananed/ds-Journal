@@ -52,7 +52,18 @@ export interface LocalJournalDraft {
   /** 单调写入序号；较早的异步写不能覆盖较新的。 */
   write_seq: number
   /** 新建的稳定创建键与已发出的首次 payload；取得服务器身份后清空。 */
-  first_request: { client_create_id: string; payload: Record<string, unknown> } | null
+  first_request: {
+    client_create_id: string
+    payload: Record<string, unknown>
+    /**
+     * 首次 POST 发出时的输入序号（`EditSession.firstRequest.seq`）。
+     *
+     * 必须单独存：镜像里的 `input_seq` 是**最新**输入，用它冒充首次请求序号，
+     * 会让创建确认后就把「较新但还没 PATCH 的输入」算作已保存。
+     * 旧记录没有这个字段，读取时回退到 `input_seq`（保守地当作同一次输入）。
+     */
+    seq?: number
+  } | null
   updated_at: string
 }
 
@@ -120,6 +131,8 @@ export function validateDraftRecord(raw: unknown): LocalJournalDraft | null {
     if (typeof raw.first_request.client_create_id !== 'string') return null
     if (raw.first_request.client_create_id === '') return null
     if (!isRecord(raw.first_request.payload)) return null
+    // 序号可选（旧记录没有）：有则必须是正整数，否则视为记录损坏而不是猜一个值。
+    if ('seq' in raw.first_request && !isPositiveInt(raw.first_request.seq)) return null
   }
   return {
     schema: DRAFT_SCHEMA_VERSION,
@@ -140,6 +153,9 @@ export function validateDraftRecord(raw: unknown): LocalJournalDraft | null {
       : {
           client_create_id: (raw.first_request as { client_create_id: string }).client_create_id,
           payload: (raw.first_request as { payload: Record<string, unknown> }).payload,
+          ...(isPositiveInt((raw.first_request as { seq?: unknown }).seq)
+            ? { seq: (raw.first_request as { seq: number }).seq }
+            : {}),
         },
     updated_at: typeof raw.updated_at === 'string' ? raw.updated_at : '',
   }
