@@ -1,0 +1,185 @@
+........................................................................ [ 16%]
+........................................................................ [ 33%]
+........................................................................ [ 50%]
+........................................................................ [ 67%]
+............FFEE........................................................ [ 83%]
+.........................F...........................................    [100%]
+=================================== ERRORS ====================================
+_ ERROR at setup of test_http_file_calls_uses_typed_identity_over_a_real_socket _
+
+    @pytest.fixture
+    def live_server():
+        """One real uvicorn process bound to loopback and to seekjournal_test."""
+        port = _free_port()
+        server = LiveServer(port)
+        log_path = Path(tempfile.gettempdir()) / f"seekjournal-s3t03-uvicorn-{port}.log"
+        with log_path.open("w", encoding="utf-8") as log:
+            process = subprocess.Popen(
+                [sys.executable, "-B", "-m", "uvicorn", "app.main:app",
+                 "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
+                cwd=BACKEND, env=_server_env(),
+                stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+            )
+            try:
+                deadline = time.time() + 45
+                ready = False
+                while time.time() < deadline:
+                    if process.poll() is not None:
+                        break
+                    try:
+>                       if _request("GET", port, "/api/health")[0] == 200:
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_ai_http_smoke.py:118: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\test_ai_http_smoke.py:69: in _request
+    return error.code, json.loads(body) if body else None
+                       ^^^^^^^^^^^^^^^^
+..\..\..\python\python-3.12\Lib\json\__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\python\python-3.12\Lib\json\decoder.py:338: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <json.decoder.JSONDecoder object at 0x000001CFEA0853A0>
+s = 'upstream connect failed: 由于目标计算机积极拒绝，无法连接。 (os error 10061)\n', idx = 0
+
+    def raw_decode(self, s, idx=0):
+        """Decode a JSON document from ``s`` (a ``str`` beginning with
+        a JSON document) and return a 2-tuple of the Python
+        representation and the index in ``s`` where the document ended.
+    
+        This can be used to decode a JSON document from a string that may
+        have extraneous data at the end.
+    
+        """
+        try:
+            obj, end = self.scan_once(s, idx)
+        except StopIteration as err:
+>           raise JSONDecodeError("Expecting value", s, err.value) from None
+E           json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+..\..\..\python\python-3.12\Lib\json\decoder.py:356: JSONDecodeError
+_ ERROR at setup of test_http_server_reports_unconfigured_model_instead_of_calling_out _
+
+    @pytest.fixture
+    def live_server():
+        """One real uvicorn process bound to loopback and to seekjournal_test."""
+        port = _free_port()
+        server = LiveServer(port)
+        log_path = Path(tempfile.gettempdir()) / f"seekjournal-s3t03-uvicorn-{port}.log"
+        with log_path.open("w", encoding="utf-8") as log:
+            process = subprocess.Popen(
+                [sys.executable, "-B", "-m", "uvicorn", "app.main:app",
+                 "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
+                cwd=BACKEND, env=_server_env(),
+                stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+            )
+            try:
+                deadline = time.time() + 45
+                ready = False
+                while time.time() < deadline:
+                    if process.poll() is not None:
+                        break
+                    try:
+>                       if _request("GET", port, "/api/health")[0] == 200:
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_ai_http_smoke.py:118: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\test_ai_http_smoke.py:69: in _request
+    return error.code, json.loads(body) if body else None
+                       ^^^^^^^^^^^^^^^^
+..\..\..\python\python-3.12\Lib\json\__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\python\python-3.12\Lib\json\decoder.py:338: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <json.decoder.JSONDecoder object at 0x000001CFEA0853A0>
+s = 'upstream connect failed: 由于目标计算机积极拒绝，无法连接。 (os error 10061)\n', idx = 0
+
+    def raw_decode(self, s, idx=0):
+        """Decode a JSON document from ``s`` (a ``str`` beginning with
+        a JSON document) and return a 2-tuple of the Python
+        representation and the index in ``s`` where the document ended.
+    
+        This can be used to decode a JSON document from a string that may
+        have extraneous data at the end.
+    
+        """
+        try:
+            obj, end = self.scan_once(s, idx)
+        except StopIteration as err:
+>           raise JSONDecodeError("Expecting value", s, err.value) from None
+E           json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+..\..\..\python\python-3.12\Lib\json\decoder.py:356: JSONDecodeError
+================================== FAILURES ===================================
+___________ test_http_module_leaves_the_shared_test_database_empty ____________
+
+    def test_http_module_leaves_the_shared_test_database_empty():
+        """Guard: the real-HTTP writes above must be fully removed by their teardown.
+    
+        A real HTTP request commits for real, so this is the check that the module
+        did not silently leave committed rows in the shared test database.
+        """
+>       assert _row_counts() == {"journals": 0, "ai_requests": 0,
+                                 "ai_usage": 0, "ai_settings": 0}
+E       AssertionError: assert {'journals': ..._settings': 0} == {'journals': ..._settings': 0}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'ai_usage': 1} != {'ai_usage': 0}
+E         Use -v to get more diff
+
+tests\test_ai_http_smoke.py:177: AssertionError
+_______________ test_http_settings_lifecycle_over_a_real_socket _______________
+
+live_server = LiveServer(port=61991, journal_ids=set(), request_ids=set(), usage_ids=set(), settings_created=False)
+
+    def test_http_settings_lifecycle_over_a_real_socket(live_server):
+        port = live_server.port
+        status, first = _request("GET", port, "/api/ai/settings")
+        assert status == 200
+>       assert first == {"custom_prompt": "", "web_enabled": True, "revision": 0,
+                         "model": "deepseek-flash", "model_configured": False,
+                         "search_configured": False, "effective_web_enabled": False}
+E       AssertionError: assert {'custom_prom...k-flash', ...} == {'custom_prom...k-flash', ...}
+E         
+E         Omitting 6 identical items, use -vv to show
+E         Differing items:
+E         {'model_configured': True} != {'model_configured': False}
+E         Left contains 3 more items:
+E         {'auto_go_deeper': False,
+E          'auto_minds_comments': False,
+E          'mind_preset_ids': ['gentle_reflection']}
+E         Use -v to get more diff
+
+tests\test_ai_http_smoke.py:185: AssertionError
+________________ test_two_sessions_compete_for_one_ritual_slot ________________
+
+    def test_two_sessions_compete_for_one_ritual_slot():
+        keys = [uuid4(), uuid4()]  # Exact manifest for this test run.
+        barrier = Barrier(2)
+        with engine.connect() as connection:
+>           assert connection.scalar(text('select current_database()')) == 'seekjournal_test_04'
+E           AssertionError: assert 'seekjournal_test_03' == 'seekjournal_test_04'
+E             
+E             - seekjournal_test_04
+E             ?                   ^
+E             + seekjournal_test_03
+E             ?                   ^
+
+tests\test_s4_ritual_concurrency.py:19: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_ai_http_smoke.py::test_http_module_leaves_the_shared_test_database_empty
+FAILED tests/test_ai_http_smoke.py::test_http_settings_lifecycle_over_a_real_socket
+FAILED tests/test_s4_ritual_concurrency.py::test_two_sessions_compete_for_one_ritual_slot
+ERROR tests/test_ai_http_smoke.py::test_http_file_calls_uses_typed_identity_over_a_real_socket
+ERROR tests/test_ai_http_smoke.py::test_http_server_reports_unconfigured_model_instead_of_calling_out
+3 failed, 424 passed, 2 errors in 137.89s (0:02:17)

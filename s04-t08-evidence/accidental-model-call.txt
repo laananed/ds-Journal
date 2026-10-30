@@ -1,0 +1,5 @@
+S04-T08 accidental real model call, 2026-10-30 Asia/Shanghai
+
+A test of review/writing mutual exclusion unexpectedly reached the configured model because the expected 409 did not occur. Its source text was synthetic. The response reported prompt_tokens=1313, completion_tokens=369, total_tokens=1682. No search was reported. The originating API request used the rollback-isolated fixture, so its request and ledger were rolled back when the test ended. An anonymous ledger record for this known usage is retained in seekjournal_test_03, with a dedicated UUID recorded below. No credentials or user journal content are in this report.
+
+Ledger UUID: 4f2a8d02-c841-44e0-b42a-27da0e5119b9
