@@ -1,0 +1,281 @@
+/*
+ * Stage 4 / S04-T03：统一正文编辑器的呈现样式。
+ *
+ * 沿用项目现有浅色 + 蓝色主色，不引入 UI 框架。所有受保护容器都用
+ * 「左侧竖线 + 标签条」表达归属：AI = 蓝，系统 = 灰，旧格式 = 琥珀，
+ * 与 Stage 3 的 AI 蓝块视觉保持连续。
+ */
+
+.s4-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.s4-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid #e3e3ee;
+  border-radius: 8px;
+  background: #fafafd;
+}
+
+.s4-toolbar-button {
+  min-width: 34px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #2b2b3c;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.s4-toolbar-button:hover:not(:disabled) {
+  background: #eef0ff;
+}
+
+.s4-toolbar-button.is-active {
+  border-color: #c7ccff;
+  background: #e6e9ff;
+  color: #1b1f6b;
+}
+
+.s4-toolbar-button:disabled {
+  color: #a9a9b8;
+  cursor: default;
+}
+
+.s4-editor-content {
+  min-height: 160px;
+  padding: 12px 14px;
+  border: 1px solid #e3e3ee;
+  border-radius: 8px;
+  background: #fff;
+  outline: none;
+}
+
+.s4-editor-content:focus-visible {
+  border-color: #8f97ff;
+  box-shadow: 0 0 0 3px rgba(143, 151, 255, 0.25);
+}
+
+.s4-editor.is-readonly .s4-editor-content {
+  border-color: #ececf4;
+  background: #fcfcff;
+}
+
+.s4-editor-content p {
+  margin: 0 0 8px;
+}
+
+.s4-editor-content h2,
+.s4-editor-content h3 {
+  margin: 18px 0 8px;
+  line-height: 1.3;
+}
+
+.s4-editor-content ul,
+.s4-editor-content ol {
+  margin: 0 0 8px;
+  padding-left: 22px;
+}
+
+.s4-editor-content ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 4px;
+}
+
+.s4-editor-content ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.s4-editor-content ul[data-type='taskList'] li > label {
+  margin-top: 3px;
+}
+
+.s4-editor-content blockquote {
+  margin: 0 0 8px;
+  padding-left: 12px;
+  border-left: 3px solid #d8dbff;
+  color: #414158;
+}
+
+.s4-editor-content pre {
+  overflow-x: auto;
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f6f6fb;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 13px;
+}
+
+.s4-editor-content hr {
+  margin: 16px 0;
+  border: 0;
+  border-top: 1px solid #e3e3ee;
+}
+
+.s4-editor-content a {
+  color: #2f43d6;
+  text-decoration: underline;
+}
+
+/* 受保护容器：标签条 + 竖线，明确「这一段不是用户写的」。 */
+.s4-node {
+  position: relative;
+  margin: 0 0 12px;
+  padding: 8px 12px 8px 14px;
+  border-radius: 8px;
+  border-left: 3px solid #c9c9d8;
+  background: #fbfbfe;
+}
+
+.s4-node-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 6px;
+  user-select: none;
+}
+
+.s4-node-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #4a4a63;
+}
+
+.s4-node-hint {
+  font-size: 12px;
+  color: #85859a;
+}
+
+.s4-node-body > p:last-child {
+  margin-bottom: 0;
+}
+
+.s4-node-aiReply,
+.s4-node-aiSummary {
+  border-left-color: #6f7dff;
+  background: #f6f7ff;
+}
+
+.s4-node-aiReply .s4-node-label,
+.s4-node-aiSummary .s4-node-label {
+  color: #2f43d6;
+}
+
+/* AI 段内容不可编辑：视觉上也不给「可以点进去打字」的暗示。 */
+.s4-node-aiReply .s4-node-body {
+  color: #33334d;
+  cursor: default;
+}
+
+.s4-node-aiSummary .s4-node-body {
+  color: #33334d;
+}
+
+.s4-node-aiPlaceholder {
+  border-left-style: dashed;
+  border-left-color: #8f97ff;
+  color: #55556e;
+}
+
+.s4-node-aiPlaceholder .s4-node-text {
+  margin: 0;
+  font-size: 13px;
+  color: #74748c;
+}
+
+.s4-node-ritualQuestion {
+  border-left-color: #b3b3c6;
+  background: #f7f7fb;
+}
+
+.s4-node-ritualQuestion .s4-node-text {
+  margin: 0;
+  font-weight: 500;
+}
+
+.s4-node-goalItem {
+  border-left-color: #7a9c7f;
+  background: #f6faf7;
+}
+
+.s4-goal-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.s4-goal-check {
+  margin: 0;
+}
+
+.s4-goal-text {
+  font-weight: 500;
+  color: #2b2b3c;
+}
+
+.s4-node-goalReview {
+  border-left-color: #7a9c7f;
+  background: #f8fbf8;
+}
+
+.s4-goal-review-title {
+  margin: 0 0 2px;
+  font-weight: 600;
+  color: #2b3c2e;
+}
+
+.s4-goal-review-snapshot {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: #78857a;
+}
+
+.s4-goal-review-snapshot[data-checked='true']::after {
+  content: ' · 已完成';
+}
+
+.s4-node-legacyText {
+  border-left-color: #d5a44a;
+  background: #fffaf0;
+}
+
+.s4-legacy-pre {
+  overflow-x: auto;
+  margin: 0;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  color: #4a3b1c;
+}
+
+.s4-legacy-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 72px;
+  padding: 8px;
+  border: 1px solid #eddcb8;
+  border-radius: 6px;
+  background: #fffdf7;
+  color: #4a3b1c;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 13px;
+  resize: vertical;
+}
+
+/* Minds 评论 Mark：只在有归属校验的评论存在时出现（T08 生成）。 */
+.s4-editor-content .s4-mind-comment {
+  border-bottom: 1px dashed #b06f2a;
+  background: #fff6e6;
+}

@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from 'react'
 import MarkdownContent from './MarkdownContent'
 import { BLOCK_LABELS } from '../utils/writingBlocks'
+import { AI_AUTHOR_HINT } from '../editor/extensions/support'
 import type { AiBlock } from '../types/writing'
 
 interface AiReplyBlockProps {
@@ -97,7 +98,7 @@ function AiReplyBlock({
     >
       <div className="writing-block-head">
         <span className="writing-block-tag">{label}</span>
-        <span className="writing-block-source">AI 内容 · 不计入用户正文</span>
+        <span className="writing-block-source">{AI_AUTHOR_HINT}</span>
         {interactive && (
           <div className="writing-block-menu-wrap" ref={wrapRef}>
             <button type="button" className="writing-block-menu-button"

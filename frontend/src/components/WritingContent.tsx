@@ -1,24 +1,25 @@
 /**
- * 结构化正文的**只读阅读**视图（Stage 3 / S3-T04）。
+ * 正文的**只读**呈现（Stage 3 / S3-T04 → Stage 4 / S04-T03 过渡）。
  *
- * 复用现有安全 Markdown 阅读（`MarkdownContent` → `react-markdown` + remark-gfm
- * + 内部链接 transform），不新建解析框架，也**不把渲染后的 HTML 写回数据**。
+ * - 传入 `doc`（schema 1 JSON）→ 用统一的 `RichTextEditor readOnly`，
+ *   与编辑态共用同一套 schema、同一套 AI/系统节点呈现；只读模式不补节点
+ *   ID、不发变更回调，因此不可能把阅读动作写回数据库。
+ * - 未传入 → 保持 Stage 3 行为：`content_blocks` 分组渲染或安全 Markdown。
+ *   Trash 详情、Inbox 详情等尚未迁移的消费者继续走这条路径（T11 / T12 收口）。
  *
- * 渲染策略（`docs/stage3-architecture.md` §3「阅读时 user 跨段还原」）：
- * - 普通文件（`content_blocks` 为 NULL）→ 直接渲染 `content`，与 Stage 2 完全一致；
- * - 结构化文件 → 用 `groupReadingRuns` 把**连续 user 段合并成一段**再渲染，
- *   使跨 textarea 的 Markdown 连续语法（列表 / 代码块 / 引用）在阅读时重新连起来；
- *   AI 段保持独立片段，加蓝色竖线与来源标签，并天然打断 Markdown 语法。
- *
- * 只读：不提供编辑与删除控件（Trash 详情、正常详情查看态共用）。
+ * 两种情况都**不把渲染结果写回数据**，也不执行正文 HTML。
  */
 
+import RichTextEditor from '../editor/RichTextEditor.tsx'
 import AiReplyBlock from './AiReplyBlock'
 import MarkdownContent from './MarkdownContent'
 import { groupReadingRuns } from '../utils/writingBlocks'
 import type { Block } from '../types/writing'
+import type { ContentDocument } from '../types/document'
 
 interface WritingContentProps {
+  /** Stage 4：schema 1 文档；传入即使用统一只读编辑器。 */
+  doc?: ContentDocument | null
   /** 详情里的结构化正文；NULL / 省略表示普通文本文件。 */
   blocks?: Block[] | null
   /** 普通文本正文（结构化文件不使用，仅作兜底）。 */
@@ -27,7 +28,14 @@ interface WritingContentProps {
   disabled?: boolean
 }
 
-function WritingContent({ blocks, content, onLink, disabled }: WritingContentProps) {
+function WritingContent({ doc, blocks, content, onLink, disabled }: WritingContentProps) {
+  if (doc !== undefined) {
+    return (
+      <div className="writing-reading">
+        <RichTextEditor doc={doc} readOnly label="正文（只读）" />
+      </div>
+    )
+  }
   if (blocks === undefined || blocks === null || blocks.length === 0) {
     return <MarkdownContent source={content} onLink={onLink} disabled={disabled} />
   }
