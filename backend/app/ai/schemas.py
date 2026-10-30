@@ -35,6 +35,9 @@ class AISettingsResponse(BaseModel):
     model_configured: bool
     search_configured: bool
     effective_web_enabled: bool
+    auto_go_deeper: bool
+    auto_minds_comments: bool
+    mind_preset_ids: list[str]
 
 
 class AISettingsUpdate(BaseModel):
@@ -51,6 +54,23 @@ class AISettingsUpdate(BaseModel):
     #: Omitted keeps the stored value; ``""`` clears it. ``None`` is rejected.
     custom_prompt: str | None = None
     web_enabled: bool | None = None
+    auto_go_deeper: bool | None = None
+    auto_minds_comments: bool | None = None
+    mind_preset_ids: list[Literal['gentle_reflection', 'alternative_perspectives', 'thinking_traps']] | None = None
+
+    @field_validator('auto_go_deeper', 'auto_minds_comments', mode='before')
+    @classmethod
+    def strict_auto_flags(cls, value):
+        if type(value) is not bool:
+            raise ValueError('automatic setting must be a boolean')
+        return value
+
+    @field_validator('mind_preset_ids')
+    @classmethod
+    def validate_presets(cls, value):
+        if value is None or not 1 <= len(value) <= 3 or len(set(value)) != len(value):
+            raise ValueError('choose one to three unique presets')
+        return value
 
     @field_validator("custom_prompt")
     @classmethod
@@ -144,10 +164,71 @@ class LocalRequest(BaseModel):
     question: Annotated[str, Field(strict=True, max_length=2000)] | None = None
 
 
+class WritingSource(BaseModel):
+    model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
+    type: Literal['journal']
+    id: Annotated[int, Field(strict=True, ge=1)]
+    expected_revision: Revision
+
+
+class WritingRange(BaseModel):
+    model_config = ConfigDict(extra='forbid', hide_input_in_errors=True, populate_by_name=True)
+    node_id: UUID
+    start: Annotated[int, Field(strict=True, ge=0)]
+    end: Annotated[int, Field(strict=True, ge=1)]
+
+    @model_validator(mode='after')
+    def valid_range(self):
+        if self.start >= self.end:
+            raise ValueError('invalid range')
+        return self
+
+
+class WritingRanges(BaseModel):
+    model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
+    ranges: Annotated[list[WritingRange], Field(min_length=1, max_length=100)]
+
+    @model_validator(mode='after')
+    def no_overlaps(self):
+        intervals = sorted((str(r.node_id), r.start, r.end) for r in self.ranges)
+        if any(a[0] == b[0] and a[2] > b[1] for a,b in zip(intervals, intervals[1:])):
+            raise ValueError('overlapping ranges')
+        return self
+
+
+class WritingPrepare(BaseModel):
+    model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
+    request_id: UUID
+    kind: Literal['go_deeper', 'minds_comments']
+    trigger: Literal['manual', 'automatic']
+    source: WritingSource
+    question: Annotated[str, Field(strict=True, max_length=2000)] | None = None
+    mind_preset_ids: list[Literal['gentle_reflection', 'alternative_perspectives', 'thinking_traps']] | None = None
+    scope: Literal['all'] | WritingRange | WritingRanges | None = None
+
+    @model_validator(mode='after')
+    def valid_options(self):
+        if self.kind == 'go_deeper':
+            if self.mind_preset_ids is not None or self.scope is not None or (self.trigger == 'automatic' and self.question is not None):
+                raise ValueError('invalid Go Deeper options')
+        else:
+            if self.question is not None or ('scope' in self.model_fields_set and self.scope is None):
+                raise ValueError('invalid Minds options')
+            if ('mind_preset_ids' in self.model_fields_set and
+                (not self.mind_preset_ids or len(set(self.mind_preset_ids)) != len(self.mind_preset_ids))):
+                raise ValueError('invalid Minds options')
+        return self
+
+
+class WritingApply(BaseModel):
+    model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
+    expected_revision: Revision
+
+
 class AiRequestResponse(BaseModel):
     request_id: str
-    kind: Literal["local", "review"]
-    status: Literal["pending", "ready", "applied", "failed", "conflict", "unknown"]
+    kind: Literal["local", "review", "go_deeper", "minds_comments"]
+    status: Literal["prepared", "pending", "ready", "applied", "failed", "conflict", "unknown"]
     sources: list[SourceIdentity]
     reply: str | None
     file: dict | None
@@ -157,6 +238,7 @@ class AiRequestResponse(BaseModel):
     web_status: Literal["disabled", "not_configured", "not_needed", "searched", "failed", "blocked"]
     citations: list[dict]
     error: dict | None
+    comments: list[dict] | None = None
 
 
 class NoopResponse(BaseModel):
@@ -166,10 +248,14 @@ class NoopResponse(BaseModel):
     usage: None = None
 
 
+class ReviewSource(LocalSource):
+    type: Literal['journal']
+
+
 class ReviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
     request_id: UUID
-    sources: Annotated[list[LocalSource], Field(min_length=1, max_length=15)]
+    sources: Annotated[list[ReviewSource], Field(min_length=1, max_length=15)]
 
     @model_validator(mode="after")
     def unique_sources(self):

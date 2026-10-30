@@ -24,9 +24,17 @@ def lock_sources(db, sources):
 
 
 def matches(row, source):
-    return (active(row) and getattr(row, 'content_doc', None) is None and row.revision == source['revision']
-            and user_text(row.content_blocks, row.content) == source['user_text']
-            and row.content_blocks == source['blocks']
+    if not active(row):
+        return False
+    document = getattr(row, 'content_doc', None)
+    if 'document' in source:
+        from app.writing.documents import user_text_document
+        body_matches = (document is not None and document == source['document']
+                        and user_text_document(document) == source['user_text'])
+    else:
+        body_matches = (document is None and user_text(row.content_blocks, row.content) == source['user_text']
+                        and row.content_blocks == source['blocks'])
+    return (body_matches and row.revision == source['revision']
             and row.title == source['title'] and row.folder_id == source['folder_id']
             and getattr(row, source['type'] + '_date').isoformat() == source['date'])
 
@@ -77,17 +85,24 @@ def register_review(db, payload):
     captured = []
     for source, row in lock_sources(db, [s.model_dump(mode='json') for s in payload.sources]):
         if not active(row): raise RequestNotFound('File not found')
-        if getattr(row, 'content_doc', None) is not None:
-            raise LegacyConversionRequired('legacy AI cannot process a structured document')
         if row.revision != source['expected_revision']: raise WriteConflict('file revision has changed')
-        if db.scalar(select(AIRequest.id).where(AIRequest.status == 'pending',
+        if db.scalar(select(AIRequest.id).where(AIRequest.status.in_(['prepared', 'pending']),
                 AIRequest.sources.contains([{'type':source['type'],'id':source['id']}]))) is not None:
             raise WriteConflict('source already has a pending AI request')
-        captured.append({'type':source['type'], 'id':source['id'], 'revision':row.revision,
-                         'user_text':user_text(row.content_blocks,row.content),
+        document = getattr(row, 'content_doc', None)
+        if document is not None:
+            from app.writing.documents import user_text_document
+            snapshot_text = user_text_document(document)
+        else:
+            snapshot_text = user_text(row.content_blocks, row.content)
+        snapshot = {'type':source['type'], 'id':source['id'], 'revision':row.revision,
+                         'user_text':snapshot_text,
                          'title':row.title, 'folder_id':row.folder_id,
                          'date':getattr(row, source['type']+'_date').isoformat(),
-                         'blocks':deepcopy(row.content_blocks)})
+                         'blocks':deepcopy(row.content_blocks)}
+        if document is not None:
+            snapshot['document'] = deepcopy(document)
+        captured.append(snapshot)
     if len({s['date'] for s in captured}) > 7:
         raise WritingError('review supports at most seven distinct business dates')
     if not client.is_configured(): raise LocalError('Model is not configured',503)

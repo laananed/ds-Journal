@@ -132,6 +132,8 @@ Writing 左侧用 journals 的当日 writing 筛选；今日总览用当日 all 
 
 body：request_id UUID、kind、trigger、source `{type:"journal",id,expected_revision}`，可选 question（Go Deeper，最多 2,000 码点）、mind_preset_ids（Minds，1～3 个唯一合法预置）、scope（Minds，all 或节点范围）。不接收前端自报 delta/正文/检查点/回复/设置快照。
 
+2026-10-30 用户批准扩展：Minds 的 `scope` 还可为 `{"ranges":[{"node_id":"UUID","start":0,"end":3}]}`，含 1～100 个范围；每项指向保存快照内的用户 paragraph/heading，使用节点内 Unicode 码点半开区间，同一节点的范围不得重叠。单节点对象 `{node_id,start,end}` 与 `"all"` 仍保留。服务端按范围从快照取文字并校验节点、边界和评论归属，不接收客户端文字或自报 delta。自动调度所依据的真实输入及激活基线仍由 T09 客户端维护；服务端不能仅凭范围证明输入事件来源。自动请求发送的范围须覆盖本次实际新增/修订范围，跨节点时使用 ranges。
+
 先按request_id核对首次payload摘要：同键同体回既有状态/结果，不重复建占位；异体409。随后在短事务中校验版本/有效状态/同源在途调用，计算 U 和增量，冻结快照/设置。Go Deeper 在保存快照边界创建稳定占位并预留下方用户段，返回 FileMutation 与 `{request_id,status:"prepared"}`；Minds 只登记分析范围和侧栏等待状态，不创建行内回复占位。无增量/有效问题时 Go Deeper 返回原 noop 文案且零请求/Token/占位。自动触发阈值不满足时客户端不发送prepare；服务端验证冻结范围/去重键，重复快照返回既有请求，不产生第二次调用。
 
 ### POST `/api/ai/writing/{request_id}/execute`

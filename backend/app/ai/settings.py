@@ -83,6 +83,9 @@ def describe(row: AISettings | None) -> dict[str, object]:
         "model_configured": is_configured(),
         "search_configured": search_configured(),
         "effective_web_enabled": bool(preference and configured),
+        "auto_go_deeper": row.auto_go_deeper if row is not None else False,
+        "auto_minds_comments": row.auto_minds_comments if row is not None else False,
+        "mind_preset_ids": list(row.mind_preset_ids) if row is not None else ['gentle_reflection'],
     }
 
 
@@ -107,6 +110,9 @@ def update_settings(
     expected_revision: int | None,
     custom_prompt: str | None = None,
     web_enabled: bool | None = None,
+    auto_go_deeper: bool | None = None,
+    auto_minds_comments: bool | None = None,
+    mind_preset_ids: list[str] | None = None,
 ) -> dict[str, object]:
     """Apply one CAS update and return the stored result.
 
@@ -123,6 +129,9 @@ def update_settings(
         values: dict[str, object] = {
             "custom_prompt": custom_prompt if custom_prompt is not None else "",
             "web_enabled": web_enabled if web_enabled is not None else True,
+            "auto_go_deeper": auto_go_deeper if auto_go_deeper is not None else False,
+            "auto_minds_comments": auto_minds_comments if auto_minds_comments is not None else False,
+            "mind_preset_ids": mind_preset_ids if mind_preset_ids is not None else ['gentle_reflection'],
         }
         # Two concurrent first writes: exactly one inserts, the other is told to
         # re-read instead of silently overwriting the winner.
@@ -153,6 +162,9 @@ def update_settings(
         changes["custom_prompt"] = custom_prompt
     if web_enabled is not None and web_enabled != row.web_enabled:
         changes["web_enabled"] = web_enabled
+    for key, value in (("auto_go_deeper", auto_go_deeper), ("auto_minds_comments", auto_minds_comments), ("mind_preset_ids", mind_preset_ids)):
+        if value is not None and value != getattr(row, key):
+            changes[key] = value
     if not changes:
         return describe(row)  # Identical intent: 200, no write, no revision bump.
 

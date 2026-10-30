@@ -10,7 +10,7 @@ import pytest
 
 def test_new_save_replay_and_payload_conflict(review_env):
     _, _, create, generate, save = review_env
-    source = create(kind='inbox')
+    source = create(kind='journal')
     result = generate([source])
     assert result.status_code == 200, result.text
     ident = result.json()['request_id']
@@ -23,8 +23,8 @@ def test_new_save_replay_and_payload_conflict(review_env):
     assert save(ident,{**body,'markdown':'另一份'}).status_code == 409
     with Session(engine) as db:
         row = db.get(Journal,first.json()['target']['id'])
-        assert row.revision == 1 and row.content_blocks[0]['kind'] == 'ai_summary'
-        assert row.content_blocks[1]['kind'] == 'user' and row.content_blocks[1]['text'] == ''
+        assert row.revision == 1 and row.content_doc['content'][0]['type'] == 'aiSummary'
+        assert row.content_doc['content'][1]['type'] == 'paragraph'
 
 
 def test_append_preserves_source(review_env):
@@ -80,7 +80,9 @@ def test_save_changed_snapshot_no_target(review_env,field):
 @pytest.mark.parametrize('case,expected',[('folder',404),('length',422),('blank',422),('title',422),('date',422),('extra',422)])
 def test_invalid_save_rolls_back_ready(review_env,case,expected):
     _,_,create,generate,save=review_env
-    result=generate([create(kind='inbox')]).json()
+    result=generate([create(kind='journal')]).json()
+    with Session(engine) as db:
+        before_ids = set(db.scalars(select(Journal.id)))
     target={'mode':'new_journal','journal_date':'2026-10-12'}
     body={'markdown':'复盘','target':target}
     if case=='folder':target['folder_id']=2147483647
@@ -91,7 +93,7 @@ def test_invalid_save_rolls_back_ready(review_env,case,expected):
     if case=='extra':body['source']={'type':'journal','id':1}
     assert save(result['request_id'],body).status_code==expected
     with Session(engine) as db:
-        assert db.scalar(select(func.count()).select_from(Journal))==0
+        assert set(db.scalars(select(Journal.id))) == before_ids
         request=db.get(AIRequest,UUID(result['request_id']))
         assert request.status=='ready' and request.saved_target is None and request.save_payload_hash is None
 
@@ -99,7 +101,11 @@ def test_invalid_save_rolls_back_ready(review_env,case,expected):
 @pytest.mark.parametrize('kind,count',[('inbox',1),('journal',2)])
 def test_append_invalid_target(review_env,kind,count):
     _,_,create,generate,save=review_env
-    result=generate([create(kind=kind) for _ in range(count)]).json()
+    generated=generate([create(kind=kind) for _ in range(count)])
+    if kind == 'inbox':
+        assert generated.status_code == 422
+        return
+    result=generated.json()
     assert save(result['request_id'],{'markdown':'复盘','target':{'mode':'append_source'}}).status_code==422
 
 
@@ -107,7 +113,7 @@ def test_append_invalid_target(review_env,kind,count):
 def test_two_sessions_double_confirm_creates_once(review_env,mode):
     from concurrent.futures import ThreadPoolExecutor
     _,_,create,generate,save=review_env
-    source=create(kind='inbox' if mode=='new_journal' else 'journal')
+    source=create(kind='journal')
     result=generate([source]).json()
     body={'markdown':'复盘','target':{'mode':mode}}
     if mode=='new_journal':body['target']['journal_date']='2026-10-12'
@@ -117,7 +123,7 @@ def test_two_sessions_double_confirm_creates_once(review_env,mode):
     assert sorted(r.status_code for r in responses)==([200,201] if mode=='new_journal' else [200,200])
     assert len({r.json()['target']['id'] for r in responses})==1
     with Session(engine) as db:
-        assert db.scalar(select(func.count()).select_from(Journal))==1
+        assert db.scalar(select(func.count()).select_from(Journal))==(2 if mode=='new_journal' else 1)
         if mode=='append_source':
             row=db.get(Journal,source['id'])
             assert row.revision==2 and len([b for b in row.content_blocks if b['kind']=='ai_summary'])==1
@@ -178,9 +184,13 @@ def test_nonready_save_rejected(review_env,status):
 
 def test_projection_limit_exact_codepoints_and_old_source_no_truncation(review_env):
     _,transport,create,generate,save=review_env
-    from app.writing.service import project_blocks
-    overhead=len(project_blocks([{'kind':'ai_summary','text':''},{'kind':'user','text':''}]))
-    result=generate([create(kind='inbox')]).json()
+    from app.writing.documents import project_document
+    from uuid import uuid4
+    skeleton={'type':'doc','content':[{'type':'aiSummary','attrs':{'id':str(uuid4()),'request_id':str(uuid4())},
+        'content':[{'type':'paragraph','content':[{'type':'text','text':'x'}]}]},
+        {'type':'paragraph','attrs':{'id':str(uuid4())}}]}
+    overhead=len(project_document(skeleton))-1
+    result=generate([create(kind='journal')]).json()
     response=save(result['request_id'],{'markdown':'😀'*(50000-overhead),
             'target':{'mode':'new_journal','journal_date':'2026-10-12'}})
     assert response.status_code==201 and len(response.json()['target']['content'])==50000
@@ -194,16 +204,17 @@ def test_projection_limit_exact_codepoints_and_old_source_no_truncation(review_e
 
 def test_new_summary_edit_stays_ai_and_noop_until_user_continues(review_env):
     http,transport,create,generate,save=review_env
-    result=generate([create(kind='inbox')]).json()
+    result=generate([create(kind='journal')]).json()
     target=save(result['request_id'],{'markdown':'AI总结','target':{'mode':'new_journal',
                                             'journal_date':'2026-10-12'}}).json()['target']
-    blocks=target['content_blocks'];blocks[0]['text']='用户编辑的AI总结'
-    response=http.patch('/api/journals/'+str(target['id']),json={'expected_revision':1,'content_blocks':blocks})
+    doc=target['content_doc'];doc['content'][0]['content'][0]['content'][0]['text']='用户编辑的AI总结'
+    response=http.patch('/api/journals/'+str(target['id']),json={'expected_revision':1,'content_doc':doc,'document_schema_version':1})
     assert response.status_code==200,response.text
     from uuid import uuid4
-    payload={'request_id':str(uuid4()),'source':{'type':'journal','id':target['id'],'expected_revision':2}}
-    assert http.post('/api/ai/local',json=payload).json()['status']=='noop'
+    payload={'request_id':str(uuid4()),'kind':'go_deeper','trigger':'manual',
+             'source':{'type':'journal','id':target['id'],'expected_revision':2}}
+    assert http.post('/api/ai/writing/prepare',json=payload).json()['status']=='noop'
     assert len(transport.calls)==1
     with Session(engine) as db:
-        assert db.get(Journal,target['id']).content_blocks[0]['kind']=='ai_summary'
+        assert db.get(Journal,target['id']).content_doc['content'][0]['type']=='aiSummary'
         assert db.get(AICheckpoint,('journal',target['id'])) is None

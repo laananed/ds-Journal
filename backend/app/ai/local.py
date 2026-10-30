@@ -47,7 +47,7 @@ def active(row):
 
 def recent_context(db, source):
     rows = db.scalars(select(AIRequest).where(
-        AIRequest.kind == 'local', AIRequest.status == 'applied',
+        AIRequest.kind.in_(['local', 'go_deeper']), AIRequest.status == 'applied',
         AIRequest.sources.contains([{'type': source['type'], 'id': source['id']}]))
         .order_by(AIRequest.created_at.desc(), AIRequest.id.desc()).limit(3)).all()
     return bounded_context([{'question': r.question, 'reply': (r.result or {}).get('reply')}
@@ -76,7 +76,7 @@ def register(db, payload):
         raise LegacyConversionRequired('legacy AI cannot process a structured document')
     if row.revision != source['expected_revision']:
         raise WriteConflict('file revision has changed')
-    pending = db.scalar(select(AIRequest.id).where(AIRequest.status == 'pending',
+    pending = db.scalar(select(AIRequest.id).where(AIRequest.status.in_(['prepared', 'pending']),
         AIRequest.sources.contains([{'type': source['type'], 'id': source['id']}])))
     if pending is not None:
         raise WriteConflict('source already has a pending AI request')

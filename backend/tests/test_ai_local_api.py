@@ -50,10 +50,16 @@ class MockTransport:
 @pytest.fixture
 def local_env(monkeypatch):
     from scripts.prepare_test_db import BUSINESS_TABLES, get_test_database_name
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    from pathlib import Path
+    config = Config(str(Path(__file__).resolve().parents[1] / 'alembic.ini'))
+    config.set_main_option('script_location', str(Path(__file__).resolve().parents[1] / 'alembic'))
+    expected_head = ScriptDirectory.from_config(config).get_current_head()
     def counts():
         with engine.connect() as c:
             assert c.scalar(text('select current_database()')) == get_test_database_name()
-            assert c.scalar(text('select version_num from alembic_version')) == '9e7a6c42d011'
+            assert c.scalar(text('select version_num from alembic_version')) == expected_head
             return {t: c.scalar(text('select count(*) from ' + t)) for t in BUSINESS_TABLES}
     baseline = counts()
     with Session(engine) as db:
@@ -127,7 +133,8 @@ def test_first_append_revision_question_noop_and_replay(local_env):
     before = result['file']
     noop = http.post('/api/ai/local', json=body(source, '\ufeff\u3000')).json()
     assert noop == {'status': 'noop', 'message': '要我分析啥啊？', 'request_id': None, 'usage': None}
-    assert http.get(f"/api/journals/{source['id']}").json() == before
+    after_noop = http.get(f"/api/journals/{source['id']}").json()
+    assert all(before[key] == value for key, value in after_noop.items())
     blocks[-1]['text'] = '\n追加乙'
     patched = http.patch(f"/api/journals/{source['id']}", json={'expected_revision': 2, 'content_blocks': blocks}).json()
     source['expected_revision'] = patched['revision']
@@ -142,7 +149,7 @@ def test_first_append_revision_question_noop_and_replay(local_env):
     assert any(m['content'] == '为什么？' for m in messages)
     assert '用户甲' not in str(messages)
     with Session(engine) as db:
-        assert len(db.scalars(select(AIUsage)).all()) == 4
+        assert len(db.scalars(select(AIUsage).where(AIUsage.response_id == transport.response_id)).all()) == 4
 
 
 def test_revision_summary_author_boundary_and_delete_reply(local_env):
@@ -197,7 +204,7 @@ def test_delete_during_model_does_not_resurrect_and_preserves_usage(local_env, m
     assert checkpoint(source) is None
     assert http.get(f"/api/{endpoint}/{source['id']}").status_code == 404
     with Session(engine) as db:
-        ledger = db.scalar(select(AIUsage))
+        ledger = db.scalar(select(AIUsage).where(AIUsage.response_id == transport.response_id))
         assert ledger.total_tokens == 12
         if mode == 'soft':
             assert response.json()['status'] == 'conflict'
@@ -256,7 +263,7 @@ def test_concurrent_same_key_source_pending_and_unlocked_http(local_env, kind):
     with Session(engine) as db:
         row = db.get(Journal if kind == 'journal' else Inbox, source['id'])
         assert row.content == '并发新文' and row.content_blocks is None
-        assert db.scalar(select(AIUsage.total_tokens)) == 12
+        assert db.scalar(select(AIUsage.total_tokens).where(AIUsage.response_id == transport.response_id)) == 12
 
 
 @pytest.mark.parametrize('failure', ['timeout', 'truncated', 'missing_usage', 'storage', 'overflow'])
@@ -313,7 +320,7 @@ def test_two_function_slots_and_same_key_registration_race(local_env):
         assert second.result(5).json()['status'] == 'applied'
     with Session(engine) as db:
         assert db.scalar(select(AIRequest).where(AIRequest.id == UUID(payload['request_id']))).status == 'applied'
-        assert len(db.scalars(select(AIUsage)).all()) == 2
+        assert len(db.scalars(select(AIUsage).where(AIUsage.response_id == transport.response_id)).all()) == 2
     assert checkpoint(sources[2]) is None
 
 
@@ -337,7 +344,7 @@ def test_sql_flushed_then_failure_rolls_back_body_and_checkpoint(local_env):
         row = db.get(Journal, source['id'])
         assert row.revision == 1 and row.content_blocks is None and row.content == '用户甲😀'
         assert db.get(AICheckpoint, ('journal', row.id)) is None
-        assert db.scalar(select(AIUsage.total_tokens)) == 12
+        assert db.scalar(select(AIUsage.total_tokens).where(AIUsage.response_id == transport.response_id)) == 12
         assert db.get(AIRequest, UUID(payload['request_id'])).result['reply']
 
 

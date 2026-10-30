@@ -53,6 +53,8 @@ def restore_replace(db, source_id, source_revision, data):
         db.execute(update(Journal).where(Journal.id == target.id).values(
             deleted_at=datetime.now(timezone.utc), revision=Journal.revision + 1,
             updated_at=Journal.updated_at))
+        from app.writing.service import invalidate_writing_ai
+        invalidate_writing_ai(db, target.id)
         db.execute(update(Journal).where(Journal.id == source.id).values(
             deleted_at=None, revision=Journal.revision + 1, updated_at=Journal.updated_at))
         db.flush()

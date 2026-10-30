@@ -45,13 +45,17 @@ def _goal(source, goal_id):
     return matches[0]
 
 
-def _write_doc(row, doc, *, user_edit=True):
+def _write_doc(db, row, doc, *, user_edit=True):
     try:
         validate_document(doc)
         content = project_document(doc)
         _validate_content(content)
     except (DocumentError, ValueError) as error:
         raise WritingError(str(error)) from error
+    from app.writing.service import invalidate_changed_go_deeper
+    invalidate_changed_go_deeper(db, row.id, doc)
+    from app.ai.comments import track_changed_minds
+    track_changed_minds(db, row.id, doc)
     row.content_doc, row.content = doc, content
     row.revision += 1
     if user_edit:
@@ -202,7 +206,13 @@ def patch_set_document(db, set_id, data):
         shadow = deepcopy(source.content_doc)
         shadow['content'] = [node for node in shadow['content'] if node['type'] != 'goalItem']
         shadow['content'].extend(deepcopy(list(new_goals.values())))
-        projected = document_content(candidate, shadow)
+        from app.ai.comments import reconcile_comment_marks
+        candidate = reconcile_comment_marks(db, source.id, source.content_doc, candidate)
+        from app.writing.service import invalidate_changed_go_deeper
+        invalidate_changed_go_deeper(db, source.id, candidate)
+        from app.ai.comments import track_changed_minds
+        track_changed_minds(db, source.id, candidate)
+        projected = document_content(candidate, shadow, verified_comments=True)
         changed = {goal_id for goal_id in old_goals.keys() | new_goals.keys()
                    if old_goals.get(goal_id) != new_goals.get(goal_id)}
         affected = [link for link in links if str(link.goal_id) in changed]
@@ -247,7 +257,7 @@ def patch_set_document(db, set_id, data):
                 setattr(source, key, getattr(data, key))
                 changed_source = True
         for end_id, doc in docs.items():
-            _write_doc(found[end_id], doc, user_edit=False)
+            _write_doc(db, found[end_id], doc, user_edit=False)
         if changed_source:
             source.content_doc, source.content = deepcopy(candidate), projected
             source.revision += 1
@@ -311,7 +321,13 @@ def patch_end_document(db, end_id, data):
         shadow = deepcopy(end.content_doc)
         shadow['content'] = [node for node in shadow['content']
                              if node['type'] != 'goalReview' or node['attrs']['id'] not in removed]
-        projected = document_content(candidate, shadow)
+        from app.ai.comments import reconcile_comment_marks
+        candidate = reconcile_comment_marks(db, end.id, end.content_doc, candidate)
+        from app.writing.service import invalidate_changed_go_deeper
+        invalidate_changed_go_deeper(db, end.id, candidate)
+        from app.ai.comments import track_changed_minds
+        track_changed_minds(db, end.id, candidate)
+        projected = document_content(candidate, shadow, verified_comments=True)
         affected = [link for link in links if str(link.end_node_id) in removed]
         required = {link.set_journal_id for link in affected if link.set_journal_id is not None}
         mutation_bases = [(end, end.revision, [{'kind': 'goal_visibility', 'node_id': node_id}
@@ -407,7 +423,7 @@ def create_links(db, data):
                 raise WriteConflict('set revision changed')
             if end.revision != data.expected_end_revision:
                 raise WriteConflict('end revision changed')
-            _write_doc(end, doc)
+            _write_doc(db, end, doc)
             result = _mutation(db, [(end, base, ops)])
         else:
             from app.journal.service import get_journal
@@ -463,7 +479,7 @@ def update_goal(db, set_id, goal_id, data):
         if end is not None and end.revision != data.expected_end_revision:
             raise WriteConflict('end revision changed')
         bases = [(source, source.revision, [{'kind': 'goal_fields', 'node_id': goal['attrs']['id']}])]
-        _write_doc(source, source_doc)
+        _write_doc(db, source, source_doc)
         if end is not None:
             doc = deepcopy(end.content_doc)
             matches = [n for n in doc['content'] if n['type'] == 'goalReview' and
@@ -478,7 +494,7 @@ def update_goal(db, set_id, goal_id, data):
                                    review_title=updated['attrs']['text'])
             assert review.get('content', []) == answer
             bases.append((end, end.revision, [{'kind': 'goal_fields', 'node_id': review['attrs']['id']}]))
-            _write_doc(end, doc)
+            _write_doc(db, end, doc)
         result = _mutation(db, bases)
         db.commit()
         return result
