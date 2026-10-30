@@ -1,0 +1,504 @@
+/*
+ * 「开始今天 / 结束今天」页面样式（Stage 4 / S04-T10）。
+ *
+ * 颜色取 AppShell 的 `--sj-*` 变量（深色主题由外壳换值），并带浅色兜底值；
+ * 不引入 UI 框架，不使用图片或图标字体。桌面优先：左栏模板上下文 + 主编辑区，
+ * 窄屏（≤1080px）改为上下堆叠，键盘顺序保持「上下文 → 正文」。
+ */
+
+.ritual-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+  color: var(--sj-text, #202124);
+}
+
+/* ------------------------------------------------------------ 标题区 */
+
+.ritual-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ritual-eyebrow {
+  margin: 0;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ritual-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  color: var(--sj-text, #202124);
+  font: 400 30px/1.25 Georgia, 'Songti SC', serif;
+  letter-spacing: -0.4px;
+}
+
+.ritual-badge {
+  padding: 2px 8px;
+  border: 1px solid var(--sj-border-strong, #cfc9d6);
+  border-radius: 999px;
+  color: var(--sj-text-muted, #6b6375);
+  font: 400 12px/1.6 system-ui, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0;
+}
+
+.ritual-sub {
+  margin: 0;
+  color: var(--sj-text-soft, #767080);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ritual-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 20px;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------ 布局 */
+
+.ritual-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  min-width: 0;
+}
+
+.ritual-layout--compare {
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+}
+
+@media (max-width: 1080px) {
+  .ritual-layout,
+  .ritual-layout--compare {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ritual-context {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 12px;
+  background: var(--sj-surface-muted, #faf9fc);
+}
+
+.ritual-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------ 通用件 */
+
+.ritual-button {
+  padding: 6px 12px;
+  border: 1px solid var(--sj-border-strong, #cfc9d6);
+  border-radius: 7px;
+  background: var(--sj-surface, #ffffff);
+  color: var(--sj-text, #202124);
+  font: 500 13px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
+  cursor: pointer;
+}
+
+.ritual-button:hover:not(:disabled) {
+  border-color: var(--sj-accent, #5b4a7d);
+  color: var(--sj-accent, #5b4a7d);
+}
+
+.ritual-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ritual-button:focus-visible {
+  outline: 2px solid var(--sj-focus, #6b53a0);
+  outline-offset: 2px;
+}
+
+.ritual-button--primary {
+  border-color: var(--sj-inverse-bg, #202124);
+  background: var(--sj-inverse-bg, #202124);
+  color: var(--sj-inverse-text, #ffffff);
+}
+
+.ritual-button--primary:hover:not(:disabled) {
+  border-color: var(--sj-accent, #5b4a7d);
+  background: var(--sj-accent, #5b4a7d);
+  color: var(--sj-inverse-text, #ffffff);
+}
+
+.ritual-button--danger {
+  border-color: var(--sj-danger-border, #e3b7b7);
+  background: var(--sj-danger-bg, #fdf4f4);
+  color: var(--sj-danger, #8a2f2f);
+}
+
+.ritual-hint {
+  margin: 0;
+  color: var(--sj-text-soft, #767080);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.ritual-state {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed var(--sj-border-strong, #cfc9d6);
+  border-radius: 10px;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 13px;
+}
+
+.ritual-state--error {
+  border-style: solid;
+  border-color: var(--sj-danger-border, #e3b7b7);
+  background: var(--sj-danger-bg, #fdf4f4);
+  color: var(--sj-danger, #8a2f2f);
+}
+
+.ritual-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 8px;
+  background: var(--sj-accent-soft, #efe9f8);
+  color: var(--sj-text, #202124);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ------------------------------------------- 本地未提交草稿（T02 + T06 面板） */
+
+.ritual-recovery-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border: 1px solid var(--sj-border-strong, #cfc9d6);
+  border-radius: 16px;
+  background: var(--sj-accent-soft, #efe9f8);
+}
+
+.ritual-recovery-callout p {
+  margin: 0;
+  color: var(--sj-text, #202124);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* 复用 T06 的恢复/对照面板：只补本页的间距，不改它的内部样式。 */
+.ritual-page .writing-drafts,
+.ritual-page .writing-conflict {
+  margin: 0 0 16px;
+}
+
+.ritual-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--sj-danger-border, #e3b7b7);
+  border-radius: 8px;
+  background: var(--sj-danger-bg, #fdf4f4);
+  color: var(--sj-text, #202124);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.ritual-alert p {
+  margin: 0;
+}
+
+.ritual-alert-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ritual-conflict {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--sj-danger-border, #e3b7b7);
+}
+
+/* ---------------------------------------------------- 模板上下文区 */
+
+.ritual-questions,
+.ritual-goals,
+.ritual-restore {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ritual-questions-head h3,
+.ritual-goals h3,
+.ritual-restore h3 {
+  margin: 0;
+  color: var(--sj-text, #202124);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ritual-questions-meta {
+  margin: 2px 0 0;
+  color: var(--sj-text-soft, #767080);
+  font-size: 12px;
+}
+
+.ritual-questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ritual-questions-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 8px;
+  background: var(--sj-surface, #ffffff);
+}
+
+.ritual-questions-label {
+  display: block;
+}
+
+.ritual-questions-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--sj-border-strong, #cfc9d6);
+  border-radius: 6px;
+  background: var(--sj-surface, #ffffff);
+  color: var(--sj-text, #202124);
+  font: 400 13px/1.6 system-ui, 'Segoe UI', Roboto, sans-serif;
+  resize: vertical;
+}
+
+.ritual-questions-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ritual-questions-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ritual-questions-empty,
+.ritual-questions-state {
+  margin: 0;
+  color: var(--sj-text-soft, #767080);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.ritual-questions-note {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 6px;
+  background: var(--sj-bg-soft, #f7f6f8);
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.ritual-questions-error {
+  margin: 0;
+  color: var(--sj-danger, #8a2f2f);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.ritual-questions-error p {
+  margin: 0 0 6px;
+}
+
+/* sr-only：脱离 App.css 单独预览时也要可访问（重复定义同名类无副作用）。 */
+.ritual-page .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ------------------------------------------------------------ 目标区 */
+
+.ritual-goal-list,
+.ritual-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ritual-goal-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 8px;
+  background: var(--sj-surface, #ffffff);
+}
+
+.ritual-goal-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--sj-text, #202124);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ritual-review-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 8px;
+  background: var(--sj-surface, #ffffff);
+}
+
+.ritual-review-title {
+  margin: 0;
+  color: var(--sj-text, #202124);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ritual-review-meta {
+  margin: 0;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ritual-review-unavailable {
+  margin: 0;
+  color: var(--sj-warn, #7a5a12);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ritual-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* -------------------------------------------------------- 恢复入口 */
+
+.ritual-restore-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 12px;
+}
+
+.ritual-restore-select select {
+  padding: 6px 8px;
+  border: 1px solid var(--sj-border-strong, #cfc9d6);
+  border-radius: 6px;
+  background: var(--sj-surface, #ffffff);
+  color: var(--sj-text, #202124);
+  font: inherit;
+}
+
+.ritual-restore-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ------------------------------------------------------------ 正文 */
+
+.ritual-title-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 12px;
+}
+
+.ritual-title-field input {
+  padding: 8px 10px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 8px;
+  background: var(--sj-surface, #ffffff);
+  color: var(--sj-text, #202124);
+  font: 400 18px/1.4 Georgia, 'Songti SC', serif;
+}
+
+.ritual-title-field input:focus-visible {
+  border-color: var(--sj-focus, #6b53a0);
+  outline: 2px solid var(--sj-focus, #6b53a0);
+  outline-offset: 1px;
+}
+
+.ritual-editor {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 12px;
+  background: var(--sj-surface, #ffffff);
+}
+
+.ritual-editor--compare {
+  padding: 10px 12px;
+}
+
+/* 深色兜底：外壳已换值，这里只补「脱离外壳也能读」的最小覆盖。 */
+.theme-dark .ritual-context,
+.sj-shell[data-theme='dark'] .ritual-context {
+  background: var(--sj-surface-muted, #212427);
+}
+
+.theme-dark .ritual-editor,
+.theme-dark .ritual-questions-item,
+.theme-dark .ritual-goal-item,
+.theme-dark .ritual-review-item,
+.sj-shell[data-theme='dark'] .ritual-editor,
+.sj-shell[data-theme='dark'] .ritual-questions-item,
+.sj-shell[data-theme='dark'] .ritual-goal-item,
+.sj-shell[data-theme='dark'] .ritual-review-item {
+  background: var(--sj-surface, #1c1e21);
+}

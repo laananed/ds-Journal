@@ -1,0 +1,314 @@
+/*
+ * 对照恢复样式（Stage 4 / S04-T10）。
+ *
+ * 颜色统一取 AppShell 的 `--sj-*` 变量（深色主题由外壳换值，这里不需要另写一套），
+ * 并给出浅色兜底值，保证脱离外壳单独预览时也不会变成无样式黑字。
+ * 不引入 UI 框架、不使用图片或图标字体。
+ */
+
+.ritual-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.ritual-compare-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--sj-border, #e5e2ea);
+}
+
+.ritual-compare-head h3 {
+  margin: 0 0 4px;
+  color: var(--sj-text, #202124);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.ritual-compare-sub {
+  margin: 0;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* 左右两栏：窄屏时上下堆叠，键盘顺序仍是「旧版本 → 当前文件」。 */
+.ritual-compare-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 5fr) minmax(320px, 7fr);
+  gap: 20px;
+  min-width: 0;
+}
+
+@media (max-width: 1080px) {
+  .ritual-compare-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ritual-compare-source,
+.ritual-compare-target {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 10px;
+  background: var(--sj-surface-muted, #faf9fc);
+}
+
+.ritual-compare-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ritual-compare-label {
+  margin: 0;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ritual-compare-title {
+  margin: 0;
+  color: var(--sj-text, #202124);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ritual-compare-meta {
+  margin: 0;
+  color: var(--sj-text-soft, #767080);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 旧版本正文：限制高度，避免对照区把页面撑得找不到操作按钮。 */
+.ritual-compare-editor {
+  max-height: 46vh;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 8px;
+  background: var(--sj-surface, #ffffff);
+}
+
+.ritual-compare-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ritual-compare-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ritual-compare-hint {
+  margin: 0;
+  color: var(--sj-text-soft, #767080);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ritual-compare-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 30vh;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.ritual-compare-block {
+  min-width: 0;
+}
+
+.ritual-compare-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ritual-compare-check:hover {
+  border-color: var(--sj-border-strong, #cfc9d6);
+  background: var(--sj-surface, #ffffff);
+}
+
+.ritual-compare-check input {
+  margin-top: 3px;
+}
+
+.ritual-compare-block-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ritual-compare-block-label {
+  color: var(--sj-text, #202124);
+  font-size: 13px;
+}
+
+.ritual-compare-block-preview {
+  overflow: hidden;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ritual-compare-block-blocked {
+  color: var(--sj-danger, #8a2f2f);
+  font-size: 12px;
+}
+
+.ritual-compare-empty {
+  color: var(--sj-text-soft, #767080);
+  font-size: 12px;
+  list-style: none;
+}
+
+/* 操作区 */
+
+.ritual-compare-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sj-border, #e5e2ea);
+}
+
+.ritual-compare-selection {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ritual-compare-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ritual-compare-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--sj-border-strong, #cfc9d6);
+  border-radius: 999px;
+  background: var(--sj-accent-soft, #efe9f8);
+  color: var(--sj-text, #202124);
+  font-size: 12px;
+}
+
+.ritual-compare-chip-remove {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sj-accent, #5b4a7d);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.ritual-compare-insert {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 12px;
+}
+
+.ritual-compare-insert select {
+  min-width: 220px;
+  max-width: 320px;
+  padding: 6px 8px;
+  border: 1px solid var(--sj-border-strong, #cfc9d6);
+  border-radius: 6px;
+  background: var(--sj-surface, #ffffff);
+  color: var(--sj-text, #202124);
+  font: inherit;
+}
+
+.ritual-compare-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ritual-compare-confirm,
+.ritual-compare-conflict {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--sj-danger-border, #e3b7b7);
+  border-radius: 8px;
+  background: var(--sj-danger-bg, #fdf4f4);
+  color: var(--sj-text, #202124);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.ritual-compare-conflict {
+  border-color: var(--sj-border-strong, #cfc9d6);
+  background: var(--sj-surface-muted, #faf9fc);
+}
+
+.ritual-compare-confirm h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.ritual-compare-confirm p,
+.ritual-compare-conflict p {
+  margin: 0;
+}
+
+.ritual-compare-error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sj-danger-border, #e3b7b7);
+  border-radius: 8px;
+  background: var(--sj-danger-bg, #fdf4f4);
+  color: var(--sj-danger, #8a2f2f);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* 深色兜底：外壳已换值，这里只补「脱离外壳也能读」的最小覆盖。 */
+.theme-dark .ritual-compare-source,
+.theme-dark .ritual-compare-target,
+.sj-shell[data-theme='dark'] .ritual-compare-source,
+.sj-shell[data-theme='dark'] .ritual-compare-target {
+  background: var(--sj-surface-muted, #212427);
+}
+
+.theme-dark .ritual-compare-editor,
+.sj-shell[data-theme='dark'] .ritual-compare-editor {
+  background: var(--sj-surface, #1c1e21);
+}
