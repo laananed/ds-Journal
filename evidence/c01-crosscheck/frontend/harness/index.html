@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%236b53a0'/%3E%3C/svg%3E" />
+    <title>C01 交叉测试夹具（非产品页面）</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #f6f5f8;
+        font-family: system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        color: #202124;
+      }
+      #harness-banner {
+        margin: 0 0 20px;
+        padding: 8px 12px;
+        border: 1px solid #c0392b;
+        border-radius: 8px;
+        background: #fdecea;
+        color: #8a2f2f;
+        font-size: 13px;
+      }
+      #root {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+    </style>
+  </head>
+  <body>
+    <p id="harness-banner">
+      测试夹具：本页仅用于 C01 组件交叉测试，注入本地内存 Mock；不是产品入口，也不是真实服务验证。
+    </p>
+    <div id="root"></div>
+    <script type="module" src="/harness/main.tsx"></script>
+  </body>
+</html>
+

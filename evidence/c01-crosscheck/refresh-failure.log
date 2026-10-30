@@ -1,0 +1,29 @@
+{
+  "before": "合成日程 21\n\n已完成\n\n2026年10月31日 周六 08:00\n\n标记未完成\n编辑\n删除",
+  "afterRows": 0,
+  "error": "网络中断，改动未确认；请稍后重新读取确认结果。\n\n读取不会创建或修改任何日程。\n\n重新读取",
+  "notice": [
+    "已删除这条日程（未改动 Set 目标）。"
+  ],
+  "calls": [
+    {
+      "method": "list",
+      "detail": 1
+    },
+    {
+      "method": "list",
+      "detail": 2
+    },
+    {
+      "method": "remove",
+      "detail": {
+        "id": "21",
+        "expectedRevision": 1
+      }
+    },
+    {
+      "method": "list",
+      "detail": 2
+    }
+  ]
+}
