@@ -150,6 +150,40 @@ export interface EditSession {
   updatedAt: number
 }
 
+/**
+ * 已存首次创建请求的冻结副本（T02 恢复入口）。
+ *
+ * 形状与 `LocalJournalDraft.first_request` 重建出来的参数完全一致：
+ * `draft` 是**原首次 POST 的 payload**，不是恢复时编辑器里的较新输入。
+ * 恢复会话时把它原样交给 `openSession`，`planWrite` 就会同键同 payload 重放。
+ */
+export interface RestoredFirstRequest {
+  client_create_id: string
+  draft: DocumentDraft
+  extras: Record<string, unknown> | null
+  seq: number
+}
+
+/** 拒绝恢复的原因；只描述记录与事实不符，不含正文。 */
+export type RestoreRejection =
+  /** payload 缺字段 / 类型不对 / 已有文件身份还想重放创建。 */
+  | 'corrupt_request'
+  /** 创建键不一致（记录的键与会话的键、或与显式传入的键不同）。 */
+  | 'key_mismatch'
+  /** 首次请求序号不成立：非正整数，或超前于恢复现场的最新序号。 */
+  | 'stale_seq'
+  /** 恢复现场序号不成立：非非负整数。 */
+  | 'invalid_resume_seq'
+
+export class EditSessionRestoreError extends Error {
+  readonly reason: RestoreRejection
+  constructor(reason: RestoreRejection, message: string) {
+    super(message)
+    this.name = 'EditSessionRestoreError'
+    this.reason = reason
+  }
+}
+
 export interface OpenSessionInput {
   sessionId: string
   type: SessionType
@@ -161,6 +195,18 @@ export interface OpenSessionInput {
   file?: { id: number; revision: number; draft: DocumentDraft } | null
   extras?: Record<string, unknown> | null
   isSavable?: ((draft: DocumentDraft) => boolean) | null
+  /**
+   * 「首次创建响应丢失」的恢复入口：传入记录里冻结的原请求。
+   * 缺省为 `null`，即普通打开 / 新建，行为与之前完全一致。
+   */
+  firstRequest?: RestoredFirstRequest | null
+  /**
+   * 恢复现场的最新输入序号（本地记录的 `input_seq`）。
+   *
+   * 必须续上，否则本地镜像的 `write_seq` 会小于磁盘上的记录而被判为旧写入丢弃，
+   * 也会让 `settleWrite` 的确认序号退回到 0。缺省 0（新建会话）。
+   */
+  resumedInputSeq?: number
 }
 
 /* ------------------------------------------------------------- 纯工具函数 */
@@ -347,11 +393,76 @@ export function applyNarrowOps(
 
 /* -------------------------------------------------------------- 状态推进 */
 
+/** 结构上是不是一份可提交的草稿；恢复入口不接受「差不多能看」的载荷。 */
+function isDocumentDraft(value: unknown): value is DocumentDraft {
+  if (!isPlainObject(value)) return false
+  if (typeof value.title !== 'string') return false
+  if (typeof value.date !== 'string') return false
+  if (!('content_doc' in value)) return false
+  if (value.folder_id !== null && typeof value.folder_id !== 'number') return false
+  return true
+}
+
+/**
+ * 校验并冻结恢复用的首次请求。
+ *
+ * 三道检查缺一不可：
+ * 1. **身份**：创建键必须与会话的 `createKey` 同一个，否则就是两次不同的创建；
+ * 2. **完整性**：payload 必须是完整的 `DocumentDraft`，不猜默认值；
+ * 3. **序号**：`seq` 必须是 1..resumeSeq 之间的整数——旧的 seq 说明记录被截断，
+ *    超前的 seq 说明记录来自另一个时间线，两者都会让屏障与确认序号错位。
+ */
+function validateRestoredFirstRequest(
+  request: RestoredFirstRequest,
+  createKey: string,
+  resumeSeq: number,
+): RestoredFirstRequest {
+  if (typeof request.client_create_id !== 'string' || request.client_create_id.trim() === '') {
+    throw new EditSessionRestoreError('corrupt_request', '已存首次请求没有创建键，不能重放。')
+  }
+  if (request.client_create_id !== createKey) {
+    throw new EditSessionRestoreError('key_mismatch', '已存首次请求的创建键与会话创建键不一致，不能重放。')
+  }
+  if (!isDocumentDraft(request.draft)) {
+    throw new EditSessionRestoreError('corrupt_request', '已存首次请求的载荷不完整，不能重放。')
+  }
+  if (request.extras !== null && !isPlainObject(request.extras)) {
+    throw new EditSessionRestoreError('corrupt_request', '已存首次请求的附加字段不合法，不能重放。')
+  }
+  if (!Number.isInteger(request.seq) || request.seq < 1 || request.seq > resumeSeq) {
+    throw new EditSessionRestoreError('stale_seq', '已存首次请求的输入序号不成立（过旧或超前），不能重放。')
+  }
+  return {
+    client_create_id: request.client_create_id,
+    draft: {
+      title: request.draft.title,
+      content_doc: request.draft.content_doc,
+      date: request.draft.date,
+      folder_id: request.draft.folder_id,
+    },
+    extras: request.extras === null ? null : { ...request.extras },
+    seq: request.seq,
+  }
+}
+
 export function createSession(input: OpenSessionInput): EditSession {
   const draftId = input.draftId ?? input.sessionId
   const file = input.file ?? null
   /** 打开已有文件时，调用方传入的 `draft` 就是服务器内容；新建时是空草稿。 */
   const draft: DocumentDraft = input.draft
+  const resumeSeq = input.resumedInputSeq ?? 0
+  if (!Number.isInteger(resumeSeq) || resumeSeq < 0) {
+    throw new EditSessionRestoreError('invalid_resume_seq', '恢复现场的输入序号不成立，不能恢复会话。')
+  }
+  const supplied = input.firstRequest ?? null
+  if (supplied !== null && file !== null) {
+    throw new EditSessionRestoreError('corrupt_request', '会话已有服务器文件身份，不能再重放首次创建请求。')
+  }
+  const createKey = input.createKey ?? supplied?.client_create_id ?? newKey()
+  // 重放时必须沿用记录里的创建键：缺省就取它，显式传入则必须相等（否则上面会拒绝）。
+  const firstRequest = supplied === null
+    ? null
+    : validateRestoredFirstRequest(supplied, createKey, resumeSeq)
   return {
     sessionId: input.sessionId,
     type: input.type,
@@ -362,12 +473,12 @@ export function createSession(input: OpenSessionInput): EditSession {
     queueKey: file === null ? draftQueueKey(draftId) : fileKey(input.type, file.id),
     baseline: file === null ? draft : file.draft,
     draft,
-    inputSeq: 0,
-    userInputSeq: 0,
+    inputSeq: resumeSeq,
+    userInputSeq: resumeSeq,
     ackedSeq: 0,
     inFlight: null,
-    createKey: input.createKey ?? newKey(),
-    firstRequest: null,
+    createKey,
+    firstRequest,
     status: 'saved',
     error: '',
     localState: 'idle',
@@ -512,16 +623,23 @@ export function settleWrite(session: EditSession, seq: number, outcome: WriteOut
   if (session.inFlight === null || session.inFlight.seq !== seq) return session
   const snapshot = session.inFlight.draft
   if (outcome.kind === 'ok') {
+    /**
+     * 只有「当前草稿与这次提交的快照完全一致」时，才能把确认序号推到最新的
+     * `inputSeq`：此时服务器内容就是当前内容，中间的输入都已落地。
+     * 否则只确认到本次请求的 `seq`——重放创建只带原首次 payload，
+     * 把较新的输入一起算作已确认会让本地草稿被提前清掉。
+     */
+    const settled = draftEquals(session.draft, snapshot)
     const next: EditSession = {
       ...session,
       fileId: outcome.file.id,
       revision: outcome.file.revision,
       baseline: snapshot,
-      ackedSeq: Math.max(session.ackedSeq, seq),
+      ackedSeq: Math.max(session.ackedSeq, settled ? session.inputSeq : seq),
       inFlight: null,
       firstRequest: null,
       queueKey: fileKey(session.type, outcome.file.id),
-      status: draftEquals(session.draft, snapshot) ? 'saved' : 'unsaved',
+      status: settled ? 'saved' : 'unsaved',
       error: '',
     }
     return next
@@ -845,6 +963,57 @@ export function createEditSessionStore(options: StoreOptions = {}): EditSessionS
     return summary
   }
 
+  /**
+   * 对**已存在**的会话补挂首次请求（同一草稿再次要求「恢复原请求」时）。
+   *
+   * 返回 `null` 表示无需改动。身份冲突直接抛错：绝不改创建键、绝不改写 payload。
+   * 草稿只在一个前提下被替换——会话还没有任何输入、也没有服务器身份
+   * （页面先开了空草稿再点恢复），此时它只是占位符，换成记录的较新内容才正确；
+   * 一旦用户已经输入过，就保留现场内容，不让恢复动作覆盖它。
+   */
+  function attachRestoredFirstRequest(
+    existing: EditSession,
+    input: OpenSessionInput,
+  ): EditSession | null {
+    const supplied = input.firstRequest ?? null
+    if (supplied === null) return null
+    // 已经拿到服务器身份：重放没有意义，也不能把旧请求挂回去。
+    if (existing.fileId !== null) return null
+    if (existing.firstRequest !== null) {
+      if (existing.firstRequest.client_create_id !== supplied.client_create_id) {
+        throw new EditSessionRestoreError('key_mismatch', '这份会话已经绑定另一次创建请求，不能换成记录的创建键。')
+      }
+      return null
+    }
+    const untouched = existing.inFlight === null
+      && existing.inputSeq === 0
+      && draftEquals(existing.draft, existing.baseline)
+    // 占位会话（页面先开了空草稿、还没有任何输入与服务器身份）可以接手记录的
+    // 创建键；一旦用户输入过，键就不再允许被替换——那会变成两次不同的创建。
+    if (!untouched && existing.createKey !== supplied.client_create_id) {
+      throw new EditSessionRestoreError('key_mismatch', '记录的创建键与会话当前创建键不一致，不能重放。')
+    }
+    const createKey = untouched ? supplied.client_create_id : existing.createKey
+    const resumeSeq = Math.max(existing.inputSeq, input.resumedInputSeq ?? 0)
+    if (!Number.isInteger(resumeSeq) || resumeSeq < 0) {
+      throw new EditSessionRestoreError('invalid_resume_seq', '恢复现场的输入序号不成立，不能恢复会话。')
+    }
+    const firstRequest = validateRestoredFirstRequest(supplied, createKey, resumeSeq)
+    return {
+      ...existing,
+      createKey,
+      draft: untouched ? input.draft : existing.draft,
+      baseline: untouched ? input.draft : existing.baseline,
+      extras: untouched ? (input.extras ?? existing.extras) : existing.extras,
+      inputSeq: resumeSeq,
+      userInputSeq: Math.max(existing.userInputSeq, resumeSeq),
+      firstRequest,
+      // 显式重放就是一次重试：解除上一次的失败，冲突 / 缺失保持原状由用户决定。
+      status: existing.status === 'failed' ? 'unsaved' : existing.status,
+      error: existing.status === 'failed' ? '' : existing.error,
+    }
+  }
+
   return {
     subscribe(listener) {
       listeners.add(listener)
@@ -872,11 +1041,14 @@ export function createEditSessionStore(options: StoreOptions = {}): EditSessionS
           ? undefined
           : Array.from(sessions.values()).find((item) => item.type === input.type && item.fileId === input.file!.id))
       if (existing !== undefined) {
-        // 重新打开只允许补上缺失的传输层 / 判定函数，绝不覆盖草稿。
-        if (existing.transport !== input.transport) {
-          put({ ...existing, transport: input.transport, isSavable: input.isSavable ?? existing.isSavable })
+        // 重新打开只允许补上缺失的传输层 / 判定函数 / 首次请求，绝不覆盖已输入的草稿。
+        let next = attachRestoredFirstRequest(existing, input) ?? existing
+        if (next.transport !== input.transport) next = { ...next, transport: input.transport }
+        if (input.isSavable !== undefined && input.isSavable !== null) {
+          next = { ...next, isSavable: input.isSavable }
         }
-        return sessions.get(existing.sessionId) ?? existing
+        if (next !== existing) put(next)
+        return sessions.get(existing.sessionId) ?? next
       }
       const created = createSession(input)
       sessions.set(created.sessionId, created)

@@ -18,6 +18,7 @@ import {
   createEditSessionStore,
   draftEquals,
   draftPatch,
+  EditSessionRestoreError,
   fileKey,
   localStateLabel,
   planWrite,
@@ -28,6 +29,7 @@ import {
   type DocumentDraft,
   type EditSession,
   type FileMutation,
+  type OpenSessionInput,
   type SaveTransport,
   type ServerFile,
   type UpdateRequest,
@@ -608,6 +610,183 @@ async function testRunFileCommand(): Promise<void> {
   await saving
 }
 
+/* --------------------------- 12. T02 恢复入口：已存首次请求重放（S04-T06） */
+
+const RECORD_KEY = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+
+/** 记录里冻结的原首次 payload 与会话里较新的输入刻意不同。 */
+function restoredInput(overrides: Partial<OpenSessionInput> = {}): OpenSessionInput {
+  return {
+    sessionId: 'draft-restore',
+    type: 'journal',
+    tabId: 'tab-1',
+    draftId: 'draft-restore',
+    draft: draft({ title: '较新标题', content_doc: doc('较新内容') }),
+    transport: manualTransport().transport,
+    createKey: RECORD_KEY,
+    firstRequest: {
+      client_create_id: RECORD_KEY,
+      draft: draft({ title: '首次标题', content_doc: doc('首次内容') }),
+      extras: { journal_kind: 'writing' },
+      seq: 2,
+    },
+    resumedInputSeq: 5,
+    ...overrides,
+  }
+}
+
+function restoreRejection(input: OpenSessionInput): string {
+  try {
+    createSession(input)
+    return 'none'
+  } catch (error: unknown) {
+    return error instanceof EditSessionRestoreError ? error.reason : 'other'
+  }
+}
+
+{
+  const restored = createSession(restoredInput())
+  expectEqual(restored.createKey, RECORD_KEY, '恢复会话沿用记录里的创建键')
+  expectEqual(restored.firstRequest?.client_create_id, RECORD_KEY, '会话冻结原首次创建键')
+  expectEqual(restored.firstRequest?.draft.content_doc, doc('首次内容'), '冻结的是原首次 payload')
+  expectEqual(restored.draft.content_doc, doc('较新内容'), '编辑器里是较新的本地内容')
+  expectEqual(restored.baseline.content_doc, doc('较新内容'), '新建会话的基线等于打开时的草稿')
+  expectEqual(restored.inputSeq, 5, '输入序号续上记录的 input_seq')
+  expectEqual(restored.ackedSeq, 0, '恢复时没有任何服务器写入被确认')
+
+  // 关键差异：草稿回到基线时，首次请求仍然优先于「没有变化」。
+  const sameAsOriginal = createSession(restoredInput({
+    draft: draft({ title: '首次标题', content_doc: doc('首次内容') }),
+  }))
+  const decision = planWrite(sameAsOriginal)
+  check(decision.kind === 'create' && decision.request.client_create_id === RECORD_KEY,
+    '草稿等于原 payload 时仍按原键重放，而不是判为无需保存')
+}
+
+{
+  expectEqual(restoreRejection(restoredInput({ createKey: 'other-key' })), 'key_mismatch',
+    '显式传入不同创建键时拒绝恢复')
+  expectEqual(restoreRejection(restoredInput({ resumedInputSeq: 1 })), 'stale_seq',
+    '首次请求序号超前于恢复现场时拒绝')
+  expectEqual(restoreRejection(restoredInput({ resumedInputSeq: -1 })), 'invalid_resume_seq',
+    '恢复现场序号非法时拒绝')
+  expectEqual(restoreRejection(restoredInput({
+    firstRequest: { client_create_id: RECORD_KEY, draft: { title: 1 } as unknown as DocumentDraft, extras: null, seq: 1 },
+  })), 'corrupt_request', '载荷不完整时拒绝恢复（不猜默认值）')
+  expectEqual(restoreRejection(restoredInput({
+    firstRequest: { client_create_id: RECORD_KEY, draft: draft({}), extras: [] as unknown as Record<string, unknown>, seq: 1 },
+  })), 'corrupt_request', '附加字段不是对象时拒绝恢复')
+  expectEqual(restoreRejection(restoredInput({
+    firstRequest: { client_create_id: RECORD_KEY, draft: draft({}), extras: null, seq: 0 } as never,
+  })), 'stale_seq', '首次请求序号为 0 时拒绝恢复')
+  expectEqual(restoreRejection(restoredInput({
+    file: { id: 9, revision: 1, draft: draft() },
+  })), 'corrupt_request', '已有服务器身份时拒绝把首次请求挂回去')
+}
+
+async function testRestoreReplaysOriginalThenPatches(): Promise<void> {
+  const { transport, calls } = manualTransport()
+  const store = createEditSessionStore()
+  const opened = store.openSession(restoredInput({ transport }))
+  expectEqual(opened.inputSeq, 5, '打开后即可继续原来的序号')
+
+  const saving = store.saveToSequence('draft-restore')
+  await flushMicrotasks()
+  expectEqual(calls.length, 1, '恢复后第一个请求是创建')
+  expectEqual(calls[0].kind, 'create', '身份未取得，先创建')
+  const create = calls[0].request as CreateRequest
+  expectEqual(create.client_create_id, RECORD_KEY, '创建使用原 client_create_id')
+  expectEqual(create.draft.content_doc, doc('首次内容'), '创建 body 是原首次 payload')
+  expectEqual(create.extras, { journal_kind: 'writing' }, '首次请求的附加字段原样带出')
+
+  calls[0].reply.resolve(serverFile(88, 1, draft({ title: '首次标题', content_doc: doc('首次内容') })))
+  await flushMicrotasks()
+  expectEqual(calls.length, 2, '创建成功后紧接着用真实版本 PATCH 最新输入')
+  const patch = calls[1].request as UpdateRequest
+  expectEqual(patch.expected_revision, 1, 'PATCH 使用创建返回的 revision（CAS）')
+  expectEqual(patch.draft.content_doc, doc('较新内容'), 'PATCH 提交最新内容')
+  expectEqual(store.getSession('draft-restore')?.ackedSeq, 2,
+    '创建只确认到原首次请求的序号，不把较新输入算作已保存')
+
+  calls[1].reply.resolve(serverFile(88, 2, draft({ title: '较新标题', content_doc: doc('较新内容') })))
+  const result = await saving
+  expectEqual(result.kind, 'clean', '创建与补写在一次排空里完成')
+  const done = store.getSession('draft-restore')!
+  expectEqual(done.status, 'saved', '最终为服务器已保存')
+  expectEqual(done.revision, 2, '版本推进到 PATCH 结果')
+  expectEqual(done.ackedSeq, 5, 'PATCH 确认后序号才推进到最新输入')
+  expectEqual(done.firstRequest, null, '取得身份后清空首次请求')
+  expectEqual(done.queueKey, fileKey('journal', 88), '队列键切换为 typed key')
+}
+
+async function testRestoreAdoptsPlaceholderOrRefusesBusy(): Promise<void> {
+  const { transport } = manualTransport()
+  const store = createEditSessionStore()
+  // 页面先开了空草稿（新生成创建键），用户随后选择「恢复原请求」。
+  store.openSession({
+    sessionId: 'draft-restore', type: 'journal', tabId: 'tab-1',
+    draftId: 'draft-restore', draft: draft(), transport,
+  })
+  const adopted = store.openSession(restoredInput({ transport }))
+  expectEqual(adopted.createKey, RECORD_KEY, '空白占位会话接手记录的创建键')
+  expectEqual(adopted.firstRequest?.client_create_id, RECORD_KEY, '首次请求挂到同一个会话')
+  expectEqual(adopted.draft.content_doc, doc('较新内容'), '占位草稿换成记录里的最新内容')
+  expectEqual(store.listSessions().length, 1, '整个过程只有一个会话')
+
+  // 已经有用户输入的会话：不允许替换创建键，也不许覆盖现场草稿。
+  const busyStore = createEditSessionStore()
+  const busyTransport = manualTransport().transport
+  busyStore.openSession({
+    sessionId: 'draft-restore', type: 'journal', tabId: 'tab-1',
+    draftId: 'draft-restore', draft: draft(), transport: busyTransport,
+  })
+  busyStore.changeSession('draft-restore', draft({ content_doc: doc('用户已经在写') }), 'user_input')
+  let reason = 'none'
+  try {
+    busyStore.openSession(restoredInput({ transport: busyTransport, createKey: 'another-key' }))
+  } catch (error: unknown) {
+    reason = error instanceof EditSessionRestoreError ? error.reason : 'other'
+  }
+  expectEqual(reason, 'key_mismatch', '已有输入的会话拒绝换成记录的创建键')
+  expectEqual(busyStore.getSession('draft-restore')?.draft.content_doc, doc('用户已经在写'),
+    '拒绝时不覆盖用户已经写下的内容')
+  expectEqual(busyStore.getSession('draft-restore')?.firstRequest, null, '拒绝时不挂半套首次请求')
+}
+
+async function testLateCreateResponseIgnoredAfterRestore(): Promise<void> {
+  const { transport, calls } = manualTransport()
+  const store = createEditSessionStore()
+  store.openSession(restoredInput({ transport }))
+  const saving = store.saveToSequence('draft-restore')
+  await flushMicrotasks()
+  expectEqual(calls.length, 1, '已发出重放创建')
+
+  // 在途期间用户继续写：不能被这条在途响应覆盖。
+  store.changeSession('draft-restore', draft({ title: '较新标题', content_doc: doc('更晚的一句') }), 'user_input')
+
+  // 迟到的、序号对不上的旧响应（例如重复投递）直接丢弃。
+  const late = settleWrite(store.getSession('draft-restore')!, 1, { kind: 'ok', file: serverFile(99, 9, draft()) })
+  expectEqual(late.fileId, null, '旧序号响应不结算身份')
+  expectEqual(late.draft.content_doc, doc('更晚的一句'), '旧序号响应不改草稿')
+
+  calls[0].reply.resolve(serverFile(88, 1, draft({ title: '首次标题', content_doc: doc('首次内容') })))
+  await flushMicrotasks()
+  const firstRound = await saving
+  expectEqual(calls.length, 1, '有界屏障：在途期间的新输入不在本轮越界提交')
+  expectEqual(firstRound.kind, 'queued', '本轮如实报告还有未提交的新输入')
+
+  // 下一轮排空：用创建返回的真实版本 PATCH 最新输入（同一会话、同一队列）。
+  const second = store.saveToSequence('draft-restore')
+  await flushMicrotasks()
+  expectEqual(calls.length, 2, '第二次排空才发出 PATCH')
+  expectEqual((calls[1].request as UpdateRequest).expected_revision, 1, 'PATCH 带真实 revision')
+  expectEqual((calls[1].request as UpdateRequest).draft.content_doc, doc('更晚的一句'), 'PATCH 提交最新输入')
+  calls[1].reply.resolve(serverFile(88, 2, draft({ title: '较新标题', content_doc: doc('更晚的一句') })))
+  const result = await second
+  expectEqual(result.kind, 'clean', '在途期间的新输入最终也落地')
+  expectEqual(store.getSession('draft-restore')?.draft.content_doc, doc('更晚的一句'), '最新输入没有被回滚')
+}
+
 /* --------------------------------------------------- 11. 草稿比较与补丁 */
 
 {
@@ -629,6 +808,9 @@ await testCrossFileIsolation()
 await testConflictKeepsBothSides()
 await testMissingServerKeepsDraft()
 await testBoundedSequenceBarrier()
+await testRestoreReplaysOriginalThenPatches()
+await testRestoreAdoptsPlaceholderOrRefusesBusy()
+await testLateCreateResponseIgnoredAfterRestore()
 await testApplyMutation()
 await testRunFileCommand()
 

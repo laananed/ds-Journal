@@ -136,6 +136,7 @@ type MirrorResolved = JournalDraftMirrorOptions & { draftId: string; delayMs: nu
 function toRecord(
   session: EditSession,
   options: MirrorResolved,
+  writeSeq: number,
 ): LocalJournalDraft {
   const firstRequest = session.firstRequest === null
     ? null
@@ -148,6 +149,8 @@ function toRecord(
           folder_id: session.firstRequest.draft.folder_id,
           ...(session.firstRequest.extras ?? {}),
         },
+        // 首次请求自己的序号，与下面的 `input_seq`（最新输入）分开保存。
+        seq: session.firstRequest.seq,
       }
   return {
     schema: 1,
@@ -162,13 +165,41 @@ function toRecord(
     content_doc: session.draft.content_doc,
     folder_id: session.draft.folder_id,
     input_seq: session.inputSeq,
-    write_seq: session.inputSeq,
+    // 写入序号只用于「较旧异步写不能覆盖较新」的排序：它必须能独立前进，
+    // 否则「首次请求被冻结」这种不改输入的重写会被判成旧写入而丢弃。
+    write_seq: writeSeq,
     first_request: firstRequest,
     updated_at: new Date().toISOString(),
   }
 }
 
 /** 仅供 `toRecord` 使用的必填化类型。 */
+
+/**
+ * 文档里有没有任何用户可见文字（只看 `type: 'text'` 的 `text`）。
+ *
+ * 不能直接遍历所有字符串：段落的 `attrs.id` 也是字符串，会把空文档判成有内容。
+ */
+function documentHasText(node: unknown): boolean {
+  if (typeof node !== 'object' || node === null) return false
+  const record = node as Record<string, unknown>
+  if (record.type === 'text') return typeof record.text === 'string' && record.text.trim() !== ''
+  if (Array.isArray(record.content)) return record.content.some(documentHasText)
+  return false
+}
+
+/**
+ * 空草稿（无标题、无正文、也没有已发出的创建请求）不写本地记录。
+ *
+ * 编辑器挂载时会把初始文档同步进会话（`system` 来源），这会推进输入序号；
+ * 若照写不误，每次打开写作页都会留下一份「空的本机草稿」，
+ * 恢复面板会把它们当成待恢复内容，用户也不知道该恢复什么。
+ */
+function isEmptyDraft(session: EditSession): boolean {
+  if (session.firstRequest !== null) return false
+  if (session.draft.title.trim() !== '') return false
+  return !documentHasText(session.draft.content_doc)
+}
 /**
  * 把会话草稿镜像到浏览器本地。
  *
@@ -191,6 +222,8 @@ export function useJournalDraftMirror(options: JournalDraftMirrorOptions): Journ
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastWrittenSeq = useRef(0)
+  const lastWriteSeq = useRef(0)
+  const lastFirstRequestKey = useRef<string | null>(null)
 
   const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {
@@ -199,19 +232,22 @@ export function useJournalDraftMirror(options: JournalDraftMirrorOptions): Journ
     }
   }, [])
 
-  const writeNow = useCallback(async () => {
+  const writeNow = useCallback(async (force = false) => {
     const sessionId = resolved.sessionId
     if (!enabled || sessionId === null) return
     const current = store.getSession(sessionId)
     if (current === null) return
     if (current.inputSeq === 0 && current.localState === 'idle') return
-    if (current.inputSeq <= lastWrittenSeq.current && current.localState === 'saved') return
+    if (isEmptyDraft(current)) return
+    if (!force && current.inputSeq <= lastWrittenSeq.current && current.localState === 'saved') return
 
     store.setLocalState(sessionId, 'pending')
-    const result = await writer.save(toRecord(current, resolved))
+    const writeSeq = Math.max(lastWriteSeq.current + 1, current.inputSeq)
+    const result = await writer.save(toRecord(current, resolved, writeSeq))
     const after = store.getSession(sessionId)
     if (after === null) return
     if (result.ok) {
+      lastWriteSeq.current = writeSeq
       lastWrittenSeq.current = after.inputSeq
       store.setLocalState(sessionId, 'saved')
       return
@@ -230,18 +266,38 @@ export function useJournalDraftMirror(options: JournalDraftMirrorOptions): Journ
     if (sessionId === null) return
     void writer.remove(resolved.tabId, resolved.draftId)
     lastWrittenSeq.current = 0
+    lastWriteSeq.current = 0
+    lastFirstRequestKey.current = null
     store.setLocalState(sessionId, 'idle')
   }, [clearTimer, resolved, store, writer])
 
   // 输入停稳后写本地；只有输入序号真的前进才重新计时。
   useEffect(() => {
     if (!enabled || resolved.sessionId === null || session === null) return
-    if (session.inputSeq === 0) return
+    if (session.inputSeq === 0 || isEmptyDraft(session)) return
     if (session.inputSeq <= lastWrittenSeq.current) return
     clearTimer()
     timerRef.current = setTimeout(() => { void writeNow() }, delayMs)
     return clearTimer
   }, [clearTimer, delayMs, enabled, resolved.sessionId, session, writeNow])
+
+  /**
+   * 首次创建请求被冻结时补写一次本地记录。
+   *
+   * 本地镜像（400ms）比创建请求（800ms）更早，所以「首次 payload」出现时
+   * 序号并没有前进；如果不补写，响应丢失后记录里 `first_request` 仍是 null，
+   * 重新打开就只能当新草稿再创建一次——正是要避免的重复记录。
+   * 只有从无到有时的这一下，不会在成功后（变成 null）再写一次。
+   */
+  useEffect(() => {
+    if (!enabled || resolved.sessionId === null || session === null) return
+    const key = session.firstRequest?.client_create_id ?? null
+    if (key === null || key === lastFirstRequestKey.current) return
+    if (session.inputSeq === 0) return
+    lastFirstRequestKey.current = key
+    clearTimer()
+    void writeNow(true)
+  }, [clearTimer, enabled, resolved.sessionId, session, writeNow])
 
   // 服务器确认且没有更新输入：清理本地记录（不删别人、不删更新过的）。
   useEffect(() => {
@@ -253,6 +309,8 @@ export function useJournalDraftMirror(options: JournalDraftMirrorOptions): Journ
     clearTimer()
     void writer.remove(resolved.tabId, resolved.draftId)
     lastWrittenSeq.current = 0
+    lastWriteSeq.current = 0
+    lastFirstRequestKey.current = null
     store.setLocalState(resolved.sessionId, 'idle')
   }, [clearTimer, enabled, resolved, session, store, writer])
 
