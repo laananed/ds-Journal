@@ -16,7 +16,9 @@ import {
   TRASH_PURGE_CONFIRM_MESSAGE,
   TRASH_TARGET_GONE_MESSAGE,
   trashActionDoneMessage,
+  trashWriteFailureMessage,
   type TrashAction,
+  type TrashFailureFeedback,
 } from '../utils/trashFeedback'
 
 interface TrashPageProps {
@@ -40,11 +42,17 @@ function emptyMessage(filter: TrashFilter): string {
 }
 
 /**
- * Trash 详情（Stage 2 / S2-T10）：只读阅读 + 恢复 + 永久删除。
+ * Trash 详情（Stage 2 / S2-T10 → Stage 4 / S04-T11）。
  *
  * - 组件按 `type:id:key` 重挂载，每次打开真实读取已删除详情；
+ * - **只读**：不挂编辑器变更回调、不发 PATCH，因此不可能改写已删除正文；
+ * - 正文优先消费 T01 契约的 `content_doc`（统一只读编辑器），
+ *   legacy 记录**不做自动转换**（转换必须由用户回到编辑页显式发起），
+ *   原文用既有安全 Markdown 兜底呈现；
  * - 恢复/永久删除都使用服务器响应；写失败保留记录与详情；
  * - 404 表示目标已被其他操作恢复或删除，不谎报本次动作成功；
+ * - 409 按 `code` 区分语义：`ritual_slot_conflict`（名额冲突，替换恢复待 T04）
+ *   与 `related_files_changed`（关联文件变化）**不冒充**成「重读再试」；
  * - 永久删除取消/关闭确认框时不发任何请求。
  */
 function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, onTargetGone, onResolveLink }: {
@@ -63,8 +71,19 @@ function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, 
   const [reloadToken, setReloadToken] = useState(0)
   const [restoreStage, setRestoreStage] = useState<'idle' | 'restoring'>('idle')
   const [purgeStage, setPurgeStage] = useState<'idle' | 'confirming' | 'deleting'>('idle')
-  const [writeError, setWriteError] = useState('')
+  const [writeFailure, setWriteFailure] = useState<TrashFailureFeedback | null>(null)
   const writing = useRef(false)
+
+  /** 写入失败：交给纯逻辑按 `code`/`status` 分类，再决定是否重读详情。 */
+  const reportFailure = useCallback((action: TrashAction, error: unknown) => {
+    const failure = trashWriteFailureMessage(action, {
+      status: error instanceof TrashApiError ? error.status : undefined,
+      code: error instanceof TrashApiError ? error.code : undefined,
+      message: error instanceof Error ? error.message : undefined,
+    })
+    setWriteFailure(failure)
+    if (failure.reread) setReloadToken((value) => value + 1)
+  }, [])
 
   /** 目标消失（404）：清除过期详情、通知父级重读列表，但不声称动作成功。 */
   const handleGone = useCallback(() => {
@@ -104,7 +123,7 @@ function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, 
     writing.current = true
     onBusyChange(true)
     setRestoreStage('restoring')
-    setWriteError('')
+    setWriteFailure(null)
     try {
       // Stage 3 / T01 契约：恢复必须携带当前版本，缺版本 428、旧版本 409。
       const restored = await restoreTrashItem(trashType, trashId, item.revision)
@@ -113,12 +132,9 @@ function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, 
       setRestoreStage('idle')
       if (error instanceof TrashApiError && error.status === 404) {
         handleGone()
-      } else if (error instanceof TrashApiError && error.status === 409) {
-        // 版本已变化：不覆盖，重新读取最新状态由用户再确认。
-        setWriteError('这条记录已在别处发生变化，已重新读取，请再确认一次。')
-        setReloadToken((value) => value + 1)
       } else {
-        setWriteError(error instanceof Error ? error.message : '恢复失败，请稍后重试')
+        // 409 的不同 code（名额冲突 / 关联变化 / 版本过期）由纯逻辑分别措辞。
+        reportFailure('restore', error)
       }
     } finally {
       writing.current = false
@@ -131,7 +147,7 @@ function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, 
     writing.current = true
     onBusyChange(true)
     setPurgeStage('deleting')
-    setWriteError('')
+    setWriteFailure(null)
     try {
       // Stage 3 / T01 契约：永久删除同样必须携带当前版本。
       await purgeTrashItem(trashType, trashId, item.revision)
@@ -140,11 +156,8 @@ function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, 
       setPurgeStage('idle')
       if (error instanceof TrashApiError && error.status === 404) {
         handleGone()
-      } else if (error instanceof TrashApiError && error.status === 409) {
-        setWriteError('这条记录已在别处发生变化，已重新读取，请再确认一次。')
-        setReloadToken((value) => value + 1)
       } else {
-        setWriteError(error instanceof Error ? error.message : '永久删除失败，请稍后重试')
+        reportFailure('purge', error)
       }
     } finally {
       writing.current = false
@@ -157,11 +170,17 @@ function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, 
     setItem(null)
     setNotFound(false)
     setLoadError('')
-    setWriteError('')
+    setWriteFailure(null)
     setRestoreStage('idle')
     setPurgeStage('idle')
     setReloadToken((value) => value + 1)
   }
+
+  /**
+   * 正文渲染口径：有 `content_doc`（T01 契约的权威正文）就用统一只读编辑器；
+   * 为 `null` 说明是 legacy 记录，只呈现服务器投影的原文，**不自动转换**。
+   */
+  const itemDocument = item?.content_doc ?? null
 
   return (
     <section className="journal-detail" aria-label="回收箱详情">
@@ -191,11 +210,24 @@ function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, 
             <div className="detail-meta-row"><dt>创建时间</dt><dd>{formatServerTimestamp(item.created_at)}</dd></div>
             <div className="detail-meta-row"><dt>修改时间</dt><dd>{formatServerTimestamp(item.updated_at)}</dd></div>
             <div className="detail-meta-row"><dt>移入回收箱时间</dt><dd>{formatServerTimestamp(item.deleted_at ?? '')}</dd></div>
+            <div className="detail-meta-row"><dt>正文格式</dt>
+              <dd>{itemDocument === null ? '旧格式（原始文本，只读）' : '富文本（schema 1）'}</dd></div>
           </dl>
-          {/* 只读展示：Journal 含结构化 blocks（Trash 详情返回原 blocks），Insight 无 blocks。 */}
-          <WritingContent
-            blocks={item.type === 'journal' ? item.content_blocks : null}
-            content={item.content} onLink={onResolveLink} disabled={busy} />
+          {/* 只读展示（Stage 4 / T11）：优先 `content_doc`；
+              legacy 时用原文兜底，Journal 的旧 blocks 仅在无 JSON 时参与呈现。
+              两条路径都不写回数据，也不执行正文 HTML。 */}
+          {itemDocument === null
+            ? (
+              <WritingContent
+                blocks={item.type === 'journal' ? item.content_blocks : null}
+                content={item.content} onLink={onResolveLink} disabled={busy} />
+            )
+            : <WritingContent doc={itemDocument} content={item.content} onLink={onResolveLink} disabled={busy} />}
+          {itemDocument === null && (
+            <p className="detail-hint">
+              这条记录的正文仍是旧格式：回收箱只读呈现原文，不做自动转换；恢复后可在编辑页显式使用「转换为富文本」。
+            </p>
+          )}
           <p className="detail-hint">回收箱中的记录只读，不能编辑或修改 Folder；恢复后回到原来的位置。</p>
           <div className="detail-actions">
             <button type="button" onClick={confirmRestore} disabled={busy}>
@@ -203,7 +235,7 @@ function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, 
             </button>
             {purgeStage === 'idle' && (
               <button type="button" className="detail-danger" disabled={busy}
-                onClick={() => { setWriteError(''); setPurgeStage('confirming') }}>永久删除</button>
+                onClick={() => { setWriteFailure(null); setPurgeStage('confirming') }}>永久删除</button>
             )}
           </div>
           {purgeStage === 'confirming' && (
@@ -218,7 +250,12 @@ function TrashDetail({ trashType, trashId, onBusyChange, onClose, onActionDone, 
             </div>
           )}
           {restoreStage === 'restoring' && <p className="detail-state" role="status">正在恢复……</p>}
-          {writeError && <p className="detail-error" role="alert">{writeError}（记录仍在回收箱中，可稍后重试。）</p>}
+          {writeFailure && (
+            <p className="detail-error" role="alert">
+              {writeFailure.message}
+              {writeFailure.retriable ? '（记录仍在回收箱中，可稍后重试。）' : ''}
+            </p>
+          )}
         </>
       )}
     </section>

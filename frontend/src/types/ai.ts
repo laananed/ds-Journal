@@ -17,6 +17,9 @@ export interface AISettings {
   search_configured: boolean
   /** 偏好与实际能力同时成立才为 true（偏好 true + 未配置搜索 => false）。 */
   effective_web_enabled: boolean
+  auto_go_deeper: boolean
+  auto_minds_comments: boolean
+  mind_preset_ids: MindPresetId[]
 }
 
 /** `PATCH /api/ai/settings` 的请求；只允许这三项。 */
@@ -26,6 +29,9 @@ export interface AISettingsUpdate {
   /** 省略表示保持不变；空串表示清除。最多 4,000 个 Unicode 码点。 */
   custom_prompt?: string
   web_enabled?: boolean
+  auto_go_deeper?: boolean
+  auto_minds_comments?: boolean
+  mind_preset_ids?: MindPresetId[]
 }
 
 /** `GET /api/ai/usage`：全软件累计。 */
@@ -96,7 +102,45 @@ export interface AICitation {
 }
 
 /** `AiRequest.status` 的固定取值。 */
-export type AIRequestStatus = 'pending' | 'ready' | 'applied' | 'failed' | 'conflict' | 'unknown'
+export type AIRequestStatus = 'prepared' | 'pending' | 'ready' | 'applied' | 'failed' | 'conflict' | 'unknown'
+
+export type MindPresetId = 'gentle_reflection' | 'alternative_perspectives' | 'thinking_traps'
+export interface AIWritingRange { node_id: string; start: number; end: number }
+export type AIWritingScope = 'all' | AIWritingRange | { ranges: AIWritingRange[] }
+export type AIWritingPrepare = {
+  request_id: string
+  trigger: 'manual' | 'automatic'
+  source: { type: 'journal'; id: number; expected_revision: number }
+} & (
+  | { kind: 'go_deeper'; question?: string }
+  | { kind: 'minds_comments'; scope?: AIWritingScope; mind_preset_ids?: MindPresetId[] }
+)
+
+export interface AICommentAnchor extends AIWritingRange { quote: string; quote_sha256: string }
+export interface AIComment {
+  id: string
+  request_id: string | null
+  mind_preset_id: MindPresetId
+  text: string
+  quote: string
+  anchor: AICommentAnchor
+  anchor_state: 'available' | 'unavailable'
+  created_at: string
+}
+export interface AICommentsPage {
+  items: AIComment[]
+  page: number
+  page_size: number
+  total: number
+  has_next: boolean
+}
+export interface AIWritingMutation {
+  request_id: string
+  status: AIRequestStatus
+  files: import('./journal').Journal[]
+  effects: import('../state/editSessions').FileEffect[]
+  comments?: Array<{ id: string; anchor_state: 'available' | 'unavailable' }>
+}
 
 /** `POST /api/ai/local` 的 source 参数：必须带 `expected_revision`。 */
 export interface AILocalSource {
@@ -127,7 +171,7 @@ export interface AIRequestErrorInfo {
  */
 export interface AIRequestDetail {
   request_id: string
-  kind: 'local' | 'review'
+  kind: 'local' | 'review' | 'go_deeper' | 'minds_comments'
   status: AIRequestStatus
   sources: AISourceIdentity[]
   reply: string | null
@@ -139,6 +183,7 @@ export interface AIRequestDetail {
   web_status: AIWebStatus
   citations: AICitation[]
   error: AIRequestErrorInfo | null
+  comments?: Array<AIComment | { mind_preset_id: MindPresetId; text: string; anchor: AICommentAnchor }> | null
 }
 
 /**

@@ -32,7 +32,7 @@ function WritingContent({ doc, blocks, content, onLink, disabled }: WritingConte
   if (doc !== undefined) {
     return (
       <div className="writing-reading">
-        <RichTextEditor doc={doc} readOnly label="正文（只读）" />
+        <RichTextEditor doc={doc} readOnly label="正文（只读）" onLink={onLink} />
       </div>
     )
   }

@@ -1,12 +1,31 @@
 import type { TrashFilter, TrashItem, TrashPageData, TrashType } from '../types/trash'
 
-/** Trash 请求错误。`status === 404` 表示目标不存在或已不在回收箱中。 */
+/**
+ * Trash 请求错误。`status === 404` 表示目标不存在或已不在回收箱中。
+ *
+ * Stage 4 / T11：后端错误体统一为 `{detail, code}`（`docs/stage4-api.md` §1），
+ * 因此这里额外保留 `code`，让调用方能区分「普通版本冲突」与
+ * `ritual_slot_conflict` / `related_files_changed` 这类**语义不同**的 409，
+ * 而不是把所有 409 都当成「记录已变化，重读再试」。
+ * `code` 缺失时保持 Stage 3 行为（按 `status` 判断），不视为错误。
+ */
 export class TrashApiError extends Error {
   readonly status: number
-  constructor(status: number, message: string) {
+  /** 机器可读错误码（`revision_conflict` / `ritual_slot_conflict` 等）；旧响应可能没有。 */
+  readonly code?: string
+  /** `ritual_slot_conflict` 附带的占位文件身份与版本；无该码时为 undefined。 */
+  readonly conflict?: { current_id: number | null; revision: number | null }
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    conflict?: { current_id: number | null; revision: number | null },
+  ) {
     super(message)
     this.name = 'TrashApiError'
     this.status = status
+    this.code = code
+    this.conflict = conflict
   }
 }
 
@@ -24,22 +43,46 @@ function getApiBaseUrl(): string {
   return raw.trim().replace(/\/+$/, '')
 }
 
-async function readErrorMessage(response: Response): Promise<string> {
+/** 后端错误体：`{detail, code?, conflict?}`；`detail` 可能是字符串或 422 校验列表。 */
+interface TrashErrorBody {
+  message: string
+  code?: string
+  conflict?: { current_id: number | null; revision: number | null }
+}
+
+function readConflict(value: unknown): TrashErrorBody['conflict'] {
+  if (typeof value !== 'object' || value === null) return undefined
+  const raw = value as { current_id?: unknown; revision?: unknown }
+  const id = typeof raw.current_id === 'number' ? raw.current_id : null
+  const revision = typeof raw.revision === 'number' ? raw.revision : null
+  if (id === null && revision === null) return undefined
+  return { current_id: id, revision }
+}
+
+/**
+ * 解析错误体：消息用于展示，`code` / `conflict` 用于分支判断。
+ * 不回显请求体内容；非 JSON 响应退化为 HTTP 状态兜底消息。
+ */
+async function readErrorBody(response: Response): Promise<TrashErrorBody> {
   const fallback = `请求失败（HTTP ${response.status}）`
   try {
     const body: unknown = await response.json()
-    if (typeof body !== 'object' || body === null || !('detail' in body)) return fallback
-    const detail = (body as { detail: unknown }).detail
-    if (typeof detail === 'string') return detail
+    if (typeof body !== 'object' || body === null) return { message: fallback }
+    const record = body as { detail?: unknown; code?: unknown; conflict?: unknown }
+    const code = typeof record.code === 'string' && record.code !== '' ? record.code : undefined
+    const conflict = readConflict(record.conflict)
+    const detail = record.detail
+    if (typeof detail === 'string') return { message: detail, code, conflict }
     if (Array.isArray(detail) && detail.length > 0) {
       const first: unknown = detail[0]
       if (typeof first === 'object' && first !== null && 'msg' in first) {
         const message = (first as { msg: unknown }).msg
-        if (typeof message === 'string') return `请求内容不合法：${message}`
+        if (typeof message === 'string') return { message: `请求内容不合法：${message}`, code, conflict }
       }
     }
+    return { message: fallback, code, conflict }
   } catch { /* 非 JSON 响应使用 HTTP 兜底消息。 */ }
-  return fallback
+  return { message: fallback }
 }
 
 /**
@@ -69,7 +112,8 @@ export async function getTrashItem(
 ): Promise<TrashItem> {
   const response = await fetch(`${getApiBaseUrl()}/api/trash/${type}/${id}`, { signal })
   if (!response.ok) {
-    throw new TrashApiError(response.status, await readErrorMessage(response))
+    const body = await readErrorBody(response)
+    throw new TrashApiError(response.status, body.message, body.code, body.conflict)
   }
   return await response.json() as TrashItem
 }
@@ -81,7 +125,8 @@ export async function restoreTrashItem(type: TrashType, id: number, expectedRevi
     headers: { 'If-Match': `"${expectedRevision}"` },
   })
   if (!response.ok) {
-    throw new TrashApiError(response.status, await readErrorMessage(response))
+    const body = await readErrorBody(response)
+    throw new TrashApiError(response.status, body.message, body.code, body.conflict)
   }
   return await response.json() as TrashItem
 }
@@ -93,6 +138,7 @@ export async function purgeTrashItem(type: TrashType, id: number, expectedRevisi
     headers: { 'If-Match': `"${expectedRevision}"` },
   })
   if (!response.ok) {
-    throw new TrashApiError(response.status, await readErrorMessage(response))
+    const body = await readErrorBody(response)
+    throw new TrashApiError(response.status, body.message, body.code, body.conflict)
   }
 }

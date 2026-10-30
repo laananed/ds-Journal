@@ -104,6 +104,8 @@ Journal 增 `journal_kind text NOT NULL DEFAULT 'writing'`，检查枚举；在 
 
 复制节点的 copy_id、来源节点和选择摘要确定性生成目标节点身份，陈旧重放不能第二次插入。复制 Set 目标是新目标；复制 End 回顾保留快照/答案但无活动关联。UI 取消零写；普通外部剪贴板仍视用户主动输入，不给予伪造来源权限。
 
+2026-10-30 用户批准：选区采用 paragraph/heading ID 与块内 Unicode 码点半开范围，兼容 T01 不给 text 分配 ID 的约束；复制命令的服务端持久记录保存 copy_id、请求摘要、源/目标身份及结果校验信息，并与正文写入同事务提交，用于重放和已修改结果检测。线性迁移由 Codex 独占，真实库升级仍须单独授权。
+
 ## 6. 目标链接、解除与快照保留
 
 不建立独立目标文本事实表。Set JSON 的 goalItem 为 canonical，goal_id 为 UUID；End JSON 保存历史镜像/系统标题及独立回答。`ritual_goal_links` 记录 link_id、set_journal_id（可空 FK，永久删除时 SET NULL）、end_journal_id（FK，目标 End 永删时 CASCADE）、goal_id、end_node_id；同一 End/goal 唯一。服务验证双方 kind/date、节点归属和 active 状态。
@@ -137,6 +139,8 @@ apply 再进入文件队列：保存到序号屏障、锁有效源/请求，验�
 同一请求使用当前用户快照和全篇/选区范围，三个固定预置由提示词常量定义，不建自定义 Mind 模型表。一个请求统一返回多个合规评论，不为每个预置暗中独立发起功能请求；受限搜索工具与子调用预算沿用 Stage 3。
 
 评论锚点使用稳定用户 paragraph/heading 块 ID、块内 Unicode 码点半开范围、quote 与摘要，不能只用绝对编辑器 offset 或全文字符串首次匹配；text 不假定具有可持久 ID，ProseMirror UTF-16 偏移需显式转换。apply 校验当前块对应 quote；无法证明位置时落库 unavailable 侧栏结果，不挂错误 Mark。前端 Mark 的 ProseMirror transaction 映射用于正常编辑跟踪，不能替代后端来源/quote 校验。多个评论用 comment_ids 集合分段表达，Mark 不存正文；UUID 形状校验不替代文件归属查询。
+
+2026-10-30 用户批准 API §7 的多节点 ranges：后端逐项从已保存快照提取并校验范围，同节点重叠拒绝；单次功能请求仍只执行一次受控调用。客户端 T09 负责由激活基线和真实用户输入计算范围，后端不凭客户端范围声称已独立验证输入事件或激活基线；正文和 delta 不由客户端传入。
 
 评论存 `ai_comments`，journal_id FK（源永删 CASCADE）、request_id 可空 SET NULL、mind_preset_id、text、quote、anchor JSONB、anchor_state、created_at。软删源保留其恢复数据，普通入口隐藏；删除评论同时清 Mark，usage 不回退。删除锚点不把评论误挂邻近重复词；评论生成不改变 Go Deeper C。
 

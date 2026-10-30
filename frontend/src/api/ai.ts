@@ -18,6 +18,10 @@ import type {
   AISettings,
   AISettingsUpdate,
   AIUsage,
+  AIWritingPrepare,
+  AIWritingMutation,
+  AICommentsPage,
+  AINoopResponse,
 } from '../types/ai'
 
 export class AiApiError extends Error {
@@ -148,7 +152,7 @@ export async function postAILocal(
     signal,
   })
   if (!response.ok) {
-    const message = await readErrorMessage(response)
+    const message = await readErrorMessage(response.clone())
     const requestId = await readErrorRequestId(response)
     throw new AiCallError(response.status, message, requestId)
   }
@@ -167,6 +171,47 @@ export async function getAIRequest(
   const response = await fetch(`${apiBase()}/api/ai/requests/${encodeURIComponent(requestId)}`, { signal })
   if (!response.ok) throw new AiApiError(response.status, await readErrorMessage(response))
   return await response.json() as AIRequestDetail
+}
+
+/** S04-T08: prepare freezes the saved source; never submits local text or a checkpoint. */
+export async function prepareAIWriting(payload: AIWritingPrepare, signal?: AbortSignal): Promise<AIWritingMutation | AINoopResponse> {
+  const response = await fetch(`${apiBase()}/api/ai/writing/prepare`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal,
+  })
+  if (!response.ok) throw new AiApiError(response.status, await readErrorMessage(response))
+  return await response.json() as AIWritingMutation | AINoopResponse
+}
+
+/** Execute only the existing ID. A failed or uncertain call must not be retried with a new key automatically. */
+export async function executeAIWriting(requestId: string, signal?: AbortSignal): Promise<{ status: number; body: AIRequestDetail }> {
+  const response = await fetch(`${apiBase()}/api/ai/writing/${encodeURIComponent(requestId)}/execute`, { method: 'POST', signal })
+  if (!response.ok) {
+    const message = await readErrorMessage(response.clone())
+    const id = await readErrorRequestId(response)
+    throw new AiCallError(response.status, message, id)
+  }
+  return { status: response.status, body: await response.json() as AIRequestDetail }
+}
+
+export async function applyAIWriting(requestId: string, expectedRevision: number, signal?: AbortSignal): Promise<AIWritingMutation> {
+  const response = await fetch(`${apiBase()}/api/ai/writing/${encodeURIComponent(requestId)}/apply`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expected_revision: expectedRevision }), signal,
+  })
+  if (!response.ok) throw new AiApiError(response.status, await readErrorMessage(response))
+  return await response.json() as AIWritingMutation
+}
+
+export async function listAIComments(journalId: number, page = 1, signal?: AbortSignal): Promise<AICommentsPage> {
+  const response = await fetch(`${apiBase()}/api/journals/${journalId}/comments?page=${page}`, { signal })
+  if (!response.ok) throw new AiApiError(response.status, await readErrorMessage(response))
+  return await response.json() as AICommentsPage
+}
+
+export async function deleteAIComment(journalId: number, commentId: string, revision: number, signal?: AbortSignal): Promise<void> {
+  const response = await fetch(`${apiBase()}/api/journals/${journalId}/comments/${encodeURIComponent(commentId)}`, {
+    method: 'DELETE', headers: { 'If-Match': `"${revision}"` }, signal,
+  })
+  if (!response.ok) throw new AiApiError(response.status, await readErrorMessage(response))
 }
 
 /* -------------------------------------------------------------------------
@@ -195,7 +240,7 @@ export async function postAIReview(
     signal,
   })
   if (!response.ok) {
-    const message = await readErrorMessage(response)
+    const message = await readErrorMessage(response.clone())
     const requestId = await readErrorRequestId(response)
     throw new AiCallError(response.status, message, requestId)
   }

@@ -46,6 +46,7 @@ from app.writing.service import (require_revision, WriteConflict, WritingError, 
 from app.folder.models import Folder, folder_fk_violation
 from app.journal.models import Journal
 from app.journal.schemas import JournalDetail
+from app.ritual.schemas import RelatedRevision
 from app.journal.schemas import (
     JournalCreate,
     JournalPage,
@@ -138,6 +139,9 @@ def _project_required(db: Session, journal_id: int) -> JournalResponse:
 def create_journal(db: Session, data: JournalCreate) -> JournalResponse:
     payload_hash = create_hash(data)
     try:
+        if data.journal_kind != 'writing':
+            from app.ritual.service import lock_day
+            lock_day(db, data.journal_date)
         if data.client_create_id is not None:
             row = db.scalar(select(Journal).where(Journal.client_create_id == data.client_create_id))
             if row is not None:
@@ -278,7 +282,25 @@ def get_journal(db: Session, journal_id: int) -> JournalResponse | None:
         return None
 
     journal, sequence = row
-    return _to_response(journal, sequence, detail=True)
+    result = _to_response(journal, sequence, detail=True)
+    if journal.journal_kind in ('set', 'end'):
+        from app.ritual.models import RitualGoalLink
+        from sqlalchemy import or_
+        with db.no_autoflush:
+            links = db.scalars(select(RitualGoalLink).where(
+                RitualGoalLink.set_journal_id.is_not(None),
+                or_(RitualGoalLink.set_journal_id == journal_id,
+                    RitualGoalLink.end_journal_id == journal_id)).order_by(RitualGoalLink.id)).all()
+            related_ids = {link.end_journal_id if link.set_journal_id == journal_id else link.set_journal_id
+                           for link in links}
+            related = db.execute(select(Journal.id, Journal.revision).where(
+                Journal.id.in_(related_ids), Journal.deleted_at.is_(None)).order_by(Journal.id)).all()
+        result.related_revisions = [RelatedRevision(type='journal', id=item.id, revision=item.revision)
+                                    for item in related]
+        result.goal_links = [{'link_id': str(link.id), 'set_id': link.set_journal_id,
+                              'end_id': link.end_journal_id, 'goal_id': str(link.goal_id),
+                              'end_node_id': str(link.end_node_id)} for link in links]
+    return result
 
 
 def _get_active_journal(db: Session, journal_id: int) -> Journal | None:
@@ -301,9 +323,46 @@ def update_journal(db: Session, journal_id: int, data: JournalUpdate) -> Journal
         row = _get_active_journal(db, journal_id)
         if row is None:
             return None
+        if row.journal_kind == 'set' and row.content_doc is not None and 'content_doc' in data.model_fields_set:
+            from app.ritual.goals import patch_set_document
+            return patch_set_document(db, journal_id, data)
+        if row.journal_kind == 'end' and row.content_doc is not None and 'content_doc' in data.model_fields_set:
+            from app.ritual.goals import patch_end_document
+            return patch_end_document(db, journal_id, data)
+        if 'related_revisions' in data.model_fields_set:
+            raise WritingError('related revisions require a structured Set document update')
+        if row.journal_kind != 'writing':
+            from app.ritual.service import lock_day, require_no_links
+            lock_day(db, row.journal_date)
+            row = db.scalar(select(Journal).where(Journal.id == journal_id)
+                            .with_for_update().execution_options(populate_existing=True))
+            if row is None or row.deleted_at is not None:
+                return None
+            if row.journal_kind != 'end' or 'content_doc' not in data.model_fields_set:
+                require_no_links(db, row.id)
+            else:
+                # Only an answer edit with every linked review intact may use
+                # the ordinary single-file path. System attrs are protected by
+                # writing_changes/validate_author_changes below.
+                from app.ritual.models import RitualGoalLink
+                from app.ritual.service import RelatedFilesChanged
+                links = db.scalars(select(RitualGoalLink).where(
+                    RitualGoalLink.end_journal_id == row.id).order_by(RitualGoalLink.id)
+                    .with_for_update()).all()
+                nodes = {n.get('attrs', {}).get('id'): n for n in (data.content_doc or {}).get('content', [])
+                         if n.get('type') == 'goalReview'}
+                if any(str(link.end_node_id) not in nodes or
+                       nodes[str(link.end_node_id)].get('attrs', {}).get('link_id') != str(link.id)
+                       for link in links):
+                    raise RelatedFilesChanged('linked review changed')
         if row.journal_kind != 'writing' and 'journal_date' in data.model_fields_set:
             raise WritingError('ritual date cannot be changed')
-        changes = writing_changes(row, data)
+        if row.journal_kind == 'writing' and 'content_doc' in data.model_fields_set:
+            row = db.scalar(select(Journal).where(Journal.id == journal_id, Journal.deleted_at.is_(None))
+                            .with_for_update().execution_options(populate_existing=True))
+            if row is None:
+                return None
+        changes = writing_changes(row, data, db=db)
         if not changes:
             return _project_required(db, journal_id)
         if row.revision != data.expected_revision:
@@ -322,7 +381,7 @@ def update_journal(db: Session, journal_id: int, data: JournalUpdate) -> Journal
             row = _get_active_journal(db, journal_id)
             if row is None:
                 return None
-            if not writing_changes(row, data):
+            if not writing_changes(row, data, db=db):
                 return _project_required(db, journal_id)
             raise WriteConflict("file revision has changed")
         db.commit()
@@ -334,12 +393,15 @@ def update_journal(db: Session, journal_id: int, data: JournalUpdate) -> Journal
     return _project_required(db, journal_id)
 
 
-def delete_journal(db: Session, journal_id: int, expected_revision: int | None = None) -> bool:
+def delete_journal(db: Session, journal_id: int, expected_revision: int | None = None, related=None) -> bool:
     require_revision(expected_revision)
     try:
         row = _get_active_journal(db, journal_id)
         if row is None:
             return False
+        if row.journal_kind != 'writing':
+            from app.ritual.goals import detach_for_delete
+            detach_for_delete(db, row.id, expected_revision, related)
         if row.revision != expected_revision:
             raise WriteConflict("file revision has changed")
         result = db.execute(update(Journal).where(Journal.id == journal_id,
@@ -350,6 +412,8 @@ def delete_journal(db: Session, journal_id: int, expected_revision: int | None =
             if _get_active_journal(db, journal_id) is None:
                 return False
             raise WriteConflict("file revision has changed")
+        from app.writing.service import invalidate_writing_ai
+        invalidate_writing_ai(db, journal_id)
         db.commit()
     except Exception:
         db.rollback()

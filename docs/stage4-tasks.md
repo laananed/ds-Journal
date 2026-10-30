@@ -91,6 +91,7 @@ T01 若从提交 HEAD 创建隔离工作区，不会自动带入未提交四份�
 - 文件：新增 `backend/app/ritual/service.py`，扩展T01建立的 `backend/app/ritual/{schemas,router,dates,queries}.py`、`frontend/src/api/rituals.ts`、`frontend/src/types/ritual.ts` 的写入/恢复契约；修改 `backend/app/journal/{service,schemas,router}.py`、`backend/app/trash/{service,schemas,router}.py`、`backend/app/main.py`；Model/迁移若需修正仍由Codex单写。
 - 输出：模板CAS、固定时区/捕获日期验证、每日唯一、软删/普通恢复、完整替换与手动选区复制。goal生命周期hook在T07接完整实现，T04先证明不含关联的事务、ID和作者安全。
 - 联动交接：T04 在无 link 的隔离基线先交付恢复事务，并对发现任何受影响 link 的操作明确拒绝/回滚（例如 409 `related_files_changed`），不得跳过解除或半写；T07 按 API §5–6 接手同一生命周期入口，在同事务核对版本、解除所有受影响关联、保留 End 快照和回答，补并发/故障独立验收。含关联的 restore-replace 不得在 T07 集成前宣称符合完整契约；T04/T07 相关服务单写串行。
+- 2026-10-30 用户批准复制选区改为 paragraph/heading ID 加 Unicode 码点范围，并新增服务端持久幂等记录；契约见 API §5、架构 §5。Codex 独占 Model/线性迁移与公共契约，测试库迁移仍先核对实际库、独占及基线；个人库升级另行授权。
 - 验收：0～4问、缺行GET零写；类型/日期不让通用PATCH绕过；两Session竞争名额一胜一409；跨04:00仍原草稿日期；开始今天和结束今天均有完整替换及copy-content；源/目标类型日期不匹配拒绝；复制AI由真实源构造，普通取消零写，响应丢失/重放不双复制；任一故障无双有效/半替换。
 - 测试：新增 `backend/tests/test_s4_ritual_api.py`、`test_s4_ritual_recovery.py`、`test_s4_templates.py`；03:59:59/04:00、月年闰日、浏览器不同时区；软删/重建/旧恢复冲突、源和目标各自CAS、恶意来源/范围、SQL故障；保留普通Trash与If-Match回归。
 - 回滚：替换只软删current，不永删；事务失败全回滚；copy保留原source。CAS失败不清本地草稿。WB独测，新Codex复核名额/复制/事务。
@@ -125,6 +126,7 @@ T01 若从提交 HEAD 创建隔离工作区，不会自动带入未提交四份�
 
 - 文件：`backend/app/ai/{local,requests,incremental,schemas,router,prompts,settings,review,review_save,usage}.py`；新增 `backend/app/ai/{writing_requests,comments}.py`；`backend/app/writing/documents.py` 的受控应用及 `writing/service.py` 删除；`frontend/src/api/ai.ts`、`types/ai.ts` 公共契约；必要Model修正由Codex单写。
 - 输出：API §7的prepare/execute/apply、Minds范围/预置/评论CRUD、auto去重、原请求安全恢复、JSON复盘/一次保存适配；复用现有官方客户端和受限工具，不改供应商/权限或增加worker。
+- 2026-10-30 用户批准 API §7 多节点 ranges；T08 校验保存快照中的范围、重叠和锚点，T09 依据真实输入及激活基线生成自动范围并验证跨节点场景，服务端不把范围自报当成输入事件证明。
 - 验收：prepare保存快照/占位，execute同ID只一次，上游期间无DB锁；用户下方续写仍能原位apply，C仅到调用快照；旧范围/删占位/软删/恢复/unknown迟到不附着；Minds重复quote不误挂，失锚侧栏保结果、不给GoDeeper推进C；usage子调用/unknown/匿名累计不二计；自动双标签同hash一请求；复盘7日期15file/源变/一次确认/Insight草稿链路不退化。
 - 测试：新增 `backend/tests/test_s4_ai_writing.py`、`test_s4_ai_comments.py`、`test_s4_ai_auto_dedupe.py`；保留现有incremental/local/recovery/review-save/evidence/usage/tool/privacy/deletion边界并按新契约更新；真实PG两Session、结果ready后存储故障、超限、模型/搜索超时、丢HTTP、重启、恶意quote/ID。Model用Mock先证明边界；真实付费链另行授权。
 - 回滚：停自动触发/新execute，既有ID查询恢复；保留已消耗usage和ready结果，不清记录再发。WB独测，新Codex审C/幂等/计量/事务。

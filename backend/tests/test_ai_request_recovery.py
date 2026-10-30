@@ -102,7 +102,7 @@ def test_expired_old_call_cannot_overwrite_newer_checkpoint(local_env):
     with Session(engine) as db:
         row = db.get(AICheckpoint, ('journal', source['id']))
         assert str(row.last_request_id) == new_payload['request_id']
-        assert len(db.scalars(select(AIUsage)).all()) == 2
+        assert len(db.scalars(select(AIUsage).where(AIUsage.response_id == transport.response_id)).all()) == 2
 
 
 def test_runtime_lifespan_recovery(local_env):

@@ -88,7 +88,7 @@ def test_ready_checkpoint_fault_rolls_back_every_source(review_env):
     from app.ai.models import AIRequest
     from uuid import UUID
     _,transport,create,generate,_=review_env
-    sources=[create(),create(kind='inbox')]
+    sources=[create(),create(kind='journal')]
     seen=[]
     def failure(connection,cursor,statement,parameters,context,many):
         if statement.startswith('INSERT INTO ai_checkpoints'):
@@ -162,7 +162,7 @@ def test_hard_delete_during_review_never_recreates_private_request(review_env):
     from app.ai.models import AIRequest,AIUsage
     from uuid import UUID
     http,transport,create,generate,_=review_env
-    sources=[create(kind='inbox'),create()]
+    sources=[create(kind='journal'),create()]
     transport.block=True
     with ThreadPoolExecutor() as pool:
         future=pool.submit(generate,sources)
@@ -171,7 +171,9 @@ def test_hard_delete_during_review_never_recreates_private_request(review_env):
             with Session(engine) as db:
                 request=db.query(AIRequest).filter(AIRequest.status=='pending').one()
                 ident=request.id
-            response=http.delete('/api/inboxes/'+str(sources[0]['id']),headers={'If-Match':'"1"'})
+            response=http.delete('/api/journals/'+str(sources[0]['id']),headers={'If-Match':'"1"'})
+            assert response.status_code==204,response.text
+            response=http.delete('/api/trash/journal/'+str(sources[0]['id']),headers={'If-Match':'"2"'})
             assert response.status_code==204,response.text
         finally:transport.release.set()
         assert future.result().status_code==404

@@ -35,6 +35,7 @@ from app.database import get_db
 from app.writing.router import matched_revision
 from app.journal import service
 from app.journal.schemas import JournalDetail
+from app.ritual.schemas import RelatedRevisionsBody
 from app.journal.schemas import (
     JournalCreate,
     JournalPage,
@@ -48,7 +49,7 @@ _NOT_FOUND = "Journal not found"
 _FOLDER_NOT_FOUND = "Folder not found"
 
 
-@router.post("", response_model=JournalDetail, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=JournalDetail, response_model_exclude_unset=True, status_code=status.HTTP_201_CREATED)
 def create_journal(
     payload: JournalCreate,
     response: Response,
@@ -99,7 +100,7 @@ def list_journals(
     )
 
 
-@router.get("/{id}", response_model=JournalDetail, status_code=status.HTTP_200_OK)
+@router.get("/{id}", response_model=JournalDetail, response_model_exclude_unset=True, status_code=status.HTTP_200_OK)
 def get_journal(
     id: int,
     db: Session = Depends(get_db),
@@ -124,7 +125,7 @@ def get_journal(
     return journal
 
 
-@router.patch("/{id}", response_model=JournalDetail, status_code=status.HTTP_200_OK)
+@router.patch("/{id}", response_model=JournalDetail, response_model_exclude_unset=True, status_code=status.HTTP_200_OK)
 def update_journal(
     id: int,
     payload: JournalUpdate,
@@ -166,6 +167,7 @@ def update_journal(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_journal(
     id: int,
+    payload: RelatedRevisionsBody | None = None,
     expected_revision: int = Depends(matched_revision),
     db: Session = Depends(get_db),
 ) -> Response:
@@ -186,7 +188,7 @@ def delete_journal(
     不自定义错误包装、错误码或全局异常体系。
     删除成功不设置 `response_model`：204 本来就没有响应体。
     """
-    if not service.delete_journal(db, id, expected_revision):
+    if not service.delete_journal(db, id, expected_revision, payload):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_NOT_FOUND,

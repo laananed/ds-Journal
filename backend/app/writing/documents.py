@@ -149,6 +149,42 @@ def user_text_document(document):
     return _plain(document, True)
 
 
+def prepare_ai_placeholder(document, request_id):
+    """Create a server-owned boundary and a fresh user continuation."""
+    validate_document(document)
+    request_id = _uuid(request_id)
+    result = deepcopy(document)
+    result['content'].extend([
+        {'type': 'aiPlaceholder', 'attrs': {'id': str(uuid4()), 'request_id': request_id}},
+        {'type': 'paragraph', 'attrs': {'id': str(uuid4())}},
+    ])
+    validate_document(result)
+    return result
+
+
+def apply_ai_placeholder(document, request_id, frozen_user_text, reply):
+    """Replace only the matching boundary when the preceding user text agrees."""
+    validate_document(document)
+    request_id = _uuid(request_id)
+    nodes = document['content']
+    matches = [i for i, node in enumerate(nodes)
+               if node['type'] == 'aiPlaceholder' and node['attrs']['request_id'] == request_id]
+    if len(matches) != 1:
+        raise DocumentError('placeholder missing or ambiguous')
+    index = matches[0]
+    before = {'type': 'doc', 'content': nodes[:index]}
+    if user_text_document(before) != frozen_user_text:
+        raise DocumentError('source changed before placeholder')
+    if not isinstance(reply, str) or not reply:
+        raise DocumentError('empty reply')
+    result = deepcopy(document)
+    result['content'][index] = {'type': 'aiReply',
+        'attrs': {'id': nodes[index]['attrs']['id'], 'request_id': request_id},
+        'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': reply}]}]}
+    validate_document(result)
+    return result
+
+
 def validate_anchor(document, anchor):
     """Check a quote on a user paragraph/heading using half-open code-point offsets.
 
@@ -176,6 +212,65 @@ def validate_anchor(document, anchor):
     walk(document)
     if len(matches) != 1 or end > len(matches[0]) or matches[0][start:end] != quote:
         raise DocumentError('anchor changed or removed')
+
+
+def add_comment_mark(document, anchor, comment_id):
+    """Mark a validated code-point range in its specific user node."""
+    validate_anchor(document, anchor)
+    comment_id = _uuid(comment_id)
+    result = deepcopy(document)
+    def visit(node):
+        if node.get('attrs', {}).get('id') == anchor['node_id'] and node['type'] in ('paragraph', 'heading'):
+            position, children = 0, []
+            for child in node.get('content', []):
+                length = len(child['text']) if child['type'] == 'text' else 1
+                begin, end = position, position + length
+                left, right = max(begin, anchor['start']), min(end, anchor['end'])
+                if left < right and child['type'] != 'text':
+                    raise DocumentError('comment range includes non-text')
+                if left >= right:
+                    children.append(child)
+                else:
+                    for start, stop, marked in ((begin,left,False),(left,right,True),(right,end,False)):
+                        if start == stop:
+                            continue
+                        part = deepcopy(child)
+                        part['text'] = child['text'][start-begin:stop-begin]
+                        if marked:
+                            marks = part.setdefault('marks', [])
+                            existing = next((m for m in marks if m['type'] == 'mindComment'), None)
+                            if existing is None:
+                                marks.append({'type':'mindComment','attrs':{'comment_ids':[comment_id]}})
+                            elif comment_id not in existing['attrs']['comment_ids']:
+                                existing['attrs']['comment_ids'].append(comment_id)
+                        children.append(part)
+                position = end
+            node['content'] = children
+            return
+        for child in node.get('content', []):
+            visit(child)
+    visit(result)
+    validate_document(result)
+    return result
+
+
+def remove_comment_mark(document, comment_id):
+    comment_id = _uuid(comment_id)
+    result = deepcopy(document)
+    def visit(node):
+        marks = node.get('marks', [])
+        for mark in marks[:]:
+            if mark['type'] == 'mindComment' and comment_id in mark['attrs']['comment_ids']:
+                mark['attrs']['comment_ids'].remove(comment_id)
+                if not mark['attrs']['comment_ids']:
+                    marks.remove(mark)
+        if 'marks' in node and not marks:
+            del node['marks']
+        for child in node.get('content', []):
+            visit(child)
+    visit(result)
+    validate_document(result)
+    return result
 
 
 def _markdown(node):

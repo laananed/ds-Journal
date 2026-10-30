@@ -11,7 +11,8 @@ from app.insight.schemas import InsightResponse, InsightDetail
 from app.insight.service import build_insight_display_title, get_insight
 from app.journal.models import Journal
 from app.journal.schemas import JournalResponse, JournalDetail
-from app.journal.service import get_journal
+from app.journal.service import get_journal, RitualSlotConflict
+from sqlalchemy.exc import IntegrityError
 from app.journal.titles import build_kind_display_title, numbered_subquery
 from app.trash.schemas import TrashFilter, TrashItem, TrashPage, TrashType
 
@@ -79,7 +80,7 @@ def get_trash(db: Session, type: TrashType, id: int) -> TrashItem | None:
                              document_format='tiptap' if file.content_doc is not None else 'legacy')
     with db.no_autoflush:
         file = db.scalar(select(Insight).where(Insight.id == id))
-    return InsightDetail(**response.model_dump(), content_doc=file.content_doc,
+    return InsightDetail(**response.model_dump(), content_blocks=None, content_doc=file.content_doc,
                          document_schema_version=1 if file.content_doc is not None else None,
                          document_format='tiptap' if file.content_doc is not None else 'legacy')
 
@@ -92,27 +93,48 @@ def restore_trash(db: Session, type: TrashType, id: int, expected_revision: int 
                  .values(deleted_at=None, updated_at=model.updated_at, revision=model.revision + 1)
                  .execution_options(synchronize_session=False))
     try:
+        ritual = db.get(Journal, id) if type == 'journal' else None
+        if ritual is not None and ritual.journal_kind != 'writing':
+            from app.ritual.service import lock_day, require_no_links
+            lock_day(db, ritual.journal_date)
+            require_no_links(db, ritual.id)
         result = db.execute(statement)
         if result.rowcount == 0:
             if get_trash(db, type, id) is not None:
                 raise WriteConflict('file revision has changed')
             return None
         db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if ritual is not None and getattr(getattr(error.orig, 'diag', None), 'constraint_name', None) == 'uq_journals_active_ritual':
+            winner = db.scalar(select(Journal).where(Journal.journal_date == ritual.journal_date,
+                Journal.journal_kind == ritual.journal_kind, Journal.deleted_at.is_(None)))
+            if winner is not None:
+                raise RitualSlotConflict(winner.id, winner.revision) from error
+        raise
     except Exception:
         db.rollback()
         raise
     restored = get_journal(db, id) if type == 'journal' else get_insight(db, id)
     if restored is None:
         raise RuntimeError('Restored file could not be read back')
+    if type == 'insight':
+        restored.content_blocks = None
     return restored
 
 
-def purge_trash(db: Session, type: TrashType, id: int, expected_revision: int | None = None) -> bool:
+def purge_trash(db: Session, type: TrashType, id: int, expected_revision: int | None = None, related=None) -> bool:
     require_revision(expected_revision)
     model = Journal if type == 'journal' else Insight
     statement = (delete(model).where(model.id == id, model.deleted_at.is_not(None), model.revision == expected_revision)
                  .execution_options(synchronize_session=False))
     try:
+        ritual = db.get(Journal, id) if type == 'journal' else None
+        if ritual is not None and ritual.deleted_at is None:
+            return False
+        if ritual is not None and ritual.journal_kind != 'writing':
+            from app.ritual.goals import detach_for_delete
+            detach_for_delete(db, ritual.id, expected_revision, related)
         result = db.execute(statement)
         if result.rowcount == 0:
             if get_trash(db, type, id) is not None:

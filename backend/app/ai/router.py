@@ -24,7 +24,7 @@ from app.ai.usage import SourceNotFound
 from app.database import get_db
 from app.ai.local import execute_local, LocalError
 from app.ai.requests import request_response
-from app.ai.schemas import LocalRequest, AiRequestResponse, NoopResponse, ReviewRequest, ReviewSave
+from app.ai.schemas import LocalRequest, AiRequestResponse, NoopResponse, ReviewRequest, ReviewSave, WritingPrepare, WritingApply
 from app.ai.review import execute_review
 from app.ai.review_save import save_review
 from uuid import UUID
@@ -33,6 +33,41 @@ from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 files_router = APIRouter(prefix="/api/files", tags=["ai"])
+
+
+@router.post('/writing/prepare')
+def prepare_writing(payload: WritingPrepare, db: Session = Depends(get_db)):
+    from app.ai.writing_requests import prepare
+    try:
+        return prepare(db, payload)
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.post('/writing/{request_id}/apply')
+def apply_writing(request_id: UUID, payload: WritingApply, db: Session = Depends(get_db)):
+    from app.ai.writing_requests import apply
+    try:
+        return apply(db, request_id, payload.expected_revision)
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.post('/writing/{request_id}/execute')
+def execute_writing(request_id: UUID, response: Response, db: Session = Depends(get_db)):
+    from app.ai.writing_requests import execute
+    try:
+        result, status = execute(db, request_id)
+        response.status_code = status
+        return result
+    except LocalError as error:
+        db.rollback()
+        return JSONResponse(status_code=error.status_code, content={'detail':str(error), 'request_id':str(request_id)})
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.post('/reviews', response_model=AiRequestResponse)
@@ -99,6 +134,9 @@ def patch_settings(
             expected_revision=payload.expected_revision,
             custom_prompt=payload.custom_prompt,
             web_enabled=payload.web_enabled,
+            auto_go_deeper=payload.auto_go_deeper,
+            auto_minds_comments=payload.auto_minds_comments,
+            mind_preset_ids=payload.mind_preset_ids,
         )
     except settings_service.SettingsPreconditionRequired as error:
         raise HTTPException(status_code=428, detail=_PRECONDITION_REQUIRED) from error

@@ -1,0 +1,56 @@
+HEAD
+c3891b4849f71d66144711344a16840bc0ebc598
+
+STATUS
+## codex/s4t8
+ M backend/app/ai/local.py
+ M backend/app/ai/prompts.py
+ M backend/app/ai/requests.py
+ M backend/app/ai/review.py
+ M backend/app/ai/review_save.py
+ M backend/app/ai/router.py
+ M backend/app/ai/schemas.py
+ M backend/app/ai/settings.py
+ M backend/app/journal/service.py
+ M backend/app/main.py
+ M backend/app/ritual/goals.py
+ M backend/app/ritual/service.py
+ M backend/app/writing/documents.py
+ M backend/app/writing/service.py
+ M backend/tests/test_ai_local_api.py
+ M backend/tests/test_ai_request_recovery.py
+ M backend/tests/test_ai_review_api.py
+ M backend/tests/test_ai_review_evidence.py
+ M backend/tests/test_ai_review_save.py
+ M backend/tests/test_ai_settings_api.py
+ M backend/tests/test_ai_tool_calls.py
+ M docs/stage4-api.md
+ M docs/stage4-architecture.md
+ M docs/stage4-tasks.md
+ M frontend/src/api/ai.ts
+ M frontend/src/types/ai.ts
+?? backend/app/ai/comments.py
+?? backend/app/ai/writing_requests.py
+?? backend/tests/test_s4_ai_comments.py
+?? backend/tests/test_s4_ai_concurrency.py
+?? backend/tests/test_s4_ai_document_application.py
+?? backend/tests/test_s4_ai_lifecycle.py
+?? backend/tests/test_s4_ai_review.py
+?? backend/tests/test_s4_ai_settings_contract.py
+?? backend/tests/test_s4_ai_writing.py
+?? frontend/src/api/aiWriting.test.ts
+?? s04-t08-evidence/
+
+WORKTREES
+worktree C:/Programme/demo/SeekJournal
+HEAD c3891b4849f71d66144711344a16840bc0ebc598
+branch refs/heads/codex/s4t8
+
+worktree C:/Programme/demo/SeekJournal-Work-01
+HEAD e0afbccf88f5beb1ed2bbfa1bd036dd8c28f47b4
+branch refs/heads/wb/s4C01
+
+worktree C:/Programme/demo/SeekJournal-Work-02
+HEAD 19cb391eeeb6a6837edfd3715c40266173b47264
+branch refs/heads/wb/s4t10
+

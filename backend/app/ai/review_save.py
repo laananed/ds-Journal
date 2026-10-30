@@ -41,12 +41,26 @@ def save_review(db, request_id, payload):
             if len(locked)!=1 or locked[0][0]['type']!='journal':
                 raise WritingError('append_source requires one Journal')
             row = locked[0][1]
-            if getattr(row, 'content_doc', None) is not None:
-                raise LegacyConversionRequired('legacy AI cannot modify a structured document')
-            blocks,content = summary_blocks(payload.markdown,request_id,row.content_blocks,row.content)
             from datetime import datetime, timezone
-            row.content_blocks = blocks
-            row.content = content
+            if getattr(row, 'content_doc', None) is not None:
+                from copy import deepcopy
+                from uuid import uuid4
+                from app.writing.documents import project_document
+                from app.journal.schemas import _validate_content
+                document = deepcopy(row.content_doc)
+                document['content'].extend([
+                    {'type':'aiSummary','attrs':{'id':str(uuid4()),'request_id':str(request_id)},
+                     'content':[{'type':'paragraph','content':[{'type':'text','text':payload.markdown}]}]},
+                    {'type':'paragraph','attrs':{'id':str(uuid4())}}])
+                content = project_document(document)
+                try:
+                    _validate_content(content)
+                except ValueError as error:
+                    raise WritingError('content limit exceeded') from error
+                row.content_doc, row.content = document, content
+            else:
+                blocks,content = summary_blocks(payload.markdown,request_id,row.content_blocks,row.content)
+                row.content_blocks, row.content = blocks, content
             row.revision += 1
             row.updated_at = datetime.now(timezone.utc)
             code = 200
@@ -54,8 +68,19 @@ def save_review(db, request_id, payload):
             if target.folder_id is not None:
                 folder = db.scalar(select(Folder).where(Folder.id==target.folder_id).with_for_update())
                 if folder is None: raise RequestNotFound('Folder not found')
-            blocks,content = summary_blocks(payload.markdown,request_id)
-            row = Journal(content=content,content_blocks=blocks,
+            from uuid import uuid4
+            from app.writing.documents import project_document
+            from app.journal.schemas import _validate_content
+            document = {'type':'doc','content':[
+                {'type':'aiSummary','attrs':{'id':str(uuid4()),'request_id':str(request_id)},
+                 'content':[{'type':'paragraph','content':[{'type':'text','text':payload.markdown}]}]},
+                {'type':'paragraph','attrs':{'id':str(uuid4())}}]}
+            content = project_document(document)
+            try:
+                _validate_content(content)
+            except ValueError as error:
+                raise WritingError('content limit exceeded') from error
+            row = Journal(content=content,content_doc=document,
                           title=target.title if target.title else 'AI 复盘 '+target.journal_date.isoformat(),
                           journal_date=target.journal_date,folder_id=target.folder_id,revision=1)
             db.add(row)

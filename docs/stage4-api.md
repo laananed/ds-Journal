@@ -57,10 +57,12 @@ T01 独占建立共享合成样例目录 `tests/fixtures/stage4_documents/`（�
 | GET | `/api/journals/{id}` | 有效 Journal 详情及受控关联所需身份/版本 |
 | POST | `/api/journals` | title、content_doc、journal_date、journal_kind、folder_id、client_create_id；Ritual 还需 draft_started_at |
 | PATCH | `/api/journals/{id}` | expected_revision、变化的 title/content_doc/folder_id；仅 writing 允许 journal_date，禁止 journal_kind |
-| DELETE | `/api/journals/{id}` | If-Match；软删除，204；Ritual 同事务解除关联并保留 End 快照和回答 |
+| DELETE | `/api/journals/{id}` | If-Match；可选 JSON body `{related_revisions:[{type:"journal",id,revision}]}`；软删除，204；Ritual 同事务解除关联并保留 End 快照和回答 |
 | GET/POST/PATCH/DELETE | `/api/insights[/{id}]` | 沿用 CRUD/创建键/CAS，正文换 content_doc；无日期，不开放本期写作 AI |
 | GET | `/api/rituals` | `journal_date=YYYY-MM-DD`，返回 `{journal_date,set:JournalDetail|null,end:JournalDetail|null}`；缺失零创建 |
 | GET | `/api/business-day` | 返回 `{timezone:"Asia/Shanghai",day_start_hour:4,server_time,business_date}`；只读时钟依据 |
+
+Ritual 详情中的受控关联信息为 `related_revisions:[{type:"journal",id,revision}]` 和 `goal_links:[{link_id,set_id,end_id,goal_id,end_node_id}]`；仅列有效关联，供两端定位目标及提交版本，不包含回答正文。GET 只读。
 
 Writing 左侧用 journals 的当日 writing 筛选；今日总览用当日 all 的分页结果与 rituals 状态，不另建总览实体。
 
@@ -77,6 +79,8 @@ Writing 左侧用 journals 的当日 writing 筛选；今日总览用当日 all 
 ## 5. Trash 与两种 Ritual 恢复
 
 普通 `GET /api/trash`、详情、单条永久删除及普通恢复沿用 Stage 3，但详情换 JSON。`POST /api/trash/journal/{id}/restore` 仍用 If-Match；若 Ritual 同日同类有有效占位，409 `ritual_slot_conflict`，不修改任何对象。
+
+2026-10-30 用户批准：Journal 软删除及 Trash 单条永久删除可携带 JSON body `{related_revisions:[{type:"journal",id,revision}]}`；存在受影响关联文件时必须提供完整身份与版本集合，缺少必需版本 428，版本陈旧或关联集合改变 409。无关联时允许省略 body，原 If-Match 和成功 204 不变。
 
 ### 完整替换
 
@@ -100,15 +104,19 @@ Writing 左侧用 journals 的当日 writing 筛选；今日总览用当日 all 
 }
 ```
 
-范围均为单个文本节点中的 Unicode 码点，半开区间；完整结构节点使用该项省略 from/to。不能选半个受保护 AI/目标结构来伪造身份；完整选择其容器由后端复制。必须同日期同 kind，来源仍在回收箱。插入位置必须存在；空选择/非法范围/作者伪造 422。服务端读取真实来源，不接收前端提交的“旧 AI 内容”。
+2026-10-30 用户批准修正：文本范围以具有 ID 的 paragraph/heading 为单位，使用该块文字的 Unicode 码点半开区间（hardBreak 计一个换行）；text 节点不分配 ID。完整结构节点使用该项省略 from/to。不能选半个受保护 AI/目标结构来伪造身份；完整选择其容器由后端复制。必须同日期同 kind，来源仍在回收箱。插入位置必须存在；空选择/非法范围/作者伪造 422。服务端读取真实来源，不接收前端提交的“旧 AI 内容”。
 
 新 ID 从 copy_id 和来源节点稳定派生，验证选择摘要；同一 copy_id 同选择已完整插入时返回当前结果不重复插入，异体 409；后续已修改/移除复制结果时陈旧重放 409，不能再次复制。原来源不恢复，当前 target 保留身份，已有回答不覆盖。复制目标使用新 goal_id；复制回顾保留文字/回答快照但不建立有效 link；评论只有合法受控复制能生成目标文件的新评论 ID，不能跨文件直接复用 Mark。
+
+服务端持久化 copy_id、请求摘要、源/目标身份及复制结果校验信息，与目标修改同事务提交；记录不放在客户端可写的正文中。重放先核对请求和已插入结果，删除或改变结果后返回 409。记录用于幂等，不是正文版本历史。
 
 两种恢复方式均适用开始今天和结束今天。当前本地较新输入由应用会话保留；用户必须明确选择采用/丢弃，不能把换 revision 当自动覆盖许可。
 
 ## 6. 目标关联与双向写入
 
 `POST /api/ritual-goal-links`：body `{source_set_id,goal_ids,expected_set_revision,end_id,expected_end_revision,client_create_id,draft_started_at}`。goal_ids 非空、去重、必须属于有效开始今天。已存在结束今天时 end_id/revision 必填；不存在时 end_id=null、expected_end_revision=0、创建键和草稿时刻必填，创建日期必须等于来源日。新建带真实回顾内容的结束今天与 links 原子完成。重复关联同一目标返回既有关联，不产生重复回顾。
+
+2026-10-30 用户决定：04:00 前实际捕获的加入草稿允许在换日后按原业务日提交。但当前接口没有服务端捕获凭证，无法区分真实延迟提交与伪造旧时刻；在解决该问题并批准相应契约前，不存在 End 的新建路径保持拒绝，不创建空壳。已有 End 的关联不受此限制。
 
 `PATCH /api/ritual-goals/{set_id}/{goal_id}`：body `{expected_set_revision,expected_end_revision?,text?,checked?}`；text 非空、checked 为 bool，关联到有效结束今天时必须提供其版本。可从任一端发起，后端只允许开始今天 canonical 节点与关联镜像/系统标题变化，回答子树不在更新范围。成功返回 FileMutation；关联对象变化 409，来源失效 409 `source_unavailable`。
 
@@ -123,6 +131,8 @@ Writing 左侧用 journals 的当日 writing 筛选；今日总览用当日 all 
 ### POST `/api/ai/writing/prepare`
 
 body：request_id UUID、kind、trigger、source `{type:"journal",id,expected_revision}`，可选 question（Go Deeper，最多 2,000 码点）、mind_preset_ids（Minds，1～3 个唯一合法预置）、scope（Minds，all 或节点范围）。不接收前端自报 delta/正文/检查点/回复/设置快照。
+
+2026-10-30 用户批准扩展：Minds 的 `scope` 还可为 `{"ranges":[{"node_id":"UUID","start":0,"end":3}]}`，含 1～100 个范围；每项指向保存快照内的用户 paragraph/heading，使用节点内 Unicode 码点半开区间，同一节点的范围不得重叠。单节点对象 `{node_id,start,end}` 与 `"all"` 仍保留。服务端按范围从快照取文字并校验节点、边界和评论归属，不接收客户端文字或自报 delta。自动调度所依据的真实输入及激活基线仍由 T09 客户端维护；服务端不能仅凭范围证明输入事件来源。自动请求发送的范围须覆盖本次实际新增/修订范围，跨节点时使用 ranges。
 
 先按request_id核对首次payload摘要：同键同体回既有状态/结果，不重复建占位；异体409。随后在短事务中校验版本/有效状态/同源在途调用，计算 U 和增量，冻结快照/设置。Go Deeper 在保存快照边界创建稳定占位并预留下方用户段，返回 FileMutation 与 `{request_id,status:"prepared"}`；Minds 只登记分析范围和侧栏等待状态，不创建行内回复占位。无增量/有效问题时 Go Deeper 返回原 noop 文案且零请求/Token/占位。自动触发阈值不满足时客户端不发送prepare；服务端验证冻结范围/去重键，重复快照返回既有请求，不产生第二次调用。
 
@@ -178,6 +188,8 @@ Token、已知/未知 usage、子调用唯一计量、受限搜索与 Key 隐私
 files 为受影响完整详情，effects 是与这些详情对应的受控变化描述，ops 允许 replace_placeholder、comment_marks、goal_fields、goal_visibility、copy_nodes、restore_identity，实际内容/ID 由后端结果提供，不能由任意客户端写系统 ops。普通单文件 CRUD 保留详情响应形状。
 
 应用用 files 确认对应提交快照，较新本地输入只接收与已知 base_revision 对应的窄 effects；不能整篇 setContent 覆盖较新草稿，不能在未知差异时只抬 revision 重发。多个文件会话按相同 typed key 顺序取得写队列；保存/命令失败保留输入和命令首次 payload。导航不等待这些队列。
+
+2026-10-30 用户批准：普通 Journal PATCH 若实际导致多文件目标变化，仍返回 Journal 详情，并在可选 `file_mutation` 字段附带本节格式的受影响文件与 effects；无多文件变化时该字段为空。会话处理需避免把发起文件的普通保存确认重复应用，并对其他文件采用同一版本及草稿保护规则。
 
 ### Journal 本地草稿恢复契约
 

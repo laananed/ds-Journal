@@ -111,6 +111,7 @@ def _validate_content(value: str) -> str:
 from uuid import UUID
 from pydantic import PrivateAttr
 from app.writing.schemas import Block, Revision, StructuredCreate, StructuredInput
+from app.ritual.schemas import RelatedRevision
 
 
 class JournalCreate(StructuredCreate):
@@ -124,6 +125,18 @@ class JournalCreate(StructuredCreate):
     draft_started_at: datetime | None = None
     _check_title = field_validator("title")(_validate_title)
     _check_content = field_validator("content")(_validate_content)
+
+    @model_validator(mode='before')
+    @classmethod
+    def strict_ritual_dates(cls, data):
+        if isinstance(data, dict) and data.get('journal_kind', 'writing') != 'writing':
+            import re
+            value = data.get('journal_date')
+            if not isinstance(value, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value):
+                raise ValueError('ritual journal_date must be an ISO date')
+            if not isinstance(data.get('draft_started_at'), str):
+                raise ValueError('draft_started_at must be an ISO timestamp')
+        return data
 
     @model_validator(mode='after')
     def check_ritual_date(self):
@@ -143,6 +156,7 @@ class JournalUpdate(StructuredInput):
     expected_revision: Revision = None
     content_doc: dict = None
     document_schema_version: Literal[1] = None
+    related_revisions: list[RelatedRevision] | None = None
     _check_title = field_validator("title")(_validate_title)
     _check_content = field_validator("content")(_validate_content)
 
@@ -177,6 +191,9 @@ class JournalDetail(JournalResponse):
     content_doc: dict | None = None
     document_schema_version: Literal[1] | None = None
     document_format: Literal['legacy', 'tiptap'] = 'legacy'
+    related_revisions: list[RelatedRevision] = []
+    goal_links: list[dict] = []
+    file_mutation: dict | None = None
 
 
 class JournalPage(BaseModel):

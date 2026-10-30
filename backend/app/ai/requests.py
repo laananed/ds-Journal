@@ -1,7 +1,7 @@
 """Request reads and explicit recovery; importing and GET never write."""
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert
 
 from app.ai.models import AIRequest, AIUsage
@@ -39,7 +39,7 @@ def recover_pending(db, *, restart=False, now=None):
     now = now or datetime.now(timezone.utc)
     statement = select(AIRequest).where(AIRequest.status == 'pending')
     if not restart:
-        statement = statement.where(AIRequest.created_at <= now - timedelta(seconds=120))
+        statement = statement.where(func.coalesce(AIRequest.started_at, AIRequest.created_at) <= now - timedelta(seconds=120))
     rows = db.scalars(statement.with_for_update(skip_locked=True)).all()
     for row in rows:
         row.status = 'unknown'
@@ -75,11 +75,20 @@ def request_response(db, request_id):
         if detail is not None:
             file = detail.model_dump(mode='json')
     category = row.error_category
+    comments = result.get('comments') if row.kind == 'minds_comments' else None
+    if row.kind == 'minds_comments' and row.status == 'applied':
+        from app.ritual.models import AIComment
+        comments = [{'id':str(c.id),'request_id':str(c.request_id) if c.request_id else None,
+                     'mind_preset_id':c.mind_preset_id,'text':c.text,'quote':c.quote,
+                     'anchor':c.anchor,'anchor_state':c.anchor_state,'created_at':c.created_at.isoformat()}
+                    for c in db.scalars(select(AIComment).where(AIComment.request_id == row.id)
+                                        .order_by(AIComment.created_at, AIComment.id)).all()]
     return {
         'request_id': str(row.id), 'kind': row.kind, 'status': row.status,
         'sources': [identity for s in row.sources if (identity := _source_identity(s))],
         'reply': result.get('reply'), 'file': file, 'review': result.get('review'),
         'saved_target': row.saved_target,
+        'comments': comments,
         'usage': _aggregate(db, [row.id])[row.id],
         'web_status': result.get('web_status', 'not_needed'),
         'citations': result.get('citations', []),
