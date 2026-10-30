@@ -125,6 +125,18 @@ class JournalCreate(StructuredCreate):
     _check_title = field_validator("title")(_validate_title)
     _check_content = field_validator("content")(_validate_content)
 
+    @model_validator(mode='before')
+    @classmethod
+    def strict_ritual_dates(cls, data):
+        if isinstance(data, dict) and data.get('journal_kind', 'writing') != 'writing':
+            import re
+            value = data.get('journal_date')
+            if not isinstance(value, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value):
+                raise ValueError('ritual journal_date must be an ISO date')
+            if not isinstance(data.get('draft_started_at'), str):
+                raise ValueError('draft_started_at must be an ISO timestamp')
+        return data
+
     @model_validator(mode='after')
     def check_ritual_date(self):
         if self.journal_kind != 'writing':

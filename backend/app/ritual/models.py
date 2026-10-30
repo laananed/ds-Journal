@@ -26,6 +26,15 @@ class RitualGoalLink(Base):
     end_node_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
 
 
+class RitualCopy(Base):
+    __tablename__ = 'ritual_copies'
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    target_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    copied_nodes: Mapped[list] = mapped_column(JSONB, nullable=False)
+
+
 class AIComment(Base):
     __tablename__ = 'ai_comments'
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)

@@ -6,6 +6,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.ritual.dates import DAY_START_HOUR, business_date
 from app.ritual.models import RitualTemplate
+from typing import Literal
+from app.ritual.schemas import TemplateUpdate, RestoreReplace, CopyContent
+from app.ritual.service import update_template, restore_replace
+from app.writing.router import matched_revision
 
 router = APIRouter(prefix='/api', tags=['rituals'])
 
@@ -42,3 +46,21 @@ def get_ritual_templates(db: Session = Depends(get_db)):
     for template in templates:
         result[template.kind] = {'questions': template.questions, 'revision': template.revision}
     return result
+
+
+@router.patch('/ritual-templates/{kind}')
+def patch_ritual_template(kind: Literal['set', 'end'], data: TemplateUpdate,
+                          db: Session = Depends(get_db)):
+    return update_template(db, kind, data)
+
+
+@router.post('/rituals/{source_id}/restore-replace')
+def replace_ritual(source_id: int, data: RestoreReplace,
+                   source_revision: int = Depends(matched_revision), db: Session = Depends(get_db)):
+    return restore_replace(db, source_id, source_revision, data)
+
+
+@router.post('/rituals/{source_id}/copy-content')
+def copy_ritual(source_id: int, data: CopyContent, db: Session = Depends(get_db)):
+    from app.ritual.copying import copy_content
+    return copy_content(db, source_id, data)

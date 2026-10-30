@@ -104,6 +104,8 @@ Journal 增 `journal_kind text NOT NULL DEFAULT 'writing'`，检查枚举；在 
 
 复制节点的 copy_id、来源节点和选择摘要确定性生成目标节点身份，陈旧重放不能第二次插入。复制 Set 目标是新目标；复制 End 回顾保留快照/答案但无活动关联。UI 取消零写；普通外部剪贴板仍视用户主动输入，不给予伪造来源权限。
 
+2026-10-30 用户批准：选区采用 paragraph/heading ID 与块内 Unicode 码点半开范围，兼容 T01 不给 text 分配 ID 的约束；复制命令的服务端持久记录保存 copy_id、请求摘要、源/目标身份及结果校验信息，并与正文写入同事务提交，用于重放和已修改结果检测。线性迁移由 Codex 独占，真实库升级仍须单独授权。
+
 ## 6. 目标链接、解除与快照保留
 
 不建立独立目标文本事实表。Set JSON 的 goalItem 为 canonical，goal_id 为 UUID；End JSON 保存历史镜像/系统标题及独立回答。`ritual_goal_links` 记录 link_id、set_journal_id（可空 FK，永久删除时 SET NULL）、end_journal_id（FK，目标 End 永删时 CASCADE）、goal_id、end_node_id；同一 End/goal 唯一。服务验证双方 kind/date、节点归属和 active 状态。

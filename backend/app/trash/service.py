@@ -11,7 +11,8 @@ from app.insight.schemas import InsightResponse, InsightDetail
 from app.insight.service import build_insight_display_title, get_insight
 from app.journal.models import Journal
 from app.journal.schemas import JournalResponse, JournalDetail
-from app.journal.service import get_journal
+from app.journal.service import get_journal, RitualSlotConflict
+from sqlalchemy.exc import IntegrityError
 from app.journal.titles import build_kind_display_title, numbered_subquery
 from app.trash.schemas import TrashFilter, TrashItem, TrashPage, TrashType
 
@@ -92,12 +93,25 @@ def restore_trash(db: Session, type: TrashType, id: int, expected_revision: int 
                  .values(deleted_at=None, updated_at=model.updated_at, revision=model.revision + 1)
                  .execution_options(synchronize_session=False))
     try:
+        ritual = db.get(Journal, id) if type == 'journal' else None
+        if ritual is not None and ritual.journal_kind != 'writing':
+            from app.ritual.service import lock_day, require_no_links
+            lock_day(db, ritual.journal_date)
+            require_no_links(db, ritual.id)
         result = db.execute(statement)
         if result.rowcount == 0:
             if get_trash(db, type, id) is not None:
                 raise WriteConflict('file revision has changed')
             return None
         db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if ritual is not None and getattr(getattr(error.orig, 'diag', None), 'constraint_name', None) == 'uq_journals_active_ritual':
+            winner = db.scalar(select(Journal).where(Journal.journal_date == ritual.journal_date,
+                Journal.journal_kind == ritual.journal_kind, Journal.deleted_at.is_(None)))
+            if winner is not None:
+                raise RitualSlotConflict(winner.id, winner.revision) from error
+        raise
     except Exception:
         db.rollback()
         raise
@@ -113,6 +127,11 @@ def purge_trash(db: Session, type: TrashType, id: int, expected_revision: int | 
     statement = (delete(model).where(model.id == id, model.deleted_at.is_not(None), model.revision == expected_revision)
                  .execution_options(synchronize_session=False))
     try:
+        ritual = db.get(Journal, id) if type == 'journal' else None
+        if ritual is not None and ritual.journal_kind != 'writing':
+            from app.ritual.service import lock_day, require_no_links
+            lock_day(db, ritual.journal_date)
+            require_no_links(db, ritual.id)
         result = db.execute(statement)
         if result.rowcount == 0:
             if get_trash(db, type, id) is not None:

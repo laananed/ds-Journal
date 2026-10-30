@@ -212,8 +212,22 @@ def test_migration_preserves_old_data_and_refuses_lossy_downgrade(stage3_schema)
     with pytest.raises(AssertionError):
         _run_alembic(schema, 'downgrade', '3aa16300a58a')
     with engine.begin() as c:
-        assert c.execute(text('select version_num from alembic_version')).scalar_one() == '9e7a6c42d011'
+        assert c.execute(text('select version_num from alembic_version')).scalar_one() == '4f8e1a3c9d02'
         assert c.execute(text('select content_doc is not null from journals where id=:id'), {'id':ident}).scalar_one()
         c.execute(text('update journals set content_doc=null where id=:id'), {'id':ident})
     _run_alembic(schema, 'downgrade', '3aa16300a58a')
     assert old_snapshot() == (original, checkpoint, sequence)
+
+
+def test_copy_receipt_blocks_lossy_downgrade(stage3_engine):
+    from test_stage2_migrations import _run_alembic
+    engine = stage3_engine
+    with engine.begin() as c:
+        schema = c.execute(text('select current_schema()')).scalar_one()
+        c.execute(text("insert into ritual_copies(id, source_id, target_id, payload_hash, copied_nodes) "
+                       "values (:id, 1, 2, 'synthetic', '[]'::jsonb)"), {'id': uuid4()})
+    with pytest.raises(AssertionError):
+        _run_alembic(schema, 'downgrade', '9e7a6c42d011')
+    with engine.connect() as c:
+        assert c.execute(text('select version_num from alembic_version')).scalar_one() == '4f8e1a3c9d02'
+        assert c.execute(text('select count(*) from ritual_copies')).scalar_one() == 1

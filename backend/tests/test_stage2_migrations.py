@@ -48,7 +48,7 @@ STAGE1_REVISION = "3a70890ddb10"
 SIX_FIELDS = ("id", "title", "content", "journal_date", "created_at", "updated_at")
 
 # 本阶段预期存在的业务表（外加 alembic_version）。
-EXPECTED_TABLES = {"journals", "folders", "inboxes", "insights", "ai_requests", "ai_checkpoints", "ai_usage", "ai_settings", "ritual_templates", "ritual_goal_links", "ai_comments"}
+EXPECTED_TABLES = {"journals", "folders", "inboxes", "insights", "ai_requests", "ai_checkpoints", "ai_usage", "ai_settings", "ritual_templates", "ritual_goal_links", "ritual_copies", "ai_comments"}
 
 
 # ---------------------------------------------------------------------------
@@ -361,7 +361,7 @@ def test_revision_chain_is_single_head_and_unchanged_base(migration_check):
     chain = migration_check.chain
 
     assert chain[0] == STAGE1_REVISION, "初始迁移不能改，链的起点必须仍是 Stage 1 revision"
-    assert chain == ['3a70890ddb10', '52c8e94a365c', 'a8d98342e603', '18ecf7e09da6', '3aa16300a58a', '9e7a6c42d011'], f"Unexpected migration chain: {chain}"
+    assert chain == ['3a70890ddb10', '52c8e94a365c', 'a8d98342e603', '18ecf7e09da6', '3aa16300a58a', '9e7a6c42d011', '4f8e1a3c9d02'], f"Unexpected migration chain: {chain}"
 
 
 def test_only_expected_tables_exist(migration_check):
@@ -602,7 +602,7 @@ OLD_MIGRATION_HASHES = {
 def test_m3_extends_m2_and_original_migrations_are_byte_unchanged():
     chain = _linear_revision_chain()
     assert chain[:4] == ['3a70890ddb10', '52c8e94a365c', 'a8d98342e603', '18ecf7e09da6']
-    assert chain[4:] == ['3aa16300a58a', '9e7a6c42d011']
+    assert chain[4:] == ['3aa16300a58a', '9e7a6c42d011', '4f8e1a3c9d02']
     for filename, digest in OLD_MIGRATION_HASHES.items():
         assert hashlib.sha256((BACKEND_DIR / 'alembic' / 'versions' / filename).read_bytes()).hexdigest() == digest
 

@@ -138,6 +138,9 @@ def _project_required(db: Session, journal_id: int) -> JournalResponse:
 def create_journal(db: Session, data: JournalCreate) -> JournalResponse:
     payload_hash = create_hash(data)
     try:
+        if data.journal_kind != 'writing':
+            from app.ritual.service import lock_day
+            lock_day(db, data.journal_date)
         if data.client_create_id is not None:
             row = db.scalar(select(Journal).where(Journal.client_create_id == data.client_create_id))
             if row is not None:
@@ -301,6 +304,10 @@ def update_journal(db: Session, journal_id: int, data: JournalUpdate) -> Journal
         row = _get_active_journal(db, journal_id)
         if row is None:
             return None
+        if row.journal_kind != 'writing':
+            from app.ritual.service import lock_day, require_no_links
+            lock_day(db, row.journal_date)
+            require_no_links(db, row.id)
         if row.journal_kind != 'writing' and 'journal_date' in data.model_fields_set:
             raise WritingError('ritual date cannot be changed')
         changes = writing_changes(row, data)
@@ -340,6 +347,10 @@ def delete_journal(db: Session, journal_id: int, expected_revision: int | None =
         row = _get_active_journal(db, journal_id)
         if row is None:
             return False
+        if row.journal_kind != 'writing':
+            from app.ritual.service import lock_day, require_no_links
+            lock_day(db, row.journal_date)
+            require_no_links(db, row.id)
         if row.revision != expected_revision:
             raise WriteConflict("file revision has changed")
         result = db.execute(update(Journal).where(Journal.id == journal_id,
