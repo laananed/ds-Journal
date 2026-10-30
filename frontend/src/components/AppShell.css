@@ -1,0 +1,367 @@
+/*
+ * 应用外壳样式（Stage 4 / S04-T05）。
+ *
+ * 独立命名空间 `sj-shell`：本轮不能改 App.css / index.css（T02 正在改 App），
+ * 所以外壳自带颜色变量与布局，且不与既有 `.app` 规则互相覆盖。
+ *
+ * 主题实现方式：
+ *   1. 变量定义两份（`data-theme="light"` / `data-theme="dark"`）；
+ *   2. 组件把解析后的生效主题写到外壳根元素的 `data-theme`；
+ *   3. 深色时根元素同时带 `theme-dark` 类，让 App.css 里已有的
+ *      `.theme-dark .journal-editor` 等兼容规则在正文区域继续生效。
+ */
+
+.sj-shell {
+  /* 浅色（默认） */
+  --sj-bg: #ffffff;
+  --sj-bg-soft: #f7f6f8;
+  --sj-surface: #ffffff;
+  --sj-surface-muted: #faf9fc;
+  --sj-border: #e5e2ea;
+  --sj-border-strong: #cfc9d6;
+  --sj-text: #202124;
+  --sj-text-muted: #6b6375;
+  /* 第三级文字：在白底上约 4.8:1，满足 13px 小字的最小对比度要求 */
+  --sj-text-soft: #767080;
+  --sj-accent: #5b4a7d;
+  --sj-accent-soft: #efe9f8;
+  --sj-inverse-bg: #202124;
+  --sj-inverse-text: #ffffff;
+  --sj-focus: #6b53a0;
+  --sj-danger: #8a2f2f;
+  --sj-danger-bg: #fdf4f4;
+  --sj-danger-border: #e3b7b7;
+  --sj-warn: #7a5a12;
+  --sj-success: #21623a;
+  --sj-shadow: 0 1px 2px rgb(32 33 36 / 6%), 0 10px 28px rgb(32 33 36 / 5%);
+
+  /* 列宽 */
+  --sj-nav-width: 232px;
+  --sj-context-width: 264px;
+  --sj-aside-width: 296px;
+
+  display: grid;
+  grid-template-columns: var(--sj-nav-width) minmax(0, 1fr);
+  width: 100%;
+  max-width: 1520px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  box-sizing: border-box;
+  background: var(--sj-bg);
+  color: var(--sj-text);
+  color-scheme: light;
+  font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
+  text-align: left;
+}
+
+/* 上下文区存在时才占第二列；右侧栏存在时才占最后一列。 */
+.sj-shell[data-has-context='true'] {
+  grid-template-columns: var(--sj-nav-width) var(--sj-context-width) minmax(0, 1fr);
+}
+.sj-shell[data-has-aside='true'] {
+  grid-template-columns: var(--sj-nav-width) minmax(0, 1fr) var(--sj-aside-width);
+}
+.sj-shell[data-has-context='true'][data-has-aside='true'] {
+  grid-template-columns:
+    var(--sj-nav-width) var(--sj-context-width) minmax(0, 1fr) var(--sj-aside-width);
+}
+
+/* 深色：同一组变量换值，其余规则不需要各写一份 */
+.sj-shell[data-theme='dark'] {
+  --sj-bg: #141517;
+  --sj-bg-soft: #191b1d;
+  --sj-surface: #1c1e21;
+  --sj-surface-muted: #212427;
+  --sj-border: #34373b;
+  --sj-border-strong: #484c51;
+  --sj-text: #eceef0;
+  --sj-text-muted: #b7bec6;
+  --sj-text-soft: #98a1a9;
+  --sj-accent: #c9bbe8;
+  --sj-accent-soft: #2b2735;
+  --sj-inverse-bg: #eceef0;
+  --sj-inverse-text: #141517;
+  --sj-focus: #c9bbe8;
+  --sj-danger: #f0b6b6;
+  --sj-danger-bg: #2a1f20;
+  --sj-danger-border: #5c3b3d;
+  --sj-warn: #e6cf9c;
+  --sj-success: #9ed6b0;
+  --sj-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 30px rgb(0 0 0 / 32%);
+  color-scheme: dark;
+}
+
+.sj-shell *,
+.sj-shell *::before,
+.sj-shell *::after {
+  box-sizing: inherit;
+}
+
+/* 键盘焦点：外壳内部统一可见，不依赖各页面自己补样式 */
+.sj-shell :focus-visible {
+  outline: 3px solid var(--sj-focus);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* 跳转链接：默认移出视口，聚焦时出现在左上角 */
+.sj-shell__skip {
+  position: absolute;
+  left: -9999px;
+  top: 8px;
+  z-index: 30;
+  padding: 8px 14px;
+  border: 1px solid var(--sj-border-strong);
+  border-radius: 8px;
+  background: var(--sj-surface);
+  color: var(--sj-text);
+  font-size: 14px;
+  text-decoration: none;
+}
+.sj-shell__skip:focus-visible {
+  left: 12px;
+}
+
+/* ---------------- 左列：导航 + 上下文 + 主题 ---------------- */
+
+.sj-shell__sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-self: start;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  padding: 28px 20px 24px 24px;
+  border-right: 1px solid var(--sj-border);
+  overflow-y: auto;
+}
+
+.sj-shell__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/*
+ * 上下文列：与主导航并排在正文左侧（产品 §3「左侧主导航旁的上下文区域」）。
+ * 只有 `context` 非空时才渲染，`data-has-context` 决定这一列是否存在。
+ */
+.sj-shell__context {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-self: start;
+  min-width: 0;
+  max-height: 100dvh;
+  padding: 28px 20px 32px;
+  border-right: 1px solid var(--sj-border);
+  overflow-y: auto;
+}
+
+/* 宽屏时上下文常显，折叠按钮只服务窄屏 */
+.sj-shell__context-toggle {
+  display: none;
+  align-self: flex-start;
+  padding: 6px 12px;
+  border: 1px solid var(--sj-border-strong);
+  border-radius: 8px;
+  background: var(--sj-surface);
+  color: var(--sj-text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.sj-shell__context-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sj-shell__theme {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: auto 0 0;
+  padding: 14px 0 0;
+  border: 0;
+  border-top: 1px solid var(--sj-border);
+}
+.sj-shell__theme-legend {
+  padding: 0;
+  color: var(--sj-text-muted);
+  font-size: 13px;
+}
+.sj-shell__theme-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sj-shell__theme-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--sj-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+.sj-shell__theme-option:hover {
+  background: var(--sj-surface-muted);
+}
+.sj-shell__theme-option[data-active='true'] {
+  background: var(--sj-accent-soft);
+  color: var(--sj-text);
+  font-weight: 600;
+}
+.sj-shell__theme-option input {
+  margin: 0;
+  accent-color: var(--sj-accent);
+}
+/* 键盘聚焦时高亮整行，单选框本身的轮廓太小不易识别 */
+.sj-shell__theme-option:has(input:focus-visible) {
+  outline: 3px solid var(--sj-focus);
+  outline-offset: 2px;
+}
+.sj-shell__theme-hint {
+  margin: 0;
+  color: var(--sj-text-soft);
+  font-size: 12px;
+}
+
+/* ---------------- 主区域 ---------------- */
+
+.sj-shell__main {
+  min-width: 0;
+  padding: 44px 40px 72px;
+}
+/* 普通文字列宽：视觉留白参考 Mindsera 桌面版（约 672px 正文列） */
+.sj-shell__main-inner {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+.sj-shell__main:focus {
+  outline: none;
+}
+
+/* ---------------- 右列：评论 / 补充信息 ---------------- */
+
+.sj-shell__aside {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100dvh;
+  min-width: 0;
+  padding: 44px 24px 48px 20px;
+  border-left: 1px solid var(--sj-border);
+  overflow-y: auto;
+}
+
+/* 平板：四列放不下，先收窄侧列而不是立刻堆叠 */
+@media (max-width: 1360px) {
+  .sj-shell {
+    --sj-nav-width: 212px;
+    --sj-context-width: 236px;
+    --sj-aside-width: 264px;
+  }
+  .sj-shell__main {
+    padding: 36px 28px 64px;
+  }
+}
+
+/*
+ * 窄屏（手机与小平板）：单列堆叠。
+ * 侧栏不再 sticky，导航在顶部；上下文区默认折叠，由可聚焦按钮展开（键盘可达），
+ * 右栏排到正文之后。
+ */
+@media (max-width: 1120px) {
+  .sj-shell,
+  .sj-shell[data-has-context='true'],
+  .sj-shell[data-has-aside='true'],
+  .sj-shell[data-has-context='true'][data-has-aside='true'] {
+    display: flex;
+    flex-direction: column;
+  }
+  .sj-shell__sidebar {
+    position: static;
+    height: auto;
+    max-height: none;
+    padding: 20px 20px 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--sj-border);
+    gap: 14px;
+  }
+  .sj-shell__context {
+    position: static;
+    max-height: none;
+    padding: 14px 20px 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--sj-border);
+    overflow-y: visible;
+  }
+  .sj-shell__context-toggle {
+    display: inline-flex;
+  }
+  .sj-shell__context-panel[data-open='false'] {
+    display: none;
+  }
+  .sj-shell__theme {
+    margin: 0;
+    padding-top: 10px;
+  }
+  .sj-shell__theme-options {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .sj-shell__main {
+    padding: 24px 20px 56px;
+  }
+  .sj-shell__main-inner {
+    max-width: 720px;
+  }
+  .sj-shell__aside {
+    position: static;
+    max-height: none;
+    padding: 20px 20px 40px;
+    border-left: 0;
+    border-top: 1px solid var(--sj-border);
+  }
+}
+
+@media (max-width: 480px) {
+  .sj-shell__sidebar {
+    padding: 16px 16px 12px;
+  }
+  .sj-shell__main {
+    padding: 20px 16px 44px;
+  }
+  .sj-shell__aside {
+    padding: 16px 16px 32px;
+  }
+  .sj-shell__theme-option {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+}
+
+/* 尊重系统「减少动态效果」：外壳本身无动画，仅为将来子元素兜底 */
+@media (prefers-reduced-motion: reduce) {
+  .sj-shell *,
+  .sj-shell *::before,
+  .sj-shell *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
