@@ -4,8 +4,11 @@ Stage 2 / S2-T01 起，本脚本的「非空拒绝」检查覆盖**所有已存�
 不再只看 journals。升级前部分新表可能还不存在，因此逐一用 `to_regclass`
 判断，表不存在就跳过，不会因此报错，也**不会**创建表（建表只由 Alembic 负责）。
 
-S3-T06 起支持两个隔离测试库并行（T06 用 `seekjournal_test_02`，T07 用
-`seekjournal_test`）。库名只来自进程环境 `SEEKJOURNAL_TEST_DB`：
+S3-T06 起支持多个隔离测试库并行，当前登记四个：`seekjournal_test`、
+`seekjournal_test_02`、`seekjournal_test_03`、`seekjournal_test_04`。三个
+Agent 并行开发时推荐分配 `_02` / `_03` / `_04`；`seekjournal_test` 仍是旧
+revision（`3aa16300a58a`、9 张表），暂不参与并行开发。库名只来自进程环境
+`SEEKJOURNAL_TEST_DB`：
 
 - 未指定时保持既有行为，默认 `seekjournal_test`；
 - 只允许下面 `ALLOWED_TEST_DATABASES` 白名单，个人库 `seekjournal`、
@@ -31,8 +34,8 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 #: 选择隔离测试库的进程环境变量；未指定时用默认值。
 TEST_DATABASE_ENV = "SEEKJOURNAL_TEST_DB"
 DEFAULT_TEST_DATABASE_NAME = "seekjournal_test"
-#: 只有这两个库可用于 pytest/迁移；个人库与任意库名都不在列。
-ALLOWED_TEST_DATABASES = ("seekjournal_test", "seekjournal_test_02")
+#: 只有下列登记库可用于 pytest/迁移；个人库与任意库名都不在列。
+ALLOWED_TEST_DATABASES = ("seekjournal_test", "seekjournal_test_02", "seekjournal_test_03", "seekjournal_test_04")
 
 # 当前阶段的全部业务表。新增业务表时同步这个元组。
 BUSINESS_TABLES = ("folders", "journals", "inboxes", "insights", "ai_requests", "ai_checkpoints", "ai_usage", "ai_settings", "ritual_templates", "ritual_goal_links", "ai_comments")

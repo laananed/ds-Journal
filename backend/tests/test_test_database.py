@@ -37,8 +37,13 @@ def test_blank_env_value_also_falls_back_to_the_default(monkeypatch):
 
 
 def test_each_whitelisted_database_can_be_selected(monkeypatch):
-    """两个隔离库都能被选中，且 URL 里的库名确实被替换。"""
-    assert set(ALLOWED_TEST_DATABASES) == {"seekjournal_test", "seekjournal_test_02"}
+    """四个登记库都能被选中，且 URL 里的库名确实被替换。"""
+    assert set(ALLOWED_TEST_DATABASES) == {
+        "seekjournal_test",
+        "seekjournal_test_02",
+        "seekjournal_test_03",
+        "seekjournal_test_04",
+    }
     for name in ALLOWED_TEST_DATABASES:
         monkeypatch.setenv(TEST_DATABASE_ENV, name)
         assert get_test_database_name() == name
@@ -50,7 +55,7 @@ def test_each_whitelisted_database_can_be_selected(monkeypatch):
     [
         "seekjournal",  # 个人库
         "journal_test_02",  # 拼错的库名
-        "seekjournal_test_03",  # 未登记的第三个库
+        "seekjournal_test_09",  # 未登记库名
         "postgres",
         "template1",
         "SEEKJOURNAL_TEST",  # 大小写不敏感地放宽是不允许的
