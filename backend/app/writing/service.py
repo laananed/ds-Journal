@@ -21,7 +21,7 @@ class LegacyConversionRequired(WriteConflict):
     code = 'legacy_conversion_required'
 
 
-def document_content(document, old_document=None):
+def document_content(document, old_document=None, *, verified_comments=False):
     """Validate untrusted client documents and return the server's projection.
 
     Comment references are rejected until a file-scoped database ownership
@@ -36,7 +36,7 @@ def document_content(document, old_document=None):
     try:
         from app.writing.documents import validate_document
         validate_document(document)
-        if has_comments(document):
+        if has_comments(document) and not verified_comments:
             raise DocumentError('comment ownership validation is unavailable')
         validate_author_changes(old_document or {'type': 'doc', 'content': []}, document)
         result = project_document(document)
@@ -177,7 +177,7 @@ def validate_blocks(blocks, *, old_blocks=None, old_content=None):
     return content
 
 
-def writing_changes(row, data):
+def writing_changes(row, data, *, db=None):
     changes = data.model_dump(mode="python", exclude_unset=True, exclude={"expected_revision", "document_schema_version"})
     current_doc = getattr(row, 'content_doc', None)
     if current_doc is not None and ({'content', 'content_blocks'} & changes.keys()):
@@ -202,7 +202,16 @@ def writing_changes(row, data):
             # Exact legacy conversion is a server-controlled identity transition.
             changes['content'] = row.content
         else:
-            changes['content'] = document_content(candidate, current_doc)
+            if db is not None and hasattr(row, 'journal_kind'):
+                from app.ai.comments import reconcile_comment_marks
+                candidate = reconcile_comment_marks(db, row.id, current_doc, candidate)
+                invalidate_changed_go_deeper(db, row.id, candidate)
+                from app.ai.comments import track_changed_minds
+                track_changed_minds(db, row.id, candidate)
+                changes['content_doc'] = candidate
+                changes['content'] = document_content(candidate, current_doc, verified_comments=True)
+            else:
+                changes['content'] = document_content(candidate, current_doc)
     if "content" in changes and 'content_doc' not in changes and getattr(row, "content_blocks", None) is not None:
         raise WriteConflict("structured files must be edited using content_blocks")
     if "content_blocks" in changes:
@@ -225,6 +234,33 @@ def cleanup_private_ai(db, file_type, file_id):
         [{"type": file_type, "id": file_id}])).execution_options(synchronize_session=False))
 
 
+def invalidate_writing_ai(db, journal_id):
+    """Invalidate in-flight writing requests in the source lifecycle transaction."""
+    from sqlalchemy import update
+    from app.ai.models import AIRequest
+    db.execute(update(AIRequest).where(
+        AIRequest.kind.in_(['go_deeper', 'minds_comments']),
+        AIRequest.status.in_(['prepared', 'pending', 'ready']),
+        AIRequest.sources.contains([{'type': 'journal', 'id': journal_id}]),
+    ).values(status='conflict', error_category='source_changed')
+       .execution_options(synchronize_session=False))
+
+
+def invalidate_changed_go_deeper(db, journal_id, document):
+    """Revoke a boundary as soon as its frozen prefix changes, even if later restored."""
+    from app.ai.models import AIRequest
+    from app.writing.documents import DocumentError, apply_ai_placeholder
+    requests = db.scalars(select(AIRequest).where(
+        AIRequest.kind == 'go_deeper', AIRequest.status.in_(['prepared','pending','ready']),
+        AIRequest.sources.contains([{'type':'journal','id':journal_id}])).with_for_update()).all()
+    for request in requests:
+        try:
+            apply_ai_placeholder(document, str(request.id), request.sources[0]['user_text'], 'check')
+        except DocumentError:
+            request.status = 'conflict'
+            request.error_category = 'source_changed'
+
+
 def delete_ai_block(db, file_type, file_id, block_id, expected_revision):
     from datetime import datetime, timezone
     from sqlalchemy import update
@@ -234,14 +270,39 @@ def delete_ai_block(db, file_type, file_id, block_id, expected_revision):
     model = Journal if file_type == "journal" else Inbox
     active = [model.deleted_at.is_(None)] if file_type == "journal" else []
     try:
-        row = db.scalar(select(model).where(model.id == file_id, *active)
+        row = db.scalar(select(model).where(model.id == file_id, *active).with_for_update()
                         .execution_options(populate_existing=True))
         if row is None:
             return False
-        if getattr(row, 'content_doc', None) is not None:
-            raise LegacyConversionRequired('legacy AI operations cannot modify a structured document')
         if row.revision != expected_revision:
             raise WriteConflict("file revision has changed")
+        if getattr(row, 'content_doc', None) is not None:
+            if file_type != 'journal':
+                raise WritingError('AI block deletion only supports Journal')
+            from copy import deepcopy
+            from app.ai.models import AIRequest
+            from app.writing.documents import project_document
+            from app.journal.schemas import _validate_content
+            doc = deepcopy(row.content_doc)
+            node = next((n for n in doc['content'] if n.get('attrs', {}).get('id') == block_id), None)
+            if node is None:
+                return False
+            if node['type'] not in ('aiReply', 'aiSummary', 'aiPlaceholder'):
+                raise WritingError('user blocks are edited through PATCH')
+            doc['content'].remove(node)
+            content = project_document(doc)
+            _validate_content(content)
+            row.content_doc = doc
+            row.content = content
+            row.revision += 1
+            row.updated_at = datetime.now(timezone.utc)
+            if node['type'] == 'aiPlaceholder':
+                db.execute(update(AIRequest).where(AIRequest.id == node['attrs']['request_id'],
+                    AIRequest.kind == 'go_deeper', AIRequest.status.in_(['prepared','pending','ready']),
+                    AIRequest.sources.contains([{'type':'journal','id':file_id}]))
+                    .values(status='conflict', error_category='source_changed'))
+            db.commit()
+            return True
         block = next((b for b in row.content_blocks or [] if b["id"] == block_id), None)
         if block is None:
             return False

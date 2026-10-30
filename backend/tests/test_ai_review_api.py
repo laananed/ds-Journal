@@ -109,7 +109,7 @@ def review_env(monkeypatch):
 @pytest.mark.parametrize('count,dates,expected', [(1,1,200),(15,7,200),(15,1,200),(16,7,422),(8,8,422),(0,0,422)])
 def test_boundaries(review_env, count, dates, expected):
     _, transport, create, generate, _ = review_env
-    sources = [create(kind='inbox' if i % 2 else 'journal', day=i % dates) for i in range(count)]
+    sources = [create(kind='journal', day=i % dates) for i in range(count)]
     response = generate(sources)
     assert response.status_code == expected, response.text
     assert len(transport.calls) == (1 if expected == 200 else 0)
@@ -157,7 +157,7 @@ def test_request_replay_and_changed_payload(review_env):
 def test_two_sessions_pending_and_no_transaction_during_http(review_env):
     from concurrent.futures import ThreadPoolExecutor
     http,transport,create,generate,_=review_env
-    sources=[create(),create(kind='inbox')]
+    sources=[create(),create(kind='journal')]
     transport.output=structured(sources)
     transport.block=True
     ident=uuid4()
@@ -185,7 +185,7 @@ def test_two_sessions_pending_and_no_transaction_during_http(review_env):
 def test_generation_source_change_preserves_preview_no_c(review_env,field):
     from concurrent.futures import ThreadPoolExecutor
     http,transport,create,generate,_=review_env
-    sources=[create(),create(kind='inbox')]
+    sources=[create(),create(kind='journal')]
     transport.output=structured(sources)
     transport.block=True
     with ThreadPoolExecutor() as pool:

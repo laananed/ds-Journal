@@ -50,6 +50,7 @@ class ScriptedModelTransport:
     def __init__(self):
         self.calls = []
         self.script = []
+        self.response_ids = []
 
     def queue(self, *steps):
         self.script.extend(steps)
@@ -66,8 +67,10 @@ class ScriptedModelTransport:
                 {"id": call_id, "type": "function",
                  "function": {"name": name, "arguments": arguments}}
                 for call_id, name, arguments in step["calls"]]
+        response_id = f"synthetic-t06-{uuid4().hex}"
+        self.response_ids.append(response_id)
         body = {
-            "id": f"synthetic-t06-{uuid4().hex}",
+            "id": response_id,
             "choices": [{"index": 0, "finish_reason": step.get("finish", "stop"),
                          "message": message}],
         }
@@ -481,11 +484,18 @@ def test_expired_budget_fails_as_timeout_without_a_new_subcall():
 @pytest.fixture
 def tool_env(monkeypatch):
     from scripts.prepare_test_db import BUSINESS_TABLES, get_test_database_name
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    from pathlib import Path
+    backend_dir = Path(__file__).resolve().parents[1]
+    config = Config(str(backend_dir / 'alembic.ini'))
+    config.set_main_option('script_location', str(backend_dir / 'alembic'))
+    expected_head = ScriptDirectory.from_config(config).get_current_head()
 
     def counts():
         with engine.connect() as connection:
             assert connection.scalar(text("select current_database()")) == get_test_database_name()
-            assert connection.scalar(text("select version_num from alembic_version")) == "9e7a6c42d011"
+            assert connection.scalar(text("select version_num from alembic_version")) == expected_head
             return {table: connection.scalar(text("select count(*) from " + table))
                     for table in BUSINESS_TABLES}
 
@@ -498,6 +508,7 @@ def tool_env(monkeypatch):
     monkeypatch.setattr(search, "UrllibSearchTransport", lambda: web)
     owned = []
     settings_created = False
+    settings_marker = f'synthetic-t08-{uuid4().hex}'
 
     def create(content="用户甲😀", kind="journal", blocks=None):
         model_class = Journal if kind == "journal" else Inbox
@@ -512,7 +523,9 @@ def tool_env(monkeypatch):
     def disable_web():
         nonlocal settings_created
         with Session(engine) as db:
-            db.merge(AISettings(id=1, custom_prompt="", web_enabled=False, revision=1))
+            if db.get(AISettings, 1) is not None:
+                raise RuntimeError('settings row exists; refusing to overwrite')
+            db.add(AISettings(id=1, custom_prompt=settings_marker, web_enabled=False, revision=1))
             db.commit()
         settings_created = True
 
@@ -524,7 +537,7 @@ def tool_env(monkeypatch):
         http.close()
         with Session(engine) as db:
             usage_owned = set(db.scalars(
-                select(AIUsage.id).where(AIUsage.response_id.like("synthetic-t06-%"))))
+                select(AIUsage.id).where(AIUsage.response_id.in_(model.response_ids))))
             for kind, ident in owned:
                 model_class = Journal if kind == "journal" else Inbox
                 requests = list(db.scalars(select(AIRequest.id).where(
@@ -540,7 +553,8 @@ def tool_env(monkeypatch):
             if usage_owned:
                 db.execute(delete(AIUsage).where(AIUsage.id.in_(usage_owned)))
             if settings_created:
-                db.execute(delete(AISettings).where(AISettings.id == 1))
+                db.execute(delete(AISettings).where(AISettings.id == 1,
+                                                   AISettings.custom_prompt == settings_marker))
             db.commit()
         assert counts() == baseline
 

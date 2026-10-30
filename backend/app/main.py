@@ -19,6 +19,7 @@ from app.search.router import router as search_router
 from app.link.router import router as link_router
 from app.ai.router import files_router as ai_files_router
 from app.ai.router import router as ai_router
+from app.ai.comments import router as ai_comments_router
 
 from contextlib import asynccontextmanager
 from app.database import SessionLocal
@@ -66,6 +67,7 @@ app.include_router(link_router)
 # AI settings/metering and T05 local generation/recovery; no search/review yet.
 app.include_router(ai_router)
 app.include_router(ai_files_router)
+app.include_router(ai_comments_router)
 
 
 @app.get("/api/health")

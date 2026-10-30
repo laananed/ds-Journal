@@ -41,6 +41,9 @@ DEFAULT_SHAPE = {
     "model_configured": False,
     "search_configured": False,
     "effective_web_enabled": False,
+    "auto_go_deeper": False,
+    "auto_minds_comments": False,
+    "mind_preset_ids": ["gentle_reflection"],
 }
 
 
@@ -255,13 +258,18 @@ def _settings_engine(db):
     return create_engine(url)
 
 
-def _clear_settings(engine) -> None:
+def _clear_settings(engine, owned_prompts: set[str]) -> None:
+    """Delete only this test's uniquely generated settings values."""
+    from sqlalchemy import delete
+    assert owned_prompts
     with engine.begin() as connection:
-        connection.execute(text("DELETE FROM ai_settings"))
+        connection.execute(delete(AISettings).where(AISettings.id == 1,
+                           AISettings.custom_prompt.in_(owned_prompts)))
 
 
 def test_concurrent_first_write_creates_exactly_one_row_and_conflicts_the_loser(api):
     import threading
+    from uuid import uuid4
 
     from sqlalchemy.orm import Session
 
@@ -270,6 +278,8 @@ def test_concurrent_first_write_creates_exactly_one_row_and_conflicts_the_loser(
     results: list[int] = []
     lock = threading.Lock()
     barrier = threading.Barrier(2, timeout=15)
+    marker = uuid4().hex
+    prompts = {f"并发{marker}{suffix}" for suffix in ('甲', '乙')}
 
     def first_write(prompt: str) -> None:
         with Session(bind=engine) as session:
@@ -286,8 +296,7 @@ def test_concurrent_first_write_creates_exactly_one_row_and_conflicts_the_loser(
             results.append(status)
 
     try:
-        threads = [threading.Thread(target=first_write, args=(f"并发{prompt}",))
-                   for prompt in ("甲", "乙")]
+        threads = [threading.Thread(target=first_write, args=(prompt,)) for prompt in prompts]
         for thread in threads:
             thread.start()
         for thread in threads:
@@ -299,14 +308,15 @@ def test_concurrent_first_write_creates_exactly_one_row_and_conflicts_the_loser(
                 text("SELECT id, revision, custom_prompt FROM ai_settings")).all()
         assert len(rows) == 1
         assert rows[0][0] == 1 and rows[0][1] == 1
-        assert rows[0][2] in ("并发甲", "并发乙")
+        assert rows[0][2] in prompts
     finally:
-        _clear_settings(engine)
+        _clear_settings(engine, prompts)
         engine.dispose()
 
 
 def test_conflicting_second_write_does_not_overwrite(api):
     import threading
+    from uuid import uuid4
 
     from sqlalchemy.orm import Session
 
@@ -315,6 +325,9 @@ def test_conflicting_second_write_does_not_overwrite(api):
     results: list[int] = []
     lock = threading.Lock()
     barrier = threading.Barrier(2, timeout=15)
+    marker = uuid4().hex
+    initial = f'原始{marker}'
+    prompts = {f'竞争{marker}{suffix}' for suffix in ('甲', '乙')}
 
     def competing_write(prompt: str) -> None:
         from app.ai.settings import SettingsConflict, update_settings
@@ -332,10 +345,9 @@ def test_conflicting_second_write_does_not_overwrite(api):
         with engine.begin() as connection:
             connection.execute(text(
                 "INSERT INTO ai_settings (id, custom_prompt, web_enabled, revision) "
-                "VALUES (1, '原始', true, 1)"))
+                "VALUES (1, :prompt, true, 1)"), {'prompt':initial})
 
-        threads = [threading.Thread(target=competing_write, args=(f"竞争{prompt}",))
-                   for prompt in ("甲", "乙")]
+        threads = [threading.Thread(target=competing_write, args=(prompt,)) for prompt in prompts]
         for thread in threads:
             thread.start()
         for thread in threads:
@@ -345,9 +357,9 @@ def test_conflicting_second_write_does_not_overwrite(api):
         with engine.connect() as connection:
             stored = connection.execute(text(
                 "SELECT custom_prompt, revision FROM ai_settings WHERE id = 1")).one()
-        assert stored[1] == 2 and stored[0] in ("竞争甲", "竞争乙")
+        assert stored[1] == 2 and stored[0] in prompts
     finally:
-        _clear_settings(engine)
+        _clear_settings(engine, prompts | {initial})
         engine.dispose()
 
 
@@ -374,7 +386,6 @@ def test_settings_write_failure_rolls_back_and_leaves_the_session_usable(api, mo
         with engine.connect() as connection:
             assert connection.execute(text(SETTINGS_ROW)).scalar_one() == 0
     finally:
-        _clear_settings(engine)
         engine.dispose()
 
 

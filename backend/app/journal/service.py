@@ -357,7 +357,12 @@ def update_journal(db: Session, journal_id: int, data: JournalUpdate) -> Journal
                     raise RelatedFilesChanged('linked review changed')
         if row.journal_kind != 'writing' and 'journal_date' in data.model_fields_set:
             raise WritingError('ritual date cannot be changed')
-        changes = writing_changes(row, data)
+        if row.journal_kind == 'writing' and 'content_doc' in data.model_fields_set:
+            row = db.scalar(select(Journal).where(Journal.id == journal_id, Journal.deleted_at.is_(None))
+                            .with_for_update().execution_options(populate_existing=True))
+            if row is None:
+                return None
+        changes = writing_changes(row, data, db=db)
         if not changes:
             return _project_required(db, journal_id)
         if row.revision != data.expected_revision:
@@ -376,7 +381,7 @@ def update_journal(db: Session, journal_id: int, data: JournalUpdate) -> Journal
             row = _get_active_journal(db, journal_id)
             if row is None:
                 return None
-            if not writing_changes(row, data):
+            if not writing_changes(row, data, db=db):
                 return _project_required(db, journal_id)
             raise WriteConflict("file revision has changed")
         db.commit()
@@ -407,6 +412,8 @@ def delete_journal(db: Session, journal_id: int, expected_revision: int | None =
             if _get_active_journal(db, journal_id) is None:
                 return False
             raise WriteConflict("file revision has changed")
+        from app.writing.service import invalidate_writing_ai
+        invalidate_writing_ai(db, journal_id)
         db.commit()
     except Exception:
         db.rollback()
