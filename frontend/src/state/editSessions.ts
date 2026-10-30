@@ -303,17 +303,32 @@ export function applyNarrowOps(
   draft: DocumentDraft,
   serverDraft: DocumentDraft | null,
   ops: readonly FileOp[],
+  baseline?: DocumentDraft,
 ): NarrowApplyResult {
   const applied: string[] = []
   const ignored: string[] = []
   let doc = draft.content_doc
   let changed = false
   for (const op of ops) {
-    if (op.kind !== 'replace_placeholder' || typeof op.node_id !== 'string' || serverDraft === null) {
+    if (typeof op.node_id !== 'string' || serverDraft === null) {
       ignored.push(op.kind)
       continue
     }
-    const replacement = findNodeById(serverDraft.content_doc, op.node_id)
+    let replacement = findNodeById(serverDraft.content_doc, op.node_id)
+    if (op.kind === 'goal_fields' || op.kind === 'goal_visibility') {
+      const local = findNodeById(doc, op.node_id)
+      const original = baseline && findNodeById(baseline.content_doc, op.node_id)
+      if (!isPlainObject(local) || !isPlainObject(original) || !isPlainObject(replacement) ||
+          local.type !== 'goalReview' || replacement.type !== 'goalReview' ||
+          !deepEqual(local.attrs, original.attrs)) {
+        ignored.push(op.kind)
+        continue
+      }
+      replacement = { ...local, attrs: replacement.attrs }
+    } else if (op.kind !== 'replace_placeholder') {
+      ignored.push(op.kind)
+      continue
+    }
     if (replacement === null) {
       ignored.push(op.kind)
       continue
@@ -761,6 +776,12 @@ export function createEditSessionStore(options: StoreOptions = {}): EditSessionS
         (item) => item.type === effect.type && item.fileId === effect.id,
       )
       for (const session of targets) {
+        if (session.inFlight !== null) {
+          put({ ...session, inFlight: null, status: 'conflict',
+            error: '保存进行时服务器又发生变化，请对照最新内容；本地草稿已保留。' })
+          summary.conflicts.push({ sessionId: session.sessionId, fileId: effect.id, message: '保存与服务器变化并发' })
+          continue
+        }
         if (session.revision !== effect.base_revision) {
           put({
             ...session,
@@ -776,10 +797,13 @@ export function createEditSessionStore(options: StoreOptions = {}): EditSessionS
         }
         const serverDraft = entry?.file.draft ?? null
         const hasNewerInput = session.inFlight === null && draftHasChanges(session.draft, session.baseline)
-        if (serverDraft === null || !hasNewerInput) {
-          const next = serverDraft === null
-            ? { ...session, revision: effect.revision }
-            : adoptServer(session, { id: effect.id, revision: effect.revision, draft: serverDraft })
+        if (serverDraft === null) {
+          put({ ...session, status: 'conflict', error: '服务器未返回完整文件，已保留本地草稿。' })
+          summary.conflicts.push({ sessionId: session.sessionId, fileId: effect.id, message: '缺少服务器文件' })
+          continue
+        }
+        if (!hasNewerInput) {
+          const next = adoptServer(session, { id: effect.id, revision: effect.revision, draft: serverDraft })
           put({ ...next, updatedAt: now() })
           summary.applied.push({
             sessionId: session.sessionId,
@@ -790,7 +814,14 @@ export function createEditSessionStore(options: StoreOptions = {}): EditSessionS
           })
           continue
         }
-        const narrow = applyNarrowOps(session.draft, serverDraft, effect.ops)
+        const narrow = applyNarrowOps(session.draft, serverDraft, effect.ops, session.baseline)
+        const baselineEffect = applyNarrowOps(session.baseline, serverDraft, effect.ops, session.baseline)
+        if (narrow.ignored.length > 0 || baselineEffect.ignored.length > 0 || effect.ops.length === 0 ||
+            !draftEquals(baselineEffect.draft, serverDraft)) {
+          put({ ...session, status: 'conflict', error: '服务器变化无法安全合并，已保留本地草稿。' })
+          summary.conflicts.push({ sessionId: session.sessionId, fileId: effect.id, message: '未知或无法应用的服务器变化' })
+          continue
+        }
         put({
           ...session,
           revision: effect.revision,

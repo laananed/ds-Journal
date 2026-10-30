@@ -4,15 +4,15 @@ import hashlib
 import json
 from uuid import uuid5
 
-from sqlalchemy import select, update
+from sqlalchemy import select, update, or_
 from sqlalchemy.exc import IntegrityError
 from app.journal.models import Journal
 from app.journal.schemas import _validate_content
 from app.journal.service import get_journal, _utcnow
-from app.ritual.models import RitualCopy
-from app.ritual.service import lock_day, require_no_links, RelatedFilesChanged
+from app.ritual.models import RitualCopy, RitualGoalLink
+from app.ritual.service import lock_day, RelatedFilesChanged
 from app.writing.documents import DocumentError, SPECIAL, project_document, validate_document
-from app.writing.service import require_revision, WriteConflict, WritingError, LegacyConversionRequired
+from app.writing.service import require_revision, WriteConflict, WritingError, LegacyConversionRequired, PreconditionRequired
 
 
 def digest(value):
@@ -78,22 +78,49 @@ def copy_content(db, source_id, data):
     require_revision(data.expected_target_revision)
     payload_hash = digest({'source_id': source_id, **data.model_dump(mode='json', by_alias=True)})
     try:
-        source = db.get(Journal, source_id)
-        if source is None:
-            raise WritingError('source does not exist')
+        source, initial_target = db.get(Journal, source_id), db.get(Journal, data.target_id)
+        if (source is None or initial_target is None or source.id == initial_target.id or
+                source.journal_kind not in ('set', 'end') or source.journal_kind != initial_target.journal_kind or
+                source.journal_date != initial_target.journal_date):
+            raise WritingError('source and target must be matching deleted and active Rituals')
         lock_day(db, source.journal_date)
-        rows = db.scalars(select(Journal).where(Journal.id.in_([source_id, data.target_id]))
+        predicate = (RitualGoalLink.set_journal_id.is_not(None) & or_(
+            RitualGoalLink.set_journal_id.in_([source_id, data.target_id]),
+            RitualGoalLink.end_journal_id.in_([source_id, data.target_id])))
+        links = db.scalars(select(RitualGoalLink).where(predicate)).all()
+        ids = {source_id, data.target_id}
+        for link in links:
+            ids.update((link.set_journal_id, link.end_journal_id))
+        rows = db.scalars(select(Journal).where(Journal.id.in_(ids))
                           .order_by(Journal.id).with_for_update()
                           .execution_options(populate_existing=True)).all()
         found = {row.id: row for row in rows}
+        links = db.scalars(select(RitualGoalLink).where(predicate).order_by(RitualGoalLink.id)
+                           .with_for_update().execution_options(populate_existing=True)).all()
+        actual = {source_id, data.target_id}
+        for link in links:
+            actual.update((link.set_journal_id, link.end_journal_id))
+        if actual != ids or set(found) != ids:
+            raise RelatedFilesChanged('association set changed')
         source, target = found.get(source_id), found.get(data.target_id)
         if (source is None or target is None or source.id == target.id or source.deleted_at is None
             or target.deleted_at is not None or source.journal_kind not in ('set', 'end')
             or source.journal_kind != target.journal_kind or source.journal_date != target.journal_date):
             raise WritingError('source and target must be matching deleted and active Rituals')
-        require_no_links(db, source.id, target.id)
-        if data.related_revisions:
-            raise RelatedFilesChanged('related file set has changed')
+        if any(source.id in (link.set_journal_id, link.end_journal_id) for link in links):
+            raise RelatedFilesChanged('deleted source has active links')
+        from pydantic import ValidationError
+        from app.ritual.schemas import RelatedRevisionsBody
+        try:
+            related = RelatedRevisionsBody(related_revisions=data.related_revisions)
+        except ValidationError as error:
+            raise WritingError('invalid related revisions') from error
+        supplied = {item.id: item.revision for item in related.related_revisions}
+        required = ids - {source_id, data.target_id}
+        if required - supplied.keys():
+            raise PreconditionRequired('related revisions are required')
+        if set(supplied) != required or any(found[item_id].revision != rev for item_id, rev in supplied.items()):
+            raise RelatedFilesChanged('related files changed')
         if source.content_doc is None or target.content_doc is None:
             raise LegacyConversionRequired('copy requires safely converted documents')
         receipt = db.get(RitualCopy, data.copy_id)
@@ -149,9 +176,10 @@ def copy_content(db, source_id, data):
         db.add(RitualCopy(id=data.copy_id, source_id=source.id, target_id=target.id,
                           payload_hash=payload_hash, copied_nodes=[
                               {'id': node['attrs']['id'], 'digest': digest(node)} for node in selected]))
-        db.commit()
+        db.flush()
         db.expire_all()
         current_file = get_journal(db, data.target_id)
+        db.commit()
         return {'files': [current_file], 'effects': [{'type': 'journal', 'id': data.target_id,
             'base_revision': data.expected_target_revision, 'revision': data.expected_target_revision + 1,
             'ops': [{'kind': 'copy_nodes', 'nodes': selected}]}], 'request_id': None}

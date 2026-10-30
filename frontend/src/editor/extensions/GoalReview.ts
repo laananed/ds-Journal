@@ -70,12 +70,18 @@ export const GoalReview = Node.create({
       const snapshot = document.createElement('p')
       snapshot.className = 's4-goal-review-snapshot'
       snapshot.contentEditable = 'false'
-      body.before(title, snapshot)
+      const sourceStatus = document.createElement('p')
+      sourceStatus.className = 's4-goal-review-source-status'
+      sourceStatus.contentEditable = 'false'
+      sourceStatus.setAttribute('role', 'status')
+      body.before(title, snapshot, sourceStatus)
 
       const render = (attrs: Record<string, unknown>) => {
         title.textContent = String(attrs.review_title ?? '')
         snapshot.textContent = String(attrs.goal_snapshot ?? '')
         snapshot.dataset.checked = attrs.checked_snapshot === true ? 'true' : 'false'
+        sourceStatus.textContent = attrs.link_id === null ? '目标来源不可用，已保留回顾和回答。' : ''
+        sourceStatus.hidden = attrs.link_id !== null
       }
       render(node.attrs)
 

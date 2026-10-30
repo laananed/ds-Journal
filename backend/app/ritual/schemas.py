@@ -1,5 +1,7 @@
 """Validated inputs for the current Ritual question templates."""
 from uuid import UUID
+from datetime import datetime
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
@@ -73,4 +75,61 @@ class CopyContent(BaseModel):
         for key in ('source_revision', 'expected_target_revision'):
             if key in self.model_fields_set and getattr(self, key) is None:
                 raise ValueError(f'{key} cannot be null')
+        return self
+
+
+class GoalLinkCreate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    source_set_id: int = Field(strict=True, gt=0)
+    goal_ids: list[UUID] = Field(min_length=1)
+    expected_set_revision: int | None = Field(default=None, strict=True, gt=0)
+    end_id: int | None = Field(default=None, strict=True, gt=0)
+    expected_end_revision: int | None = Field(default=None, strict=True, ge=0)
+    client_create_id: UUID | None = None
+    draft_started_at: datetime | None = None
+
+    @model_validator(mode='after')
+    def valid_input(self):
+        if len(self.goal_ids) != len(set(self.goal_ids)):
+            raise ValueError('goal_ids must be unique')
+        for name in ('expected_set_revision', 'expected_end_revision'):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f'{name} cannot be null')
+        return self
+
+
+class GoalUpdate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    expected_set_revision: int | None = Field(default=None, strict=True, gt=0)
+    expected_end_revision: int | None = Field(default=None, strict=True, gt=0)
+    text: str | None = Field(default=None, min_length=1, max_length=2000)
+    checked: bool | None = Field(default=None, strict=True)
+
+    @model_validator(mode='after')
+    def valid_input(self):
+        for name in ('expected_set_revision', 'expected_end_revision', 'text', 'checked'):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f'{name} cannot be null')
+        if self.text is not None and not self.text.strip():
+            raise ValueError('text cannot be blank')
+        if not ({'text', 'checked'} & self.model_fields_set):
+            raise ValueError('goal update is empty')
+        return self
+
+
+class RelatedRevision(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    type: Literal['journal']
+    id: int = Field(strict=True, gt=0)
+    revision: int = Field(strict=True, gt=0)
+
+
+class RelatedRevisionsBody(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    related_revisions: list[RelatedRevision]
+
+    @model_validator(mode='after')
+    def unique_files(self):
+        if len({item.id for item in self.related_revisions}) != len(self.related_revisions):
+            raise ValueError('related files must be unique')
         return self

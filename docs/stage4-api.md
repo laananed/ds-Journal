@@ -57,10 +57,12 @@ T01 独占建立共享合成样例目录 `tests/fixtures/stage4_documents/`（�
 | GET | `/api/journals/{id}` | 有效 Journal 详情及受控关联所需身份/版本 |
 | POST | `/api/journals` | title、content_doc、journal_date、journal_kind、folder_id、client_create_id；Ritual 还需 draft_started_at |
 | PATCH | `/api/journals/{id}` | expected_revision、变化的 title/content_doc/folder_id；仅 writing 允许 journal_date，禁止 journal_kind |
-| DELETE | `/api/journals/{id}` | If-Match；软删除，204；Ritual 同事务解除关联并保留 End 快照和回答 |
+| DELETE | `/api/journals/{id}` | If-Match；可选 JSON body `{related_revisions:[{type:"journal",id,revision}]}`；软删除，204；Ritual 同事务解除关联并保留 End 快照和回答 |
 | GET/POST/PATCH/DELETE | `/api/insights[/{id}]` | 沿用 CRUD/创建键/CAS，正文换 content_doc；无日期，不开放本期写作 AI |
 | GET | `/api/rituals` | `journal_date=YYYY-MM-DD`，返回 `{journal_date,set:JournalDetail|null,end:JournalDetail|null}`；缺失零创建 |
 | GET | `/api/business-day` | 返回 `{timezone:"Asia/Shanghai",day_start_hour:4,server_time,business_date}`；只读时钟依据 |
+
+Ritual 详情中的受控关联信息为 `related_revisions:[{type:"journal",id,revision}]` 和 `goal_links:[{link_id,set_id,end_id,goal_id,end_node_id}]`；仅列有效关联，供两端定位目标及提交版本，不包含回答正文。GET 只读。
 
 Writing 左侧用 journals 的当日 writing 筛选；今日总览用当日 all 的分页结果与 rituals 状态，不另建总览实体。
 
@@ -77,6 +79,8 @@ Writing 左侧用 journals 的当日 writing 筛选；今日总览用当日 all 
 ## 5. Trash 与两种 Ritual 恢复
 
 普通 `GET /api/trash`、详情、单条永久删除及普通恢复沿用 Stage 3，但详情换 JSON。`POST /api/trash/journal/{id}/restore` 仍用 If-Match；若 Ritual 同日同类有有效占位，409 `ritual_slot_conflict`，不修改任何对象。
+
+2026-10-30 用户批准：Journal 软删除及 Trash 单条永久删除可携带 JSON body `{related_revisions:[{type:"journal",id,revision}]}`；存在受影响关联文件时必须提供完整身份与版本集合，缺少必需版本 428，版本陈旧或关联集合改变 409。无关联时允许省略 body，原 If-Match 和成功 204 不变。
 
 ### 完整替换
 
@@ -111,6 +115,8 @@ Writing 左侧用 journals 的当日 writing 筛选；今日总览用当日 all 
 ## 6. 目标关联与双向写入
 
 `POST /api/ritual-goal-links`：body `{source_set_id,goal_ids,expected_set_revision,end_id,expected_end_revision,client_create_id,draft_started_at}`。goal_ids 非空、去重、必须属于有效开始今天。已存在结束今天时 end_id/revision 必填；不存在时 end_id=null、expected_end_revision=0、创建键和草稿时刻必填，创建日期必须等于来源日。新建带真实回顾内容的结束今天与 links 原子完成。重复关联同一目标返回既有关联，不产生重复回顾。
+
+2026-10-30 用户决定：04:00 前实际捕获的加入草稿允许在换日后按原业务日提交。但当前接口没有服务端捕获凭证，无法区分真实延迟提交与伪造旧时刻；在解决该问题并批准相应契约前，不存在 End 的新建路径保持拒绝，不创建空壳。已有 End 的关联不受此限制。
 
 `PATCH /api/ritual-goals/{set_id}/{goal_id}`：body `{expected_set_revision,expected_end_revision?,text?,checked?}`；text 非空、checked 为 bool，关联到有效结束今天时必须提供其版本。可从任一端发起，后端只允许开始今天 canonical 节点与关联镜像/系统标题变化，回答子树不在更新范围。成功返回 FileMutation；关联对象变化 409，来源失效 409 `source_unavailable`。
 
@@ -180,6 +186,8 @@ Token、已知/未知 usage、子调用唯一计量、受限搜索与 Key 隐私
 files 为受影响完整详情，effects 是与这些详情对应的受控变化描述，ops 允许 replace_placeholder、comment_marks、goal_fields、goal_visibility、copy_nodes、restore_identity，实际内容/ID 由后端结果提供，不能由任意客户端写系统 ops。普通单文件 CRUD 保留详情响应形状。
 
 应用用 files 确认对应提交快照，较新本地输入只接收与已知 base_revision 对应的窄 effects；不能整篇 setContent 覆盖较新草稿，不能在未知差异时只抬 revision 重发。多个文件会话按相同 typed key 顺序取得写队列；保存/命令失败保留输入和命令首次 payload。导航不等待这些队列。
+
+2026-10-30 用户批准：普通 Journal PATCH 若实际导致多文件目标变化，仍返回 Journal 详情，并在可选 `file_mutation` 字段附带本节格式的受影响文件与 effects；无多文件变化时该字段为空。会话处理需避免把发起文件的普通保存确认重复应用，并对其他文件采用同一版本及草稿保护规则。
 
 ### Journal 本地草稿恢复契约
 

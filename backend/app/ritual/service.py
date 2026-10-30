@@ -15,7 +15,7 @@ def lock_day(db, day):
 
 
 def require_no_links(db, *ids):
-    if db.scalar(select(RitualGoalLink.id).where(or_(
+    if db.scalar(select(RitualGoalLink.id).where(RitualGoalLink.set_journal_id.is_not(None), or_(
         RitualGoalLink.set_journal_id.in_(ids), RitualGoalLink.end_journal_id.in_(ids)
     )).limit(1)) is not None:
         raise RelatedFilesChanged('linked Ritual operations are not available yet')
@@ -28,38 +28,50 @@ def restore_replace(db, source_id, source_revision, data):
     from app.trash.service import get_trash
     require_revision(data.expected_target_revision)
     try:
-        source = db.get(Journal, source_id)
-        if source is None:
-            raise WritingError('source does not exist')
-        lock_day(db, source.journal_date)
-        rows = db.scalars(select(Journal).where(Journal.id.in_([source_id, data.target_id]))
-                          .order_by(Journal.id).with_for_update()
-                          .execution_options(populate_existing=True)).all()
-        found = {row.id: row for row in rows}
-        source, target = found.get(source_id), found.get(data.target_id)
+        source, target = db.get(Journal, source_id), db.get(Journal, data.target_id)
+        if (source is None or target is None or source.id == target.id or
+            source.journal_kind not in ('set', 'end') or source.journal_kind != target.journal_kind or
+            source.journal_date != target.journal_date):
+            raise WritingError('source and target must be matching deleted and active Rituals')
+        from pydantic import ValidationError
+        from app.ritual.schemas import RelatedRevisionsBody
+        from app.ritual.goals import detach_for_delete
+        try:
+            related = RelatedRevisionsBody(related_revisions=data.related_revisions)
+        except ValidationError as error:
+            raise WritingError('invalid related revisions') from error
+        bases = detach_for_delete(db, target.id, data.expected_target_revision, related,
+                                  additional_ids=(source.id,))
+        require_no_links(db, source_id)
+        source, target = db.get(Journal, source_id), db.get(Journal, data.target_id)
         if (source is None or target is None or source.id == target.id or
             source.journal_kind not in ('set', 'end') or source.journal_kind != target.journal_kind or
             source.journal_date != target.journal_date or source.deleted_at is None or target.deleted_at is not None):
             raise WritingError('source and target must be matching deleted and active Rituals')
         if source.revision != source_revision or target.revision != data.expected_target_revision:
             raise WriteConflict('file revision has changed')
-        require_no_links(db, source.id, target.id)
-        if data.related_revisions:
-            raise RelatedFilesChanged('related file set has changed')
         db.execute(update(Journal).where(Journal.id == target.id).values(
             deleted_at=datetime.now(timezone.utc), revision=Journal.revision + 1,
             updated_at=Journal.updated_at))
         db.execute(update(Journal).where(Journal.id == source.id).values(
             deleted_at=None, revision=Journal.revision + 1, updated_at=Journal.updated_at))
-        db.commit()
+        db.flush()
         db.expire_all()
         restored, deleted = get_journal(db, source_id), get_trash(db, 'journal', data.target_id)
-        return {'files': [restored, deleted], 'effects': [
+        files = [restored, deleted]
+        effects = [
             {'type': 'journal', 'id': source_id, 'base_revision': source_revision,
              'revision': source_revision + 1, 'ops': [{'kind': 'restore_identity'}]},
             {'type': 'journal', 'id': data.target_id, 'base_revision': data.expected_target_revision,
              'revision': data.expected_target_revision + 1, 'ops': [{'kind': 'restore_identity'}]},
-        ], 'request_id': None}
+        ]
+        for related_id, base in bases.items():
+            file = get_journal(db, related_id)
+            files.append(file)
+            effects.append({'type': 'journal', 'id': related_id, 'base_revision': base,
+                            'revision': file.revision, 'ops': [{'kind': 'goal_visibility'}]})
+        db.commit()
+        return {'files': files, 'effects': effects, 'request_id': None}
     except Exception:
         db.rollback()
         raise

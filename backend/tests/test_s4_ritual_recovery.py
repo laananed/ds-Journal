@@ -159,6 +159,10 @@ def test_replace_rejects_link_without_half_write(api):
     db.flush()
     result = client.post(f"/api/rituals/{source['id']}/restore-replace", headers={'If-Match': '"2"'},
         json={'target_id': target['id'], 'expected_target_revision': 1, 'related_revisions': []})
+    assert result.status_code == 428
+    result = client.post(f"/api/rituals/{source['id']}/restore-replace", headers={'If-Match': '"2"'},
+        json={'target_id': target['id'], 'expected_target_revision': 1,
+              'related_revisions': [{'type': 'journal', 'id': end['id'], 'revision': 1}]})
     assert result.status_code == 409 and result.json()['code'] == 'related_files_changed'
     assert client.get(f"/api/journals/{target['id']}").json()['revision'] == 1
     assert client.get(f"/api/trash/journal/{source['id']}").json()['revision'] == 2

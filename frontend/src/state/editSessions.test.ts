@@ -460,15 +460,61 @@ async function testApplyMutation(): Promise<void> {
   expectEqual(store.getSession('idle')!.status, 'conflict', '冲突状态可见')
   expectEqual(store.getSession('idle')!.draft.content_doc, serverDocA, '冲突不覆盖本地内容')
 
-  // 未识别 op 只记录忽略，不改内容。
+  // 未识别 op 必须保留草稿并进入冲突，不能抬版本后覆盖服务器变化。
   store.resolveTakeServer('idle', { id: 20, revision: 6, draft: draft({ content_doc: serverDocA }) })
   store.changeSession('idle', draft({ content_doc: placeholderDoc('再写一点', null) }), 'user_input')
   const unknownOp = store.applyFileMutation({
     files: [{ type: 'journal', file: serverFile(20, 7, draft({ content_doc: placeholderDoc('再写一点', 'AI 2') })) }],
     effects: [{ type: 'journal', id: 20, base_revision: 6, revision: 7, ops: [{ kind: 'mind_comment_marks' }] }],
   })
-  expectEqual(unknownOp.applied[0]?.ignored, ['mind_comment_marks'], '未识别 op 记为忽略')
+  expectEqual(unknownOp.conflicts.length, 1, '未识别 op 应进入冲突')
+  expectEqual(store.getSession('idle')!.revision, 6, '未识别 op 不推进基线版本')
+  expectEqual(store.getSession('idle')!.status, 'conflict', '未识别 op 禁止静默保存')
   expectEqual(store.getSession('idle')!.draft.content_doc, placeholderDoc('再写一点', null), '未识别 op 不改内容')
+
+  const reviewDoc = (text: string, answer: string) => ({ type: 'doc', content: [{ type: 'goalReview',
+    attrs: { id: 'review-1', link_id: 'link-1', goal_snapshot: text, checked_snapshot: false, review_title: text },
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: answer }] }] }] })
+  const baseline = draft({ content_doc: reviewDoc('旧目标', '已保存回答') })
+  store.openSession({ sessionId: 'review', type: 'journal', tabId: 'tab-1', draft: baseline,
+    file: { id: 22, revision: 1, draft: baseline }, transport })
+  store.changeSession('review', draft({ content_doc: reviewDoc('旧目标', '正在输入的回答') }), 'user_input')
+  const synced = store.applyFileMutation({
+    files: [{ type: 'journal', file: serverFile(22, 2, draft({ content_doc: reviewDoc('新目标', '已保存回答') })) }],
+    effects: [{ type: 'journal', id: 22, base_revision: 1, revision: 2,
+      ops: [{ kind: 'goal_fields', node_id: 'review-1' }] }],
+  })
+  expectEqual(synced.conflicts.length, 0, '回答编辑期间允许合并目标系统字段')
+  expectEqual(store.getSession('review')!.draft.content_doc, reviewDoc('新目标', '正在输入的回答'), '目标同步保留未保存回答')
+  const beforeConflict = store.getSession('review')!.draft
+  const unexpectedDoc = reviewDoc('又改目标', '服务器另改回答')
+  const unsafe = store.applyFileMutation({
+    files: [{ type: 'journal', file: serverFile(22, 3, draft({ content_doc: unexpectedDoc })) }],
+    effects: [{ type: 'journal', id: 22, base_revision: 2, revision: 3,
+      ops: [{ kind: 'goal_fields', node_id: 'review-1' }] }],
+  })
+  expectEqual(unsafe.conflicts.length, 1, '未声明的服务器回答变化应冲突')
+  expectEqual(store.getSession('review')!.revision, 2, '未知差异不能推进版本')
+  expectEqual(store.getSession('review')!.draft, beforeConflict, '冲突保留整个未保存草稿')
+
+  const racing = manualTransport()
+  const concurrent = createEditSessionStore()
+  const original = draft({ content_doc: doc('原文') })
+  concurrent.openSession({ sessionId: 'flight', type: 'journal', tabId: 'tab', draft: original,
+    file: { id: 23, revision: 1, draft: original }, transport: racing.transport })
+  const pendingDraft = draft({ content_doc: doc('用户在途输入') })
+  concurrent.changeSession('flight', pendingDraft, 'user_input')
+  const saving = concurrent.saveToSequence('flight')
+  await flushMicrotasks()
+  const inFlightResult = concurrent.applyFileMutation({ files: [
+    { type: 'journal', file: serverFile(23, 2, draft({ content_doc: doc('服务器变化') })) }],
+    effects: [{ type: 'journal', id: 23, base_revision: 1, revision: 2, ops: [{ kind: 'goal_fields', node_id: 'p-1' }] }] })
+  expectEqual(inFlightResult.conflicts.length, 1, '在途保存遇到外部变化必须冲突')
+  expectEqual(concurrent.getSession('flight')!.draft, pendingDraft, '在途用户输入保留')
+  racing.calls[0].reply.resolve(serverFile(23, 2, pendingDraft))
+  await saving
+  expectEqual(concurrent.getSession('flight')!.status, 'conflict', '迟到的保存响应不能清除冲突')
+  expectEqual(concurrent.getSession('flight')!.draft, pendingDraft, '迟到响应不能覆盖草稿')
 }
 
 /* -------------------------------------------------------- 9. 多文件命令 */

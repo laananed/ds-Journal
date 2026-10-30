@@ -41,6 +41,9 @@ def test_delete_rejects_existing_goal_link(api):
                           goal_id=uuid4(), end_node_id=uuid4()))
     db.flush()
     response = client.delete(f"/api/journals/{source['id']}", headers={'If-Match': '"1"'})
+    assert response.status_code == 428
+    response = client.request('DELETE', f"/api/journals/{source['id']}", headers={'If-Match': '"1"'},
+                              json={'related_revisions': [{'type': 'journal', 'id': target['id'], 'revision': 1}]})
     assert response.status_code == 409
     assert response.json()['code'] == 'related_files_changed'
     assert client.get(f"/api/journals/{source['id']}").json()['revision'] == 1

@@ -80,7 +80,7 @@ def get_trash(db: Session, type: TrashType, id: int) -> TrashItem | None:
                              document_format='tiptap' if file.content_doc is not None else 'legacy')
     with db.no_autoflush:
         file = db.scalar(select(Insight).where(Insight.id == id))
-    return InsightDetail(**response.model_dump(), content_doc=file.content_doc,
+    return InsightDetail(**response.model_dump(), content_blocks=None, content_doc=file.content_doc,
                          document_schema_version=1 if file.content_doc is not None else None,
                          document_format='tiptap' if file.content_doc is not None else 'legacy')
 
@@ -118,20 +118,23 @@ def restore_trash(db: Session, type: TrashType, id: int, expected_revision: int 
     restored = get_journal(db, id) if type == 'journal' else get_insight(db, id)
     if restored is None:
         raise RuntimeError('Restored file could not be read back')
+    if type == 'insight':
+        restored.content_blocks = None
     return restored
 
 
-def purge_trash(db: Session, type: TrashType, id: int, expected_revision: int | None = None) -> bool:
+def purge_trash(db: Session, type: TrashType, id: int, expected_revision: int | None = None, related=None) -> bool:
     require_revision(expected_revision)
     model = Journal if type == 'journal' else Insight
     statement = (delete(model).where(model.id == id, model.deleted_at.is_not(None), model.revision == expected_revision)
                  .execution_options(synchronize_session=False))
     try:
         ritual = db.get(Journal, id) if type == 'journal' else None
+        if ritual is not None and ritual.deleted_at is None:
+            return False
         if ritual is not None and ritual.journal_kind != 'writing':
-            from app.ritual.service import lock_day, require_no_links
-            lock_day(db, ritual.journal_date)
-            require_no_links(db, ritual.id)
+            from app.ritual.goals import detach_for_delete
+            detach_for_delete(db, ritual.id, expected_revision, related)
         result = db.execute(statement)
         if result.rowcount == 0:
             if get_trash(db, type, id) is not None:

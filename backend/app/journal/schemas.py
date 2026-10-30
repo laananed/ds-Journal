@@ -111,6 +111,7 @@ def _validate_content(value: str) -> str:
 from uuid import UUID
 from pydantic import PrivateAttr
 from app.writing.schemas import Block, Revision, StructuredCreate, StructuredInput
+from app.ritual.schemas import RelatedRevision
 
 
 class JournalCreate(StructuredCreate):
@@ -155,6 +156,7 @@ class JournalUpdate(StructuredInput):
     expected_revision: Revision = None
     content_doc: dict = None
     document_schema_version: Literal[1] = None
+    related_revisions: list[RelatedRevision] | None = None
     _check_title = field_validator("title")(_validate_title)
     _check_content = field_validator("content")(_validate_content)
 
@@ -189,6 +191,9 @@ class JournalDetail(JournalResponse):
     content_doc: dict | None = None
     document_schema_version: Literal[1] | None = None
     document_format: Literal['legacy', 'tiptap'] = 'legacy'
+    related_revisions: list[RelatedRevision] = []
+    goal_links: list[dict] = []
+    file_mutation: dict | None = None
 
 
 class JournalPage(BaseModel):
