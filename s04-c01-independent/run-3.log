@@ -1,0 +1,44 @@
+[PASS] preflight.target_database_is_seekjournal_test_03 :: ('seekjournal_test_03', 'public')
+[PASS] preflight.no_other_connections_on_target_db :: 其他连接数=0
+[PASS] preflight.no_previous_c01_schema :: []
+[PASS] preflight.public_has_no_schedules_table :: False
+[PASS] preflight.ai_usage_row_present :: 1
+[PASS] migration.single_head :: ['c01a7e421b50']
+[PASS] migration.linear_chain_from_pinned_base :: ['c01a7e421b50', '4f8e1a3c9d02', '9e7a6c42d011', '3aa16300a58a', '18ecf7e09da6', 'a8d98342e603', '52c8e94a365c', '3a70890ddb10']
+[PASS] migration.child_process_stayed_in_private_schema :: ('seekjournal_test_03', 'c01it_04d65d79')
+[PASS] migration.upgraded_to_head_in_private_schema :: c01a7e421b50
+[PASS] migration.private_schema_isolated_from_public :: public 未出现 schedules
+[PASS] schema.table_shape_matches_contract :: {"id": ["integer", "NO"], "title": ["text", "NO"], "starts_at": ["timestamp with time zone", "NO"], "ends_at": ["timestamp with time zone", "YES"], "completed": ["boolean", "NO"], "revision": ["bigint", "NO"], "client_create_id": ["uuid", "NO"], "create_payload_hash": ["text", "NO"], "created_at": [
+[PASS] schema.pk_and_unique_client_create_id :: [('ck_schedule_time_order', 'c', 'CHECK (((ends_at IS NULL) OR (ends_at > starts_at)))'), ('schedules_pkey', 'p', 'PRIMARY KEY (id)'), ('schedules_client_create_id_key', 'u', 'UNIQUE (client_create_id)')]
+[PASS] schema.check_end_after_start_present :: ['CHECK (((ends_at IS NULL) OR (ends_at > starts_at)))']
+[PASS] schema.no_foreign_keys :: schedules 无外键即与 Set/End 目标解耦
+[PASS] schema.index_starts_at_id_present :: ['ix_schedules_starts_at_id', 'schedules_client_create_id_key', 'schedules_pkey']
+[PASS] public_entry.main_import_ok :: 
+[PASS] public_entry.no_schedule_route_registered :: {'schedule_paths': [], 'total': 5}
+[PASS] public_entry.openapi_has_no_schedule_path :: []
+[PASS] post.create_returns_created :: (201, {'id': 1, 'title': '合成日程', 'starts_at': '2026-10-30T01:00:00+00:00', 'ends_at': '2026-10-30T02:00:00+00:00', 'completed': False, 'revision': 1, 'created_at': '2026-10-30T14:24:46.937712+00:00', 'updated_at': '2026-10-30T14:24:46.937712+00:00'})
+[PASS] post.create_shape :: ['completed', 'created_at', 'ends_at', 'id', 'revision', 'starts_at', 'title', 'updated_at']
+[PASS] post.revision_starts_at_1 :: 1
+[PASS] post.stored_as_timestamptz :: timestamp with time zone
+[PASS] post.stored_utc_instant :: ('2026-10-30 01:00:00+00:00', '2026-10-30 01:00:00+00:00')
+[PASS] post.stored_utc_offset_zero :: 0:00:00
+[PASS] post.response_time_aware :: 2026-10-30T01:00:00+00:00
+[PASS] post.asia_shanghai_display :: 2026-10-30T09:00:00+08:00
+[PASS] post.created_at_equals_updated_at :: ('2026-10-30T14:24:46.937712+00:00', '2026-10-30T14:24:46.937712+00:00')
+[FAIL] post.ends_at_key_required_when_omitted :: (404, {'detail': 'Not Found'})
+[FAIL] post.title_80_codepoints_accepted :: 404
+[FAIL] post.title_81_codepoints_rejected :: 404
+[FAIL] post.title_80_astral_codepoints_counted_by_codepoint :: 404
+[FAIL] post.title_81_astral_rejected :: 404
+[FAIL] post.title_blank_rejected :: 404
+[FAIL] post.title_empty_rejected :: 404
+[FAIL] post.title_missing_rejected :: 404
+[FAIL] harness.unexpected_error :: Traceback (most recent call last):
+  File "C:\Programme\demo\SeekJournal-Work-01\s04-c01-independent\run_indep_tests.py", line 781, in main
+    test_title_rules(ctx)
+  File "C:\Programme\demo\SeekJournal-Work-01\s04-c01-independent\run_indep_tests.py", line 311, in test_title_rules
+    stored = sql(
+[PASS] cleanup.test_schema_dropped :: 残留 c01* schema 数=0
+[PASS] cleanup.public_snapshot_unchanged :: revision 4f8e1a3c9d02；ai_usage 行数 1
+[PASS] cleanup.ai_usage_preserved :: ai_usage 唯一行内容散列未变
+{"pass": 30, "fail": 9}

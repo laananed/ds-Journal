@@ -1,0 +1,141 @@
+[PASS] preflight.target_database_is_seekjournal_test_03 :: ('seekjournal_test_03', 'public')
+[PASS] preflight.no_other_connections_on_target_db :: 其他连接数=0
+[PASS] preflight.no_previous_c01_schema :: []
+[PASS] preflight.public_has_no_schedules_table :: False
+[PASS] preflight.ai_usage_row_present :: 1
+[PASS] migration.single_head :: ['c01a7e421b50']
+[PASS] migration.linear_chain_from_pinned_base :: ['c01a7e421b50', '4f8e1a3c9d02', '9e7a6c42d011', '3aa16300a58a', '18ecf7e09da6', 'a8d98342e603', '52c8e94a365c', '3a70890ddb10']
+[PASS] migration.child_process_stayed_in_private_schema :: ('seekjournal_test_03', 'c01it_7129557d')
+[PASS] migration.upgraded_to_head_in_private_schema :: c01a7e421b50
+[PASS] migration.private_schema_isolated_from_public :: public 未出现 schedules
+[PASS] schema.table_shape_matches_contract :: {"id": ["integer", "NO"], "title": ["text", "NO"], "starts_at": ["timestamp with time zone", "NO"], "ends_at": ["timestamp with time zone", "YES"], "completed": ["boolean", "NO"], "revision": ["bigint", "NO"], "client_create_id": ["uuid", "NO"], "create_payload_hash": ["text", "NO"], "created_at": [
+[PASS] schema.pk_and_unique_client_create_id :: [('ck_schedule_time_order', 'c', 'CHECK (((ends_at IS NULL) OR (ends_at > starts_at)))'), ('schedules_pkey', 'p', 'PRIMARY KEY (id)'), ('schedules_client_create_id_key', 'u', 'UNIQUE (client_create_id)')]
+[PASS] schema.check_end_after_start_present :: ['CHECK (((ends_at IS NULL) OR (ends_at > starts_at)))']
+[PASS] schema.no_foreign_keys :: schedules 无外键即与 Set/End 目标解耦
+[PASS] schema.index_starts_at_id_present :: ['ix_schedules_starts_at_id', 'schedules_client_create_id_key', 'schedules_pkey']
+[PASS] public_entry.main_import_ok :: 
+[PASS] public_entry.no_schedule_route_registered :: {'schedule_paths': [], 'total': 5}
+[PASS] public_entry.openapi_has_no_schedule_path :: []
+[PASS] post.create_returns_created :: (201, {'id': 1, 'title': '合成日程', 'starts_at': '2026-10-30T01:00:00+00:00', 'ends_at': '2026-10-30T02:00:00+00:00', 'completed': False, 'revision': 1, 'created_at': '2026-10-30T14:35:08.299693+00:00', 'updated_at': '2026-10-30T14:35:08.299693+00:00'})
+[PASS] post.create_shape :: ['completed', 'created_at', 'ends_at', 'id', 'revision', 'starts_at', 'title', 'updated_at']
+[PASS] post.revision_starts_at_1 :: 1
+[PASS] post.stored_as_timestamptz :: timestamp with time zone
+[PASS] post.stored_utc_instant :: ('2026-10-30 01:00:00+00:00', '2026-10-30 01:00:00+00:00')
+[PASS] post.stored_utc_offset_zero :: 0:00:00
+[PASS] post.response_time_aware :: 2026-10-30T01:00:00+00:00
+[PASS] post.asia_shanghai_display :: 2026-10-30T09:00:00+08:00
+[PASS] post.created_at_equals_updated_at :: ('2026-10-30T14:35:08.299693+00:00', '2026-10-30T14:35:08.299693+00:00')
+[PASS] post.ends_at_key_required_when_omitted :: (422, {'detail': [{'type': 'missing', 'loc': ['body', 'ends_at'], 'msg': 'Field required'}]})
+[PASS] post.title_80_codepoints_accepted :: 201
+[PASS] post.title_81_codepoints_rejected :: 422
+[PASS] post.title_80_astral_codepoints_counted_by_codepoint :: 201
+[PASS] post.title_81_astral_rejected :: 422
+[PASS] post.title_blank_rejected :: 422
+[PASS] post.title_empty_rejected :: 422
+[PASS] post.title_missing_rejected :: 422
+[PASS] post.title_roundtrip_unicode :: 80
+[PASS] post.time_naive_datetime_rejected_422 :: (422, '{"detail":[{"type":"value_error","loc":["body","starts_at"],"msg":"Value error, time must include an offset"}]}')
+[PASS] post.time_numeric_epoch_rejected_422 :: (422, '{"detail":[{"type":"value_error","loc":["body","starts_at"],"msg":"Value error, time must be an ISO datetime"}]}')
+[PASS] post.time_garbage_string_rejected_422 :: (422, '{"detail":[{"type":"datetime_from_date_parsing","loc":["body","starts_at"],"msg":"Input should be a valid datetime or date, invalid character in year"}]}')
+[PASS] post.time_missing_rejected_422 :: (422, '{"detail":[{"type":"missing","loc":["body","starts_at"],"msg":"Field required"}]}')
+[PASS] post.time_end_equal_start_rejected_422 :: (422, '{"detail":[{"type":"value_error","loc":["body"],"msg":"Value error, end must be after start"}]}')
+[PASS] post.time_end_before_start_rejected_422 :: (422, '{"detail":[{"type":"value_error","loc":["body"],"msg":"Value error, end must be after start"}]}')
+[PASS] post.time_naive_end_rejected_422 :: (422, '{"detail":[{"type":"value_error","loc":["body","ends_at"],"msg":"Value error, time must include an offset"}]}')
+[PASS] post.time_null_end_accepted :: 201
+[PASS] post.field_completed_string_rejected_422 :: 422
+[PASS] post.field_completed_int_rejected_422 :: 422
+[PASS] post.field_extra_field_rejected_422 :: 422
+[PASS] post.field_bad_uuid_rejected_422 :: 422
+[PASS] post.field_title_int_rejected_422 :: 422
+[PASS] post.missing_completed_rejected :: 
+[PASS] post.missing_client_create_id_rejected :: 
+[PASS] post.replay_same_key_resolves_to_same_resource :: (200, 5, 5)
+[PASS] post.replay_does_not_bump_revision :: 1
+[PASS] post.replay_does_not_change_updated_at :: ('2026-10-30T14:35:08.500213+00:00', '2026-10-30T14:35:08.500213+00:00')
+[PASS] post.replay_single_row :: 1
+[PASS] post.replay_equivalent_instant_different_offset_same_row :: (200, 5)
+[PASS] post.replay_different_payload_409 :: 409
+[PASS] post.replay_conflict_no_extra_row :: 
+[PASS] post.reuse_after_delete_observed :: 删除后同键 POST 状态 201，id 6（原 5）
+[PASS] get.detail_matches_created :: 200
+[PASS] get.detail_404_unknown :: 
+[PASS] get.detail_422_non_integer_id :: 
+[PASS] get.detail_and_list_zero_write_xmin :: ('121998', '121998')
+[PASS] get.zero_write_row_stats :: ((0, 0, 5), (0, 0, 5))
+[PASS] get.zero_write_updated_at :: ('2026-10-30 14:35:08.607357+00:00', '2026-10-30 14:35:08.607357+00:00')
+[PASS] list.empty_shape :: {'items': [], 'page': 1, 'has_next': False}
+[PASS] list.page_size_20 :: 20
+[PASS] list.page1_has_next :: True
+[PASS] list.page2_remainder :: (1, False)
+[PASS] list.order_by_starts_at_then_id :: [('2026-10-31T00:00:00+00:00', 8), ('2026-10-31T00:00:00+00:00', 9), ('2026-10-31T00:05:00+00:00', 10)]
+[PASS] list.no_duplicates_across_pages :: 21
+[PASS] list.page_beyond_last :: {'items': [], 'page': 99, 'has_next': False}
+[PASS] list.page_0_rejected :: 422
+[PASS] list.page_-1_rejected :: 422
+[PASS] list.page_abc_rejected :: 422
+[PASS] list.page_1.5_rejected :: 422
+[PASS] list.exactly_20_rows_has_next_false :: (20, False)
+[PASS] patch.missing_expected_revision_428 :: 
+[PASS] patch.expected_revision_null_422 :: 422
+[PASS] patch.expected_revision_zero_422 :: 422
+[PASS] patch.expected_revision_string_422 :: 422
+[PASS] patch.expected_revision_huge_422 :: 422
+[PASS] patch.no_change_200 :: 200
+[PASS] patch.no_change_revision_stable :: 1
+[PASS] patch.no_change_updated_at_stable :: ('2026-10-30T14:35:09.619840+00:00', '2026-10-30T14:35:09.619840+00:00')
+[PASS] patch.no_change_issued_no_update_xmin :: ('122043', '122043')
+[PASS] patch.no_change_row_stats_stable :: ((28, 0, 48), (48, 0, 48))
+[PASS] patch.same_title_and_times_no_bump :: (200, 1)
+[PASS] patch.equivalent_instant_offset_no_bump :: (200, 1)
+[PASS] patch.actual_change_bumps_revision :: (200, 2)
+[PASS] patch.actual_change_updates_updated_at :: ('2026-10-30T14:35:09.793614+00:00', '2026-10-30T14:35:09.619840+00:00')
+[PASS] patch.actual_change_persisted :: 
+[PASS] patch.stale_revision_409 :: 409
+[PASS] patch.stale_does_not_overwrite :: 
+[PASS] patch.clear_ends_at_null :: (200, 3)
+[PASS] patch.boundary_end_equal_start_422 :: 422
+[PASS] patch.boundary_end_before_start_422 :: 422
+[PASS] patch.set_end_after_clear :: (200, 4)
+[PASS] patch.boundary_start_after_end_422 :: 422
+[PASS] patch.boundary_rejected_row_unchanged :: 
+[PASS] patch.illegal_unknown_field_422 :: 422
+[PASS] patch.illegal_empty_body_422 :: 422
+[PASS] patch.illegal_title_null_422 :: 422
+[PASS] patch.illegal_title_too_long_422 :: 422
+[PASS] patch.illegal_title_blank_422 :: 422
+[PASS] patch.illegal_completed_string_422 :: 422
+[PASS] patch.unknown_id_404 :: 
+[PASS] patch.concurrent_cas_one_wins_one_409 :: [200, 409]
+[PASS] patch.concurrent_cas_single_bump :: 2
+[PASS] create.concurrent_same_key_same_payload_same_row :: [(200, 51), (201, 51)]
+[PASS] create.concurrent_same_key_same_payload_single_row :: 1
+[PASS] create.concurrent_same_key_diff_payload_one_conflict :: [201, 409]
+[PASS] create.concurrent_same_key_diff_payload_single_row :: 1
+[PASS] delete.missing_if_match_428 :: 
+[PASS] delete.if_match_unquoted_422 :: 422
+[PASS] delete.if_match_garbage_422 :: 422
+[PASS] delete.if_match_zero_422 :: 422
+[PASS] delete.if_match_empty_422 :: 422
+[PASS] delete.stale_revision_409 :: 
+[PASS] delete.stale_row_intact :: 
+[PASS] delete.unknown_id_404 :: 
+[PASS] delete.success_204 :: 204
+[PASS] delete.204_empty_body :: b''
+[PASS] delete.hard_delete_row_absent :: 
+[PASS] delete.keeps_other_rows :: 
+[PASS] delete.second_time_404 :: 
+[PASS] delete.no_soft_delete_column :: []
+[PASS] independence.no_writes_to_set_end_tables :: {'before': {'journals': 0, 'insights': 0, 'folders': 0, 'ritual_templates': 0, 'ritual_goal_links': 0, 'ritual_copies': 0, 'ai_requests': 0, 'ai_usage': 0, 'ai_comments': 0}, 'after': {'journals': 0, 'insights': 0, 'folders': 0, 'ritual_templates': 0, 'ritual_goal_links': 0, 'ritual_copies': 0, 'ai_
+[PASS] independence.no_fk_to_goals :: []
+[PASS] independence.schedule_module_has_no_goal_import :: ['writing.service']
+[PASS] persistence.visible_on_new_connection :: 1
+[PASS] persistence.survives_process_restart :: (200, '{"id":58,"title":"restart survivor","starts_at":"2026-10-30T01:00:00+00:00","ends_at":"2026-10-30T02:00:00+00:00","compl')
+[PASS] migration.downgrade_blocked_by_rows_setup :: 
+[PASS] migration.downgrade_refuses_with_rows :: 有数据时 downgrade 被拒绝
+[PASS] migration.downgrade_drops_table_when_empty :: None
+[PASS] migration.reupgrade_head_restores_table :: schedules
+[PASS] cleanup.migration_schema_dropped :: 0
+[PASS] cleanup.test_schema_dropped :: 残留 c01* schema 数=0
+[PASS] cleanup.public_snapshot_unchanged :: revision 4f8e1a3c9d02；ai_usage 行数 1
+[PASS] cleanup.ai_usage_preserved :: ai_usage 唯一行内容散列未变
+{"pass": 140, "fail": 0}

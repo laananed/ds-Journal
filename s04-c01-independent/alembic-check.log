@@ -1,0 +1,14 @@
+target db=seekjournal_test_03 schema=c01chk_9f95ab04
+alembic check exit code = 4294967295
+ate.tables
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.types
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.constraints
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.defaults
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.comments
+INFO  [alembic.ddl.postgresql] Detected sequence named 'inboxes_id_seq' as owned by integer column 'inboxes(id)', assuming SERIAL and omitting
+INFO  [alembic.ddl.postgresql] Detected sequence named 'insights_id_seq' as owned by integer column 'insights(id)', assuming SERIAL and omitting
+INFO  [alembic.ddl.postgresql] Detected sequence named 'folders_id_seq' as owned by integer column 'folders(id)', assuming SERIAL and omitting
+INFO  [alembic.ddl.postgresql] Detected sequence named 'schedules_id_seq' as owned by integer column 'schedules(id)', assuming SERIAL and omitting
+INFO  [alembic.ddl.postgresql] Detected sequence named 'journals_id_seq' as owned by integer column 'journals(id)', assuming SERIAL and omitting
+INFO  [alembic.autogenerate.compare.constraints] Detected removed index 'ix_schedules_starts_at_id' on 'schedules'
+ERROR [alembic.util.messaging] New upgrade operations detected: [('remove_index', Index('ix_schedules_starts_at_id', Column('starts_at', TIMESTAMP(timezone=True), table=<schedules>, nullable=False), Column('id', INTEGER(), table=<schedules>, primary_key=True, nullable=False)))]

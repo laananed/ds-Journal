@@ -1,0 +1,873 @@
+{
+  "started": "2026-10-30T22:35:00",
+  "finished": "2026-10-30T22:35:23",
+  "manifest": {
+    "db": "seekjournal_test_03",
+    "test_schema": "c01it_7129557d",
+    "migration_schema": "c01mg_7129557d",
+    "created_by": "C01 独立测试（WorkBuddy 新对话）",
+    "started": "2026-10-30T22:35:00"
+  },
+  "notes": {
+    "preflight": {
+      "revision": "4f8e1a3c9d02",
+      "ai_usage_rows": 1,
+      "other_connections": 0
+    },
+    "main_route_count": 5,
+    "replay_status_code": 200,
+    "reuse_after_delete": {
+      "delete_status": 204,
+      "post_status": 201,
+      "new_id": 6,
+      "old_id": 5,
+      "revision": 1
+    }
+  },
+  "totals": {
+    "pass": 140,
+    "fail": 0
+  },
+  "results": [
+    {
+      "name": "preflight.target_database_is_seekjournal_test_03",
+      "status": "PASS",
+      "detail": "('seekjournal_test_03', 'public')",
+      "kind": "check"
+    },
+    {
+      "name": "preflight.no_other_connections_on_target_db",
+      "status": "PASS",
+      "detail": "其他连接数=0",
+      "kind": "check"
+    },
+    {
+      "name": "preflight.no_previous_c01_schema",
+      "status": "PASS",
+      "detail": "[]",
+      "kind": "check"
+    },
+    {
+      "name": "preflight.public_has_no_schedules_table",
+      "status": "PASS",
+      "detail": "False",
+      "kind": "check"
+    },
+    {
+      "name": "preflight.ai_usage_row_present",
+      "status": "PASS",
+      "detail": "1",
+      "kind": "check"
+    },
+    {
+      "name": "migration.single_head",
+      "status": "PASS",
+      "detail": "['c01a7e421b50']",
+      "kind": "check"
+    },
+    {
+      "name": "migration.linear_chain_from_pinned_base",
+      "status": "PASS",
+      "detail": "['c01a7e421b50', '4f8e1a3c9d02', '9e7a6c42d011', '3aa16300a58a', '18ecf7e09da6', 'a8d98342e603', '52c8e94a365c', '3a70890ddb10']",
+      "kind": "check"
+    },
+    {
+      "name": "migration.child_process_stayed_in_private_schema",
+      "status": "PASS",
+      "detail": "('seekjournal_test_03', 'c01it_7129557d')",
+      "kind": "check"
+    },
+    {
+      "name": "migration.upgraded_to_head_in_private_schema",
+      "status": "PASS",
+      "detail": "c01a7e421b50",
+      "kind": "check"
+    },
+    {
+      "name": "migration.private_schema_isolated_from_public",
+      "status": "PASS",
+      "detail": "public 未出现 schedules",
+      "kind": "check"
+    },
+    {
+      "name": "schema.table_shape_matches_contract",
+      "status": "PASS",
+      "detail": "{\"id\": [\"integer\", \"NO\"], \"title\": [\"text\", \"NO\"], \"starts_at\": [\"timestamp with time zone\", \"NO\"], \"ends_at\": [\"timestamp with time zone\", \"YES\"], \"completed\": [\"boolean\", \"NO\"], \"revision\": [\"bigint\", \"NO\"], \"client_create_id\": [\"uuid\", \"NO\"], \"create_payload_hash\": [\"text\", \"NO\"], \"created_at\": [\"timestamp with time zone\", \"NO\"], \"updated_at\": [\"timestamp with time zone\", \"NO\"]}",
+      "kind": "check"
+    },
+    {
+      "name": "schema.pk_and_unique_client_create_id",
+      "status": "PASS",
+      "detail": "[('ck_schedule_time_order', 'c', 'CHECK (((ends_at IS NULL) OR (ends_at > starts_at)))'), ('schedules_pkey', 'p', 'PRIMARY KEY (id)'), ('schedules_client_create_id_key', 'u', 'UNIQUE (client_create_id)')]",
+      "kind": "check"
+    },
+    {
+      "name": "schema.check_end_after_start_present",
+      "status": "PASS",
+      "detail": "['CHECK (((ends_at IS NULL) OR (ends_at > starts_at)))']",
+      "kind": "check"
+    },
+    {
+      "name": "schema.no_foreign_keys",
+      "status": "PASS",
+      "detail": "schedules 无外键即与 Set/End 目标解耦",
+      "kind": "check"
+    },
+    {
+      "name": "schema.index_starts_at_id_present",
+      "status": "PASS",
+      "detail": "['ix_schedules_starts_at_id', 'schedules_client_create_id_key', 'schedules_pkey']",
+      "kind": "check"
+    },
+    {
+      "name": "public_entry.main_import_ok",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "public_entry.no_schedule_route_registered",
+      "status": "PASS",
+      "detail": "{'schedule_paths': [], 'total': 5}",
+      "kind": "check"
+    },
+    {
+      "name": "public_entry.openapi_has_no_schedule_path",
+      "status": "PASS",
+      "detail": "[]",
+      "kind": "check"
+    },
+    {
+      "name": "post.create_returns_created",
+      "status": "PASS",
+      "detail": "(201, {'id': 1, 'title': '合成日程', 'starts_at': '2026-10-30T01:00:00+00:00', 'ends_at': '2026-10-30T02:00:00+00:00', 'completed': False, 'revision': 1, 'created_at': '2026-10-30T14:35:08.299693+00:00', 'updated_at': '2026-10-30T14:35:08.299693+00:00'})",
+      "kind": "check"
+    },
+    {
+      "name": "post.create_shape",
+      "status": "PASS",
+      "detail": "['completed', 'created_at', 'ends_at', 'id', 'revision', 'starts_at', 'title', 'updated_at']",
+      "kind": "check"
+    },
+    {
+      "name": "post.revision_starts_at_1",
+      "status": "PASS",
+      "detail": "1",
+      "kind": "check"
+    },
+    {
+      "name": "post.stored_as_timestamptz",
+      "status": "PASS",
+      "detail": "timestamp with time zone",
+      "kind": "check"
+    },
+    {
+      "name": "post.stored_utc_instant",
+      "status": "PASS",
+      "detail": "('2026-10-30 01:00:00+00:00', '2026-10-30 01:00:00+00:00')",
+      "kind": "check"
+    },
+    {
+      "name": "post.stored_utc_offset_zero",
+      "status": "PASS",
+      "detail": "0:00:00",
+      "kind": "check"
+    },
+    {
+      "name": "post.response_time_aware",
+      "status": "PASS",
+      "detail": "2026-10-30T01:00:00+00:00",
+      "kind": "check"
+    },
+    {
+      "name": "post.asia_shanghai_display",
+      "status": "PASS",
+      "detail": "2026-10-30T09:00:00+08:00",
+      "kind": "check"
+    },
+    {
+      "name": "post.created_at_equals_updated_at",
+      "status": "PASS",
+      "detail": "('2026-10-30T14:35:08.299693+00:00', '2026-10-30T14:35:08.299693+00:00')",
+      "kind": "check"
+    },
+    {
+      "name": "post.ends_at_key_required_when_omitted",
+      "status": "PASS",
+      "detail": "(422, {'detail': [{'type': 'missing', 'loc': ['body', 'ends_at'], 'msg': 'Field required'}]})",
+      "kind": "check"
+    },
+    {
+      "name": "post.title_80_codepoints_accepted",
+      "status": "PASS",
+      "detail": "201",
+      "kind": "check"
+    },
+    {
+      "name": "post.title_81_codepoints_rejected",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "post.title_80_astral_codepoints_counted_by_codepoint",
+      "status": "PASS",
+      "detail": "201",
+      "kind": "check"
+    },
+    {
+      "name": "post.title_81_astral_rejected",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "post.title_blank_rejected",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "post.title_empty_rejected",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "post.title_missing_rejected",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "post.title_roundtrip_unicode",
+      "status": "PASS",
+      "detail": "80",
+      "kind": "check"
+    },
+    {
+      "name": "post.time_naive_datetime_rejected_422",
+      "status": "PASS",
+      "detail": "(422, '{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"starts_at\"],\"msg\":\"Value error, time must include an offset\"}]}')",
+      "kind": "check"
+    },
+    {
+      "name": "post.time_numeric_epoch_rejected_422",
+      "status": "PASS",
+      "detail": "(422, '{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"starts_at\"],\"msg\":\"Value error, time must be an ISO datetime\"}]}')",
+      "kind": "check"
+    },
+    {
+      "name": "post.time_garbage_string_rejected_422",
+      "status": "PASS",
+      "detail": "(422, '{\"detail\":[{\"type\":\"datetime_from_date_parsing\",\"loc\":[\"body\",\"starts_at\"],\"msg\":\"Input should be a valid datetime or date, invalid character in year\"}]}')",
+      "kind": "check"
+    },
+    {
+      "name": "post.time_missing_rejected_422",
+      "status": "PASS",
+      "detail": "(422, '{\"detail\":[{\"type\":\"missing\",\"loc\":[\"body\",\"starts_at\"],\"msg\":\"Field required\"}]}')",
+      "kind": "check"
+    },
+    {
+      "name": "post.time_end_equal_start_rejected_422",
+      "status": "PASS",
+      "detail": "(422, '{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\"],\"msg\":\"Value error, end must be after start\"}]}')",
+      "kind": "check"
+    },
+    {
+      "name": "post.time_end_before_start_rejected_422",
+      "status": "PASS",
+      "detail": "(422, '{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\"],\"msg\":\"Value error, end must be after start\"}]}')",
+      "kind": "check"
+    },
+    {
+      "name": "post.time_naive_end_rejected_422",
+      "status": "PASS",
+      "detail": "(422, '{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"ends_at\"],\"msg\":\"Value error, time must include an offset\"}]}')",
+      "kind": "check"
+    },
+    {
+      "name": "post.time_null_end_accepted",
+      "status": "PASS",
+      "detail": "201",
+      "kind": "check"
+    },
+    {
+      "name": "post.field_completed_string_rejected_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "post.field_completed_int_rejected_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "post.field_extra_field_rejected_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "post.field_bad_uuid_rejected_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "post.field_title_int_rejected_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "post.missing_completed_rejected",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "post.missing_client_create_id_rejected",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "post.replay_same_key_resolves_to_same_resource",
+      "status": "PASS",
+      "detail": "(200, 5, 5)",
+      "kind": "check"
+    },
+    {
+      "name": "post.replay_does_not_bump_revision",
+      "status": "PASS",
+      "detail": "1",
+      "kind": "check"
+    },
+    {
+      "name": "post.replay_does_not_change_updated_at",
+      "status": "PASS",
+      "detail": "('2026-10-30T14:35:08.500213+00:00', '2026-10-30T14:35:08.500213+00:00')",
+      "kind": "check"
+    },
+    {
+      "name": "post.replay_single_row",
+      "status": "PASS",
+      "detail": "1",
+      "kind": "check"
+    },
+    {
+      "name": "post.replay_equivalent_instant_different_offset_same_row",
+      "status": "PASS",
+      "detail": "(200, 5)",
+      "kind": "check"
+    },
+    {
+      "name": "post.replay_different_payload_409",
+      "status": "PASS",
+      "detail": "409",
+      "kind": "check"
+    },
+    {
+      "name": "post.replay_conflict_no_extra_row",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "post.reuse_after_delete_observed",
+      "status": "PASS",
+      "detail": "删除后同键 POST 状态 201，id 6（原 5）",
+      "kind": "observation"
+    },
+    {
+      "name": "get.detail_matches_created",
+      "status": "PASS",
+      "detail": "200",
+      "kind": "check"
+    },
+    {
+      "name": "get.detail_404_unknown",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "get.detail_422_non_integer_id",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "get.detail_and_list_zero_write_xmin",
+      "status": "PASS",
+      "detail": "('121998', '121998')",
+      "kind": "check"
+    },
+    {
+      "name": "get.zero_write_row_stats",
+      "status": "PASS",
+      "detail": "((0, 0, 5), (0, 0, 5))",
+      "kind": "check"
+    },
+    {
+      "name": "get.zero_write_updated_at",
+      "status": "PASS",
+      "detail": "('2026-10-30 14:35:08.607357+00:00', '2026-10-30 14:35:08.607357+00:00')",
+      "kind": "check"
+    },
+    {
+      "name": "list.empty_shape",
+      "status": "PASS",
+      "detail": "{'items': [], 'page': 1, 'has_next': False}",
+      "kind": "check"
+    },
+    {
+      "name": "list.page_size_20",
+      "status": "PASS",
+      "detail": "20",
+      "kind": "check"
+    },
+    {
+      "name": "list.page1_has_next",
+      "status": "PASS",
+      "detail": "True",
+      "kind": "check"
+    },
+    {
+      "name": "list.page2_remainder",
+      "status": "PASS",
+      "detail": "(1, False)",
+      "kind": "check"
+    },
+    {
+      "name": "list.order_by_starts_at_then_id",
+      "status": "PASS",
+      "detail": "[('2026-10-31T00:00:00+00:00', 8), ('2026-10-31T00:00:00+00:00', 9), ('2026-10-31T00:05:00+00:00', 10)]",
+      "kind": "check"
+    },
+    {
+      "name": "list.no_duplicates_across_pages",
+      "status": "PASS",
+      "detail": "21",
+      "kind": "check"
+    },
+    {
+      "name": "list.page_beyond_last",
+      "status": "PASS",
+      "detail": "{'items': [], 'page': 99, 'has_next': False}",
+      "kind": "check"
+    },
+    {
+      "name": "list.page_0_rejected",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "list.page_-1_rejected",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "list.page_abc_rejected",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "list.page_1.5_rejected",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "list.exactly_20_rows_has_next_false",
+      "status": "PASS",
+      "detail": "(20, False)",
+      "kind": "check"
+    },
+    {
+      "name": "patch.missing_expected_revision_428",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "patch.expected_revision_null_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "patch.expected_revision_zero_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "patch.expected_revision_string_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "patch.expected_revision_huge_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "patch.no_change_200",
+      "status": "PASS",
+      "detail": "200",
+      "kind": "check"
+    },
+    {
+      "name": "patch.no_change_revision_stable",
+      "status": "PASS",
+      "detail": "1",
+      "kind": "check"
+    },
+    {
+      "name": "patch.no_change_updated_at_stable",
+      "status": "PASS",
+      "detail": "('2026-10-30T14:35:09.619840+00:00', '2026-10-30T14:35:09.619840+00:00')",
+      "kind": "check"
+    },
+    {
+      "name": "patch.no_change_issued_no_update_xmin",
+      "status": "PASS",
+      "detail": "('122043', '122043')",
+      "kind": "check"
+    },
+    {
+      "name": "patch.no_change_row_stats_stable",
+      "status": "PASS",
+      "detail": "((28, 0, 48), (48, 0, 48))",
+      "kind": "check"
+    },
+    {
+      "name": "patch.same_title_and_times_no_bump",
+      "status": "PASS",
+      "detail": "(200, 1)",
+      "kind": "check"
+    },
+    {
+      "name": "patch.equivalent_instant_offset_no_bump",
+      "status": "PASS",
+      "detail": "(200, 1)",
+      "kind": "check"
+    },
+    {
+      "name": "patch.actual_change_bumps_revision",
+      "status": "PASS",
+      "detail": "(200, 2)",
+      "kind": "check"
+    },
+    {
+      "name": "patch.actual_change_updates_updated_at",
+      "status": "PASS",
+      "detail": "('2026-10-30T14:35:09.793614+00:00', '2026-10-30T14:35:09.619840+00:00')",
+      "kind": "check"
+    },
+    {
+      "name": "patch.actual_change_persisted",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "patch.stale_revision_409",
+      "status": "PASS",
+      "detail": "409",
+      "kind": "check"
+    },
+    {
+      "name": "patch.stale_does_not_overwrite",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "patch.clear_ends_at_null",
+      "status": "PASS",
+      "detail": "(200, 3)",
+      "kind": "check"
+    },
+    {
+      "name": "patch.boundary_end_equal_start_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "patch.boundary_end_before_start_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "patch.set_end_after_clear",
+      "status": "PASS",
+      "detail": "(200, 4)",
+      "kind": "check"
+    },
+    {
+      "name": "patch.boundary_start_after_end_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "patch.boundary_rejected_row_unchanged",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "patch.illegal_unknown_field_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "patch.illegal_empty_body_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "patch.illegal_title_null_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "patch.illegal_title_too_long_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "patch.illegal_title_blank_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "patch.illegal_completed_string_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "patch.unknown_id_404",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "patch.concurrent_cas_one_wins_one_409",
+      "status": "PASS",
+      "detail": "[200, 409]",
+      "kind": "check"
+    },
+    {
+      "name": "patch.concurrent_cas_single_bump",
+      "status": "PASS",
+      "detail": "2",
+      "kind": "check"
+    },
+    {
+      "name": "create.concurrent_same_key_same_payload_same_row",
+      "status": "PASS",
+      "detail": "[(200, 51), (201, 51)]",
+      "kind": "check"
+    },
+    {
+      "name": "create.concurrent_same_key_same_payload_single_row",
+      "status": "PASS",
+      "detail": "1",
+      "kind": "check"
+    },
+    {
+      "name": "create.concurrent_same_key_diff_payload_one_conflict",
+      "status": "PASS",
+      "detail": "[201, 409]",
+      "kind": "check"
+    },
+    {
+      "name": "create.concurrent_same_key_diff_payload_single_row",
+      "status": "PASS",
+      "detail": "1",
+      "kind": "check"
+    },
+    {
+      "name": "delete.missing_if_match_428",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "delete.if_match_unquoted_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "delete.if_match_garbage_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "delete.if_match_zero_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "delete.if_match_empty_422",
+      "status": "PASS",
+      "detail": "422",
+      "kind": "check"
+    },
+    {
+      "name": "delete.stale_revision_409",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "delete.stale_row_intact",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "delete.unknown_id_404",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "delete.success_204",
+      "status": "PASS",
+      "detail": "204",
+      "kind": "check"
+    },
+    {
+      "name": "delete.204_empty_body",
+      "status": "PASS",
+      "detail": "b''",
+      "kind": "check"
+    },
+    {
+      "name": "delete.hard_delete_row_absent",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "delete.keeps_other_rows",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "delete.second_time_404",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "delete.no_soft_delete_column",
+      "status": "PASS",
+      "detail": "[]",
+      "kind": "check"
+    },
+    {
+      "name": "independence.no_writes_to_set_end_tables",
+      "status": "PASS",
+      "detail": "{'before': {'journals': 0, 'insights': 0, 'folders': 0, 'ritual_templates': 0, 'ritual_goal_links': 0, 'ritual_copies': 0, 'ai_requests': 0, 'ai_usage': 0, 'ai_comments': 0}, 'after': {'journals': 0, 'insights': 0, 'folders': 0, 'ritual_templates': 0, 'ritual_goal_links': 0, 'ritual_copies': 0, 'ai_requests': 0, 'ai_usage': 0, 'ai_comments': 0}}",
+      "kind": "check"
+    },
+    {
+      "name": "independence.no_fk_to_goals",
+      "status": "PASS",
+      "detail": "[]",
+      "kind": "check"
+    },
+    {
+      "name": "independence.schedule_module_has_no_goal_import",
+      "status": "PASS",
+      "detail": "['writing.service']",
+      "kind": "check"
+    },
+    {
+      "name": "persistence.visible_on_new_connection",
+      "status": "PASS",
+      "detail": "1",
+      "kind": "check"
+    },
+    {
+      "name": "persistence.survives_process_restart",
+      "status": "PASS",
+      "detail": "(200, '{\"id\":58,\"title\":\"restart survivor\",\"starts_at\":\"2026-10-30T01:00:00+00:00\",\"ends_at\":\"2026-10-30T02:00:00+00:00\",\"compl')",
+      "kind": "check"
+    },
+    {
+      "name": "migration.downgrade_blocked_by_rows_setup",
+      "status": "PASS",
+      "detail": "",
+      "kind": "check"
+    },
+    {
+      "name": "migration.downgrade_refuses_with_rows",
+      "status": "PASS",
+      "detail": "有数据时 downgrade 被拒绝",
+      "kind": "check"
+    },
+    {
+      "name": "migration.downgrade_drops_table_when_empty",
+      "status": "PASS",
+      "detail": "None",
+      "kind": "check"
+    },
+    {
+      "name": "migration.reupgrade_head_restores_table",
+      "status": "PASS",
+      "detail": "schedules",
+      "kind": "check"
+    },
+    {
+      "name": "cleanup.migration_schema_dropped",
+      "status": "PASS",
+      "detail": "0",
+      "kind": "check"
+    },
+    {
+      "name": "cleanup.test_schema_dropped",
+      "status": "PASS",
+      "detail": "残留 c01* schema 数=0",
+      "kind": "check"
+    },
+    {
+      "name": "cleanup.public_snapshot_unchanged",
+      "status": "PASS",
+      "detail": "revision 4f8e1a3c9d02；ai_usage 行数 1",
+      "kind": "check"
+    },
+    {
+      "name": "cleanup.ai_usage_preserved",
+      "status": "PASS",
+      "detail": "ai_usage 唯一行内容散列未变",
+      "kind": "check"
+    }
+  ]
+}
