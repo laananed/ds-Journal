@@ -24,6 +24,8 @@
  * 4. 409 / 404 / 网络失败全部保留本地草稿与服务端基线，不静默覆盖。
  */
 
+import { mergeNarrowOps } from './narrowOps.ts'
+
 /* ------------------------------------------------------------------ 基础类型 */
 
 /** 文件类型：Stage 4 最终只有 Journal 与 Insight（API §1）。 */
@@ -299,51 +301,26 @@ function splitKey(key: string): [string, number] {
 
 /* ---------------------------------------------------------- 文档节点小工具 */
 
-function findNodeById(node: unknown, nodeId: string): unknown {
-  if (!isPlainObject(node)) return null
-  const attrs = node.attrs
-  if (isPlainObject(attrs) && attrs.id === nodeId) return node
-  const content = node.content
-  if (!Array.isArray(content)) return null
-  for (const child of content) {
-    const found = findNodeById(child, nodeId)
-    if (found !== null) return found
-  }
-  return null
-}
-
-/** 用 `replacement` 替换同 id 节点；本地找不到时返回 `null`（不猜测位置）。 */
-function replaceNodeById(node: unknown, nodeId: string, replacement: unknown): unknown | null {
-  if (!isPlainObject(node)) return null
-  const attrs = node.attrs
-  if (isPlainObject(attrs) && attrs.id === nodeId) return replacement
-  const content = node.content
-  if (!Array.isArray(content)) return null
-  let changed = false
-  const nextContent: unknown[] = []
-  for (const child of content) {
-    const replaced = replaceNodeById(child, nodeId, replacement)
-    if (replaced === null) {
-      nextContent.push(child)
-      continue
-    }
-    changed = true
-    nextContent.push(replaced)
-  }
-  if (!changed) return null
-  return { ...node, content: nextContent }
-}
-
 export interface NarrowApplyResult {
   draft: DocumentDraft
   applied: string[]
   ignored: string[]
+  /** 已应用但需要提示的情形（例如评论无法安全挂到被改写的段落）。 */
+  warnings?: string[]
 }
 
 /**
  * 只把**已知窄变化**应用到较新草稿，绝不整篇回填（API §10）。
- * 目前只处理 `replace_placeholder`：按稳定节点 ID 用服务端节点替换本地同 ID 节点。
- * 未识别 / 本地已不存在该节点 → 计入 `ignored`，草稿保持不动。
+ *
+ * 具体合并规则在 `./narrowOps.ts`（纯逻辑，可单独测试），这里保留这一层的
+ * 决定权与返回形状。S04-T09 接线时补上两个缺口：
+ * - `replace_placeholder` 的节点在本地不存在时（prepare 新建的占位）改为**纯插入**，
+ *   插到基线最后一段之后、用户新写段落之前；
+ * - `comment_marks`（effect 不带 node_id）按节点做「只增 Mark」核对。
+ *
+ * 任一条无法安全合并 → 计入 `ignored`，由调用方判冲突并保留本地草稿；
+ * 绝不为了合并成功去改用户文字。只有本地同 ID 节点本身就是 AI 边界节点
+ * （`aiPlaceholder` / `aiReply`）时才允许原位替换。
  */
 export function applyNarrowOps(
   draft: DocumentDraft,
@@ -351,44 +328,13 @@ export function applyNarrowOps(
   ops: readonly FileOp[],
   baseline?: DocumentDraft,
 ): NarrowApplyResult {
-  const applied: string[] = []
-  const ignored: string[] = []
-  let doc = draft.content_doc
-  let changed = false
-  for (const op of ops) {
-    if (typeof op.node_id !== 'string' || serverDraft === null) {
-      ignored.push(op.kind)
-      continue
-    }
-    let replacement = findNodeById(serverDraft.content_doc, op.node_id)
-    if (op.kind === 'goal_fields' || op.kind === 'goal_visibility') {
-      const local = findNodeById(doc, op.node_id)
-      const original = baseline && findNodeById(baseline.content_doc, op.node_id)
-      if (!isPlainObject(local) || !isPlainObject(original) || !isPlainObject(replacement) ||
-          local.type !== 'goalReview' || replacement.type !== 'goalReview' ||
-          !deepEqual(local.attrs, original.attrs)) {
-        ignored.push(op.kind)
-        continue
-      }
-      replacement = { ...local, attrs: replacement.attrs }
-    } else if (op.kind !== 'replace_placeholder') {
-      ignored.push(op.kind)
-      continue
-    }
-    if (replacement === null) {
-      ignored.push(op.kind)
-      continue
-    }
-    const next = replaceNodeById(doc, op.node_id, replacement)
-    if (next === null) {
-      ignored.push(op.kind)
-      continue
-    }
-    doc = next
-    changed = true
-    applied.push(op.kind)
+  const merged = mergeNarrowOps(draft, serverDraft, ops, baseline)
+  return {
+    draft: merged.draft,
+    applied: merged.applied,
+    ignored: merged.ignored,
+    warnings: merged.warnings,
   }
-  return { draft: changed ? { ...draft, content_doc: doc } : draft, applied, ignored }
 }
 
 /* -------------------------------------------------------------- 状态推进 */
@@ -738,7 +684,15 @@ export type SaveResult =
   | { kind: 'no_session' }
 
 export interface ApplySummary {
-  applied: { sessionId: string; fileId: number; revision: number; applied: string[]; ignored: string[] }[]
+  applied: {
+    sessionId: string
+    fileId: number
+    revision: number
+    applied: string[]
+    ignored: string[]
+    /** 已应用但需要提示的情形（例如评论无法安全挂 Mark）。 */
+    warnings?: string[]
+  }[]
   conflicts: { sessionId: string; fileId: number; message: string }[]
   ignoredSessions: string[]
 }
@@ -956,6 +910,7 @@ export function createEditSessionStore(options: StoreOptions = {}): EditSessionS
           revision: effect.revision,
           applied: narrow.applied,
           ignored: narrow.ignored,
+          warnings: narrow.warnings,
         })
       }
       if (targets.length === 0) summary.ignoredSessions.push(fileKey(effect.type, effect.id))

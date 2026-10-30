@@ -23,14 +23,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './WritingPage.css'
+import { getAISettings } from '../api/ai'
 import { JournalApiError, getJournal, listJournals } from '../api/journals'
 import { getBusinessDay } from '../api/rituals'
 import FolderSelect from '../components/FolderSelect'
 import Pagination from '../components/Pagination'
+import WritingAiPanel from '../components/WritingAiPanel'
 import { DraftConflictView, LocalDraftPanel, type DraftAction, type DraftPanelItem } from '../components/WritingDraftRecovery'
-import RichTextEditor from '../editor/RichTextEditor'
+import RichTextEditor, { type EditorSelectionInfo } from '../editor/RichTextEditor'
 import { useEditSession, useJournalDraftMirror } from '../hooks/useEditSession'
 import type { FlushResult } from '../hooks/useAutosave'
+import type { AutoRange } from '../state/autoAi'
 import {
   displayStatus,
   editSessionStore,
@@ -50,6 +53,7 @@ import {
   type ServerDraftProbe,
 } from '../state/localJournalDrafts'
 import type { ContentDocument } from '../types/document'
+import type { AISettings } from '../types/ai'
 import type { Journal, JournalPage } from '../types/journal'
 import type { BusinessDay } from '../types/ritual'
 import { nearestValidPage } from '../utils/pagination'
@@ -168,6 +172,47 @@ function WritingPage({
 
   const sessionId = active === null ? null : writingSessionId(active.draftId)
   const session = useEditSession(sessionId, store)
+
+  /* ------------------------------------------------------ AI 设置（T09） */
+  /**
+   * 自动开关与预置只在设置页改；本页只**读取**，不写回。
+   * 读不到设置时保持 `null`：面板会如实显示「状态未知」，
+   * 手动 Go Deeper / Minds 仍可用（它们的默认预置不依赖设置）。
+   */
+  const [aiSettings, setAiSettings] = useState<AISettings | null>(null)
+  const [aiSettingsToken, setAiSettingsToken] = useState(0)
+  /** 编辑器当前选区（块 ID + 码点区间）；`null` 表示整篇评论。 */
+  const [aiSelection, setAiSelection] = useState<AutoRange[] | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    getAISettings(controller.signal).then((value) => {
+      if (controller.signal.aborted) return
+      setAiSettings(value)
+    }).catch(() => {
+      if (controller.signal.aborted) return
+      setAiSettings(null)
+    })
+    return () => controller.abort()
+  }, [aiSettingsToken])
+
+  /**
+   * 选区 → 评论范围。
+   *
+   * `onSelection` 已经给出**码点**区间（编辑器内部是 UTF-16，换算在 T03 完成），
+   * 这里只做形状转换；空选区、跨块选区（`blockId === null`）都退回整篇，
+   * 绝不猜一个「相近的文字」当锚点。
+   */
+  const onEditorSelection = useCallback((info: EditorSelectionInfo | null) => {
+    if (info === null || info.empty || info.blockId === null || info.end <= info.start) {
+      setAiSelection(null)
+      return
+    }
+    setAiSelection([{ node_id: info.blockId, start: info.start, end: info.end }])
+  }, [])
+
+  // 换草稿/换会话时丢掉旧选区：范围属于某一篇正文，不跟着跨文件走。
+  useEffect(() => { setAiSelection(null) }, [sessionId])
 
   const businessDate = writingDateFromBusinessDay(businessDay)
 
@@ -735,6 +780,8 @@ function WritingPage({
   const locked = disabled || busy
   const savable = session !== null && writingSavable(session.draft)
   const tooLong = session !== null && writingTooLong(session.draft)
+  /** 用户投影文本 U（不含 AI/系统节点）：AI 增量、去重与 apply 前置条件都用它。 */
+  const draftUserText = session === null ? '' : userTextOf(session.draft.content_doc)
 
   return (
     <section className="writing-page" aria-label="写作">
@@ -969,6 +1016,7 @@ function WritingPage({
                       readOnly={locked}
                       label="写作正文"
                       onUserChange={(document) => change({ ...session.draft, content_doc: document })}
+                      onSelection={onEditorSelection}
                     />
                   </div>
                 </div>
@@ -991,6 +1039,28 @@ function WritingPage({
                   <button type="button" disabled={locked} onClick={startNew}>新建一篇</button>
                 </div>
               </div>
+
+              {/*
+                AI 写作面板（T09）。
+                这里**不把 `locked` 传给它**：`locked` 含本页 `busy`（保存动作中），
+                而 AI 的「在途」语义明确允许继续写、允许切页。
+                只有页面级全局写锁 `disabled` 会禁用入口。
+              */}
+              <WritingAiPanel
+                sessionId={sessionId}
+                fileId={session.fileId}
+                userText={draftUserText}
+                editorDocument={session.draft.content_doc}
+                saved={display === 'saved'}
+                userInputSeq={session.userInputSeq}
+                composing={session.imeComposing}
+                settings={aiSettings}
+                selection={aiSelection}
+                disabled={disabled}
+                store={store}
+                onNotice={setNotice}
+                onReloadSettings={() => setAiSettingsToken((value) => value + 1)}
+              />
             </>
           )}
         </div>

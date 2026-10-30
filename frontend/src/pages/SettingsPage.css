@@ -127,6 +127,35 @@
   color: #6b6375;
 }
 
+/* S04-T09：自动 AI 开关与固定预置视角。用左线分组，不新造颜色变量。 */
+.settings-auto {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0;
+  padding: 12px 0 12px 14px;
+  border-left: 3px solid #5b4a7d;
+}
+.settings-auto h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #08060d;
+}
+.settings-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #e5e2ea;
+  border-radius: 8px;
+}
+.settings-presets legend {
+  padding: 0 4px;
+  font-size: 12px;
+  color: #6b6375;
+}
+
 .settings-actions {
   display: flex;
   flex-wrap: wrap;

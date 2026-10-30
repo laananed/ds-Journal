@@ -1,0 +1,258 @@
+/*
+ * 写作 AI 面板与全局请求状态的样式（Stage 4 / S04-T09）。
+ *
+ * 与写作页同一套 `--sj-*` 设计变量（T05 / AppShell），带浅色兜底值。
+ * 命名空间 `.writing-ai-*` 与 `.global-ai-*`，不覆盖 App.css / JournalPage.css /
+ * WritingPage.css 的既有规则。
+ */
+
+.writing-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 12px;
+  background: var(--sj-surface, #ffffff);
+  color: var(--sj-text, #202124);
+}
+
+.writing-ai-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.writing-ai-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.writing-ai-phase {
+  font-size: 12px;
+  color: var(--sj-text-muted, #6b6375);
+}
+
+.writing-ai-hint,
+.writing-ai-note,
+.writing-ai-auto {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--sj-text-soft, #767080);
+}
+.writing-ai-auto {
+  padding-top: 8px;
+  border-top: 1px dashed var(--sj-border, #e5e2ea);
+}
+
+.writing-ai-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.writing-ai-question {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--sj-text-muted, #6b6375);
+}
+.writing-ai-question textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 8px;
+  background: var(--sj-surface-muted, #faf9fc);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+.writing-ai-question textarea:focus-visible {
+  outline: 2px solid var(--sj-focus, #6b53a0);
+  outline-offset: 1px;
+}
+
+.writing-ai-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.writing-ai-buttons button {
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 8px;
+  background: var(--sj-surface, #ffffff);
+  color: inherit;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.writing-ai-buttons button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.writing-ai-buttons button:focus-visible {
+  outline: 2px solid var(--sj-focus, #6b53a0);
+  outline-offset: 2px;
+}
+.writing-ai-primary {
+  border-color: var(--sj-accent, #5b4a7d) !important;
+  background: var(--sj-accent, #5b4a7d) !important;
+  color: var(--sj-inverse-text, #ffffff) !important;
+}
+
+.writing-ai-status {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--sj-text, #202124);
+}
+.writing-ai-status-applied {
+  color: var(--sj-success, #21623a);
+}
+.writing-ai-status-conflict,
+.writing-ai-status-failed {
+  color: var(--sj-danger, #8a2f2f);
+}
+.writing-ai-status-unknown {
+  color: var(--sj-warn, #7a5a12);
+}
+.writing-ai-warn {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--sj-danger-border, #e3b7b7);
+  border-radius: 8px;
+  background: var(--sj-danger-bg, #fdf4f4);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--sj-danger, #8a2f2f);
+}
+.writing-ai-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sj-danger, #8a2f2f);
+}
+
+/* 行内文字按钮：只用于「重新读取设置」这类无副作用的重读动作。 */
+.writing-ai-link {
+  margin-left: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--sj-accent, #5b4a7d);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.writing-ai-link:focus-visible {
+  outline: 2px solid var(--sj-focus, #6b53a0);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------- 全局请求状态 */
+
+.global-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 12px;
+  background: var(--sj-surface-muted, #faf9fc);
+  color: var(--sj-text, #202124);
+}
+.global-ai-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.global-ai-head h4 {
+  margin: 0;
+  font-size: 14px;
+}
+.global-ai-count {
+  font-size: 12px;
+  color: var(--sj-text-muted, #6b6375);
+}
+.global-ai-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.global-ai-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-left: 3px solid var(--sj-accent, #5b4a7d);
+  border-radius: 8px;
+  background: var(--sj-surface, #ffffff);
+}
+.global-ai-unknown,
+.global-ai-failed,
+.global-ai-conflict {
+  border-left-color: var(--sj-warn, #7a5a12);
+}
+.global-ai-line {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  font-size: 12px;
+}
+.global-ai-kind {
+  font-weight: 600;
+  color: var(--sj-accent, #5b4a7d);
+}
+.global-ai-file {
+  color: var(--sj-text-muted, #6b6375);
+}
+.global-ai-phase {
+  color: var(--sj-text-soft, #767080);
+}
+.global-ai-message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.global-ai-warn {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--sj-warn, #7a5a12);
+}
+.global-ai-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.global-ai-actions button {
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 8px;
+  background: var(--sj-surface, #ffffff);
+  color: inherit;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.global-ai-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.global-ai-rest,
+.global-ai-footnote {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--sj-text-soft, #767080);
+}

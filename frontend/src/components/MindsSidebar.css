@@ -1,0 +1,256 @@
+/*
+ * Minds 评论侧栏样式（Stage 4 / S04-T09）。
+ *
+ * 与写作页同一套 `--sj-*` 设计变量（T05 / AppShell），带浅色兜底值，
+ * 放进外壳时跟随主题，单独预览也不会变成无样式黑字。
+ * 独立命名空间 `.minds-*`，不覆盖 App.css / JournalPage.css / WritingPage.css。
+ */
+
+.minds-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 12px;
+  background: var(--sj-surface, #ffffff);
+  color: var(--sj-text, #202124);
+}
+
+.minds-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.minds-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.minds-toggle {
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 8px;
+  background: var(--sj-surface-muted, #faf9fc);
+  color: inherit;
+  padding: 4px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+.minds-collapsed-hint,
+.minds-footnote {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--sj-text-soft, #767080);
+}
+
+.minds-section-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sj-text-muted, #6b6375);
+}
+
+/* ------------------------------------------------------------- 预置选择 */
+
+.minds-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.minds-preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.minds-preset {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 10px;
+  background: var(--sj-surface-muted, #faf9fc);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.minds-preset.is-active {
+  border-color: var(--sj-accent, #5b4a7d);
+  background: var(--sj-accent-soft, #efe9f8);
+}
+.minds-preset:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.minds-preset:focus-visible,
+.minds-toggle:focus-visible,
+.minds-primary:focus-visible,
+.minds-item-actions button:focus-visible {
+  outline: 2px solid var(--sj-focus, #6b53a0);
+  outline-offset: 2px;
+}
+.minds-preset-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.minds-preset-hint {
+  font-size: 12px;
+  color: var(--sj-text-muted, #6b6375);
+}
+.minds-scope {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sj-text-muted, #6b6375);
+}
+.minds-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.minds-primary {
+  border: 1px solid var(--sj-accent, #5b4a7d);
+  border-radius: 8px;
+  background: var(--sj-accent, #5b4a7d);
+  color: var(--sj-inverse-text, #ffffff);
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+.minds-primary:disabled,
+.minds-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.minds-actions button {
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 8px;
+  background: var(--sj-surface, #ffffff);
+  color: inherit;
+  padding: 6px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+.minds-status {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sj-accent, #5b4a7d);
+}
+
+/* --------------------------------------------------------------- 评论列表 */
+
+.minds-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.minds-state {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sj-text-muted, #6b6375);
+}
+.minds-state-error {
+  color: var(--sj-danger, #8a2f2f);
+}
+.minds-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.minds-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-left: 3px solid var(--sj-accent, #5b4a7d);
+  border-radius: 10px;
+  background: var(--sj-surface-muted, #faf9fc);
+}
+.minds-item.is-unavailable {
+  border-left-color: var(--sj-warn, #7a5a12);
+  background: var(--sj-surface, #ffffff);
+}
+.minds-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.minds-item-preset {
+  font-weight: 600;
+  color: var(--sj-accent, #5b4a7d);
+}
+.minds-item-anchor {
+  color: var(--sj-text-muted, #6b6375);
+}
+.minds-item-anchor-unavailable {
+  color: var(--sj-warn, #7a5a12);
+}
+.minds-item-quote {
+  margin: 0;
+  padding: 4px 8px;
+  border-left: 2px solid var(--sj-border-strong, #cfc9d6);
+  font-size: 12px;
+  color: var(--sj-text-soft, #767080);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.minds-item-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.minds-item-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--sj-warn, #7a5a12);
+}
+.minds-item-actions {
+  display: flex;
+  gap: 8px;
+}
+.minds-item-actions button {
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 8px;
+  background: var(--sj-surface, #ffffff);
+  color: inherit;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.minds-item-actions .minds-danger {
+  border-color: var(--sj-danger-border, #e3b7b7);
+  background: var(--sj-danger-bg, #fdf4f4);
+  color: var(--sj-danger, #8a2f2f);
+}
+.minds-paging {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--sj-text-muted, #6b6375);
+}
+.minds-paging button {
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 8px;
+  background: var(--sj-surface, #ffffff);
+  color: inherit;
+  padding: 3px 8px;
+  font: inherit;
+  cursor: pointer;
+}
