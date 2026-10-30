@@ -464,3 +464,42 @@
 @media (max-width: 800px) { .app { padding: 0 24px; flex-direction: column; gap: 0; } .app-sidebar { position: static; width: auto; height: auto; flex: none; padding: 24px 0; border-right: 0; border-bottom: 1px solid #e5e7eb; gap: 16px; } .app-navigation { flex-direction: row; overflow-x: auto; } .app .app-navigation button { white-space: nowrap; } .app .theme-toggle { margin-top: 0; } .app-content { box-sizing: border-box; padding: 32px 0 48px; max-width: 100%; } }
 @media (max-width: 480px) { .app { padding: 0 16px; } .home-heading h2 { font-size: 27px; } .app .journal-results .file-card { padding: 18px; } }
 .theme-dark .journal-editor, .theme-dark .journal-detail, .theme-dark .review-picker, .theme-dark .review-preview, .theme-dark .review-recovery, .theme-dark .folder-list, .theme-dark .folder-content, .theme-dark .app-toolbar { color: #202124; }
+
+/* ------------------------------------------------------------------
+ * Stage 4 / S04-T06：外壳接线后的样式边界
+ *
+ * 从 T06 起，页面布局与外观由 `components/AppShell.tsx`（T05）承载：
+ * 左导航列、可折叠上下文列、正文列、右侧栏都由外壳决定。`.app` 因此从
+ * 「整页容器」退化为「元素基础样式的命名空间」——`app-embedded` 关掉它原来的
+ * max-width / 居中 / padding / flex 列，只保留 `.app button`、`.app input`
+ * 这类元素级规则，避免与外壳的栅格互相挤压（也不改动任何既有选择器，
+ * 其他页面即便以后不再套外壳也不会回退）。
+ *
+ * 深色主题由外壳把生效主题写在根元素的 `data-theme` 上，同时保留 `theme-dark`
+ * 类给既有规则复用；这里补的几条只在 `data-theme="dark"` 时生效。
+ * ------------------------------------------------------------------ */
+
+.app.app-embedded { display: block; max-width: none; margin: 0; padding: 0; gap: 0; }
+
+/* 正文列：宽度与上下留白交给外壳，不再叠加旧的 672px / 48px。 */
+.app.app-embedded .app-content { flex: none; max-width: none; padding: 0; }
+
+/* 导航槽：竖向排列；窄屏由外壳收起左列，不在这里改成横向滚动。 */
+.app.app-embedded.app-nav-host { display: flex; flex-direction: column; gap: 14px; }
+.app-nav-host .app-header h1 { font-size: 24px; }
+.app.app-embedded .app-navigation { flex-direction: column; align-items: stretch; gap: 4px; }
+.app.app-embedded .app-navigation button { text-align: left; }
+.app.app-embedded .home-new { width: 100%; }
+
+[data-theme='dark'] .app.app-embedded { color: #eee; }
+[data-theme='dark'] .app.app-embedded .app-navigation button {
+  color: #eee;
+  background: #25282b;
+  border-color: #414449;
+}
+[data-theme='dark'] .app.app-embedded .app-navigation button[aria-pressed='true'] {
+  background: #34373a;
+  border-color: #9c8fb5;
+}
+[data-theme='dark'] .app.app-embedded .home-new { background: #eee; color: #202124; border-color: #eee; }
+[data-theme='dark'] .app.app-embedded .clear-search { color: #eee; }
