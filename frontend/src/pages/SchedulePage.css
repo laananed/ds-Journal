@@ -1,0 +1,445 @@
+/*
+ * 独立日程页样式（Stage 4 结题 C01）。
+ *
+ * 只作用于 `.sched-*` 命名空间：
+ * - 不改 App.css / index.css / AppShell.css 的全局规则，避免与 T06/T10 抢样式；
+ * - 颜色优先取 `--sj-*` 设计变量并带浅色兜底，放进外壳时跟随主题，单独预览也不会黑底黑字；
+ * - 不引入 UI 框架、图片或图标字体。
+ */
+
+.sched {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* ---------------- 标题区 ---------------- */
+
+.sched-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sched-eyebrow {
+  margin: 0;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.sched-title {
+  margin: 0;
+  color: var(--sj-text, #202124);
+  font: 400 28px/1.25 Georgia, 'Songti SC', serif;
+  letter-spacing: -0.4px;
+}
+.sched-sub {
+  margin: 0;
+  color: var(--sj-text-soft, #767080);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------- 状态与提示 ---------------- */
+
+.sched-mock {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--sj-warn, #7a5a12);
+  border-radius: 12px;
+  background: #fdf8ea;
+  color: var(--sj-warn, #7a5a12);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.sched-notice {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--sj-success, #21623a);
+  border-radius: 12px;
+  background: #f2f9f4;
+  color: var(--sj-success, #21623a);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.sched-notice--error {
+  border-color: var(--sj-danger-border, #e3b7b7);
+  background: var(--sj-danger-bg, #fdf4f4);
+  color: var(--sj-danger, #8a2f2f);
+}
+.sched-state {
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px dashed var(--sj-border-strong, #cfc9d6);
+  border-radius: 14px;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.sched-state--error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  border-style: solid;
+  border-color: var(--sj-danger-border, #e3b7b7);
+  background: var(--sj-danger-bg, #fdf4f4);
+}
+.sched-error-text {
+  margin: 0;
+  color: var(--sj-danger, #8a2f2f);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.sched-hint {
+  margin: 0;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------- 工具栏与分页 ---------------- */
+
+.sched-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.sched-toolbar-meta {
+  color: var(--sj-text-soft, #767080);
+  font-size: 13px;
+}
+.sched-pager {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* ---------------- 列表 ---------------- */
+
+.sched-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.sched-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 14px;
+  background: var(--sj-surface, #ffffff);
+  box-shadow: var(--sj-shadow, 0 1px 2px rgb(32 33 36 / 6%));
+  min-width: 0;
+}
+.sched-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sched-item-title {
+  margin: 0;
+  color: var(--sj-text, #202124);
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.sched-item-title--done {
+  color: var(--sj-text-muted, #6b6375);
+  text-decoration: line-through;
+}
+.sched-item-time {
+  margin: 0;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.sched-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sched-badge {
+  padding: 2px 10px;
+  border: 1px solid var(--sj-border-strong, #cfc9d6);
+  border-radius: 999px;
+  color: var(--sj-text-soft, #767080);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.sched-badge--done {
+  border-color: var(--sj-success, #21623a);
+  color: var(--sj-success, #21623a);
+}
+
+/* ---------------- 表单 ---------------- */
+
+.sched-form,
+.sched-suggest {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 16px;
+  background: var(--sj-surface-muted, #faf9fc);
+  min-width: 0;
+}
+.sched-form-title {
+  margin: 0;
+  color: var(--sj-text, #202124);
+  font-size: 17px;
+  font-weight: 600;
+}
+.sched-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.sched-label {
+  color: var(--sj-text-soft, #767080);
+  font-size: 13px;
+}
+.sched-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--sj-border-strong, #cfc9d6);
+  border-radius: 8px;
+  background: var(--sj-surface, #ffffff);
+  color: var(--sj-text, #202124);
+  font: inherit;
+  font-size: 14px;
+  min-width: 0;
+}
+.sched-input[aria-invalid='true'] {
+  border-color: var(--sj-danger, #8a2f2f);
+}
+.sched-input:focus-visible {
+  outline: 3px solid var(--sj-focus, #6b53a0);
+  outline-offset: 2px;
+}
+.sched-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.sched-counter {
+  margin: -4px 0 0;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.sched-field-error {
+  margin: 0;
+  color: var(--sj-danger, #8a2f2f);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------- 版本冲突（D1） ---------------- */
+
+/*
+ * 冲突提示不是「一条错误文案」而是需要用户决策的面板：
+ * 用实线边框 + 标题 + 明确的三个按钮，避免用户以为表单已经保存或已被覆盖。
+ * 颜色只作辅助，标题与按钮文案本身说明后果。
+ */
+.sched-conflict {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--sj-danger, #8a2f2f);
+  border-radius: 12px;
+  background: var(--sj-danger-bg, #fdf4f4);
+  min-width: 0;
+}
+.sched-conflict-title {
+  margin: 0;
+  color: var(--sj-danger, #8a2f2f);
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.sched-conflict-latest {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--sj-border-strong, #cfc9d6);
+  border-radius: 10px;
+  background: var(--sj-surface, #ffffff);
+  font-size: 13px;
+  min-width: 0;
+}
+.sched-conflict-latest dt {
+  color: var(--sj-text-muted, #6b6375);
+  white-space: nowrap;
+}
+.sched-conflict-latest dd {
+  margin: 0;
+  color: var(--sj-text, #202124);
+  overflow-wrap: anywhere;
+}
+.sched-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sched-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--sj-text-soft, #767080);
+  font-size: 14px;
+}
+.sched-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---------------- 建议候选 ---------------- */
+
+.sched-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 14px 10px 30px;
+  border: 1px dashed var(--sj-warn, #7a5a12);
+  border-radius: 10px;
+  background: #fdf8ea;
+  color: var(--sj-warn, #7a5a12);
+  font-size: 13px;
+}
+.sched-issues-item {
+  overflow-wrap: anywhere;
+}
+.sched-mood {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--sj-border-strong, #cfc9d6);
+  border-radius: 10px;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.sched-mood-tag {
+  padding: 1px 8px;
+  border: 1px solid var(--sj-warn, #7a5a12);
+  border-radius: 999px;
+  color: var(--sj-warn, #7a5a12);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.sched-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sched-candidate {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 12px;
+  background: var(--sj-surface, #ffffff);
+  min-width: 0;
+}
+.sched-candidate-title {
+  margin: 0;
+  color: var(--sj-text, #202124);
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.sched-candidate-time {
+  margin: 0;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.sched-candidate-flag {
+  margin: 0;
+  color: var(--sj-warn, #7a5a12);
+  font-size: 12px;
+}
+
+/* ---------------- 按钮 ---------------- */
+
+.sched-button {
+  padding: 8px 16px;
+  border: 1px solid var(--sj-border-strong, #cfc9d6);
+  border-radius: 999px;
+  background: var(--sj-surface, #ffffff);
+  color: var(--sj-text, #202124);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.sched-button--primary {
+  border-color: var(--sj-inverse-bg, #202124);
+  background: var(--sj-inverse-bg, #202124);
+  color: var(--sj-inverse-text, #ffffff);
+}
+.sched-button--danger {
+  border-color: var(--sj-danger, #8a2f2f);
+  color: var(--sj-danger, #8a2f2f);
+}
+.sched-button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.sched-button:focus-visible {
+  outline: 3px solid var(--sj-focus, #6b53a0);
+  outline-offset: 2px;
+}
+.sched-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ---------------- 窄屏 ---------------- */
+
+@media (max-width: 480px) {
+  .sched {
+    gap: 16px;
+  }
+  .sched-title {
+    font-size: 24px;
+  }
+  .sched-item,
+  .sched-form,
+  .sched-suggest {
+    padding: 14px;
+    border-radius: 12px;
+  }
+  .sched-pager {
+    margin-left: 0;
+    width: 100%;
+  }
+  .sched-pager .sched-button {
+    flex: 1;
+    text-align: center;
+  }
+}
