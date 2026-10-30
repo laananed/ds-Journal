@@ -1,36 +1,42 @@
 /**
- * 结构化写作编辑器（Stage 3 / S3-T04）。
+ * 写作编辑器入口（Stage 3 / S3-T04 → Stage 4 / S04-T03 过渡）。
  *
- * 用户正文用**原生 textarea 分段**编辑，AI 段由 `AiReplyBlock` 渲染成蓝块；
- * 两类段落交错排列，而不是在同一个 textarea 里着色
- * （`docs/stage3.md` §3、`docs/stage3-architecture.md` §3）。
+ * Stage 4 起正文权威是 **schema 1 JSON**（`content_doc`），编辑与阅读共用
+ * `editor/RichTextEditor`。本组件因此变成一层很薄的适配：
  *
- * 交给父级（页面）的契约：
+ * - 传入 `doc`（`ContentDocument`）→ 渲染统一的 Tiptap 编辑器；
+ *   用户输入通过 `onDocumentChange` 上报**已按服务端白名单归一**的文档，
+ *   保存队列仍归调用方（T02 的应用级会话），这里不做队列。
+ * - 未传 `doc` → 保持 Stage 3 的 `content_blocks` 分段编辑（textarea + AI 块）。
+ *   现存的 `JournalEditor` / `JournalDetail` / `InboxPage` 仍走这条路径，
+ *   由 T06 / T11 逐步迁移，T12 收缩 `content_blocks` 后删除。
  *
- * - `blocks` + `onChange(blocks)`：组件是**受控**的，唯一状态源是父级草稿里的块数组；
- * - `onCompositionStart/End`：IME 组合期间页面暂停自动保存，避免存半个拼音；
- * - `onRequestDeleteAiBlock(blockId)`：**只上报意图**。父级必须先 `flush()` 待保存
- *   输入，再按最新 revision 调 `DELETE /api/files/{type}/{id}/ai-blocks/{block_id}`，
- *   成功后才重读详情更新基线（防止删除与自动保存竞态）；
- * - `locked` / `lockedMessage`：T07 的「AI 调用期间锁定当前编辑与导航」接口。
- *   本期不接模型调用，只保留这个锁定开关。
- *
- * 供 T07 复用的封口 / 空尾续写段是 `utils/writingBlocks.ts` 里的纯函数
- * （`appendContinuation`、`removeAiBlock`、`pruneBlocksToServer`），
- * 不在本组件里隐藏实现——AI 回复的插入位置由服务端按调用记录边界决定。
+ * 两条路径共用同一份 AI 标签文案与「AI 段不可当作用户正文」的语义，
+ * 但它们**不是两套富文本实现**：旧路径只是尚未迁移的字符段渲染。
  */
 
+import RichTextEditor from '../editor/RichTextEditor.tsx'
+import type { EditorSelectionInfo } from '../editor/RichTextEditor.tsx'
 import AiReplyBlock from './AiReplyBlock'
 import { setBlockText } from '../utils/writingBlocks'
 import type { Block } from '../types/writing'
+import type { ContentDocument } from '../types/document'
 
 export interface WritingEditorProps {
-  blocks: Block[]
+  /** Stage 4：schema 1 文档；传入即启用统一 Tiptap 编辑器。 */
+  doc?: ContentDocument | null
+  /** Stage 3 兼容：结构化字符块（未传 `doc` 时使用）。 */
+  blocks?: Block[]
   disabled?: boolean
   /** AI 调用处理中锁定编辑（T07 使用；本期恒为 false）。 */
   locked?: boolean
   lockedMessage?: string
-  onChange: (blocks: Block[]) => void
+  /** 文档模式的用户输入回调。 */
+  onDocumentChange?: (document: ContentDocument, schemaVersion: number) => void
+  /** 文档模式的选区回调（Minds 范围分析用）。 */
+  onSelection?: (selection: EditorSelectionInfo | null) => void
+  /** 字符块模式的输入回调。 */
+  onChange?: (blocks: Block[]) => void
   onCompositionStart?: () => void
   onCompositionEnd?: () => void
   /** 用户确认删除某个 AI 段；父级负责 flush + 专用接口。 */
@@ -41,10 +47,27 @@ export interface WritingEditorProps {
 }
 
 function WritingEditor({
-  blocks, disabled, locked, lockedMessage, onChange, onCompositionStart, onCompositionEnd,
-  onRequestDeleteAiBlock, deletingBlockId, onResolveLink,
+  doc, blocks, disabled, locked, lockedMessage, onDocumentChange, onSelection, onChange,
+  onCompositionStart, onCompositionEnd, onRequestDeleteAiBlock, deletingBlockId, onResolveLink,
 }: WritingEditorProps) {
   const readOnly = disabled === true || locked === true
+
+  if (doc !== undefined) {
+    return (
+      <div className="writing-editor">
+        {locked === true && (
+          <p className="writing-locked" role="status">{lockedMessage ?? 'AI 正在处理，编辑与导航暂时锁定。'}</p>
+        )}
+        <RichTextEditor
+          doc={doc}
+          readOnly={readOnly}
+          onUserChange={onDocumentChange === undefined ? undefined : (next, version) => onDocumentChange(next, version)}
+          onSelection={onSelection}
+          label="日记正文"
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="writing-editor">
@@ -52,7 +75,7 @@ function WritingEditor({
         <p className="writing-locked" role="status">{lockedMessage ?? 'AI 正在处理，编辑与导航暂时锁定。'}</p>
       )}
       <ul className="writing-blocks">
-        {blocks.map((block) => (
+        {(blocks ?? []).map((block) => (
           block.kind === 'user' ? (
             <li key={block.id} className="writing-block writing-block-user">
               <textarea
@@ -62,7 +85,7 @@ function WritingEditor({
                 aria-label="用户正文段"
                 disabled={readOnly}
                 placeholder="在这里继续写……"
-                onChange={(event) => onChange(setBlockText(blocks, block.id, event.target.value))}
+                onChange={(event) => onChange?.(setBlockText(blocks ?? [], block.id, event.target.value))}
                 onCompositionStart={onCompositionStart}
                 onCompositionEnd={onCompositionEnd}
               />
@@ -73,7 +96,7 @@ function WritingEditor({
               block={block}
               disabled={readOnly}
               deleting={deletingBlockId === block.id}
-              onTextChange={(text) => onChange(setBlockText(blocks, block.id, text))}
+              onTextChange={(text) => onChange?.(setBlockText(blocks ?? [], block.id, text))}
               onCompositionStart={onCompositionStart}
               onCompositionEnd={onCompositionEnd}
               onRequestDelete={onRequestDeleteAiBlock}
