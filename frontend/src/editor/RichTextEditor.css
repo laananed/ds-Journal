@@ -279,3 +279,23 @@
   border-bottom: 1px dashed #b06f2a;
   background: #fff6e6;
 }
+
+/*
+ * 内部链接 `[[显示标题]]`（S04-T11）：正文里就存普通文字，这里只提供
+ * 「看得出是链接」的视觉提示；代码区域不会带这个类。
+ */
+.s4-editor-content .s4-internal-link {
+  color: #1b4fd8;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+
+/* 只读时普通点击就能打开候选，因此才给手型；编辑态需要 Ctrl/⌘ + 点击。 */
+.s4-editor.is-readonly .s4-internal-link {
+  cursor: pointer;
+}
+
+.theme-dark .s4-editor-content .s4-internal-link {
+  color: #9db4ff;
+}

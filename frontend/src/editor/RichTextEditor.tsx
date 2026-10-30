@@ -1,22 +1,29 @@
 /**
  * Stage 4 / S04-T03：统一的 `RichTextEditor`（编辑 + 只读共用一套基础）。
  *
- * 对外只有四个约定（`docs/stage4-tasks.md` §3.4）：
+ * 对外只有五个约定（`docs/stage4-tasks.md` §3.4、§3.12）：
  * - `doc`：服务端 `content_doc`；受控输入，外部换版本时整体替换；
  * - `readOnly`：只读，不建 ID、不发 `onUserChange`（Trash/阅读态复用）；
  * - `onUserChange`：**只**在真实用户输入后上报，载荷已按服务端白名单归一；
  * - `onSelection`：当前选区对应的用户段落 ID 与 Unicode 码点区间，
- *   供后续 Minds 范围分析使用（ProseMirror 是 UTF-16，必须显式换算）。
+ *   供后续 Minds 范围分析使用（ProseMirror 是 UTF-16，必须显式换算）；
+ * - `onLink`：正文里 `[[显示标题]]` 被用户点击时上报标题（T11 内部链接）。
+ *   只认普通文本位置，代码块与行内代码里不激活；编辑态需要 Ctrl/⌘ + 点击，
+ *   避免抢走普通点击的定位光标语义。注册了回调才可能拦截点击。
  *
  * 不在这里做保存、不做会话、不做 AI 调用：写队列属于 T02，
  * 目标同步属于 T07，AI 执行/应用属于 T08。本组件是纯受控视图。
  */
 
 import { useCallback, useEffect, useReducer, useRef } from 'react'
-import type { Editor, JSONContent } from '@tiptap/core'
+import { Extension, type Editor, type JSONContent } from '@tiptap/core'
+import type { Node as PMNode } from '@tiptap/pm/model'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { ContentDocument } from '../types/document.ts'
 import { DOCUMENT_SCHEMA_VERSION, SYSTEM_ORIGIN, buildExtensions, isSafeHref, toEditorDocument, toServerDocument } from './schema.ts'
+import { findInternalLinkAt, internalLinkTokens } from '../utils/internalLinks.ts'
 import './RichTextEditor.css'
 
 /** 选区信息；`start`/`end` 是块内 Unicode 码点半开区间（API §2.1）。 */
@@ -34,6 +41,8 @@ export interface RichTextEditorProps {
   readOnly?: boolean
   onUserChange?: (document: ContentDocument, schemaVersion: number) => void
   onSelection?: (selection: EditorSelectionInfo | null) => void
+  /** 点击正文内部链接（`[[显示标题]]`）时上报标题；不传则不拦截任何点击。 */
+  onLink?: (title: string) => void
   /** 可访问名称，例如「正文」「日记正文」。 */
   label?: string
   className?: string
@@ -41,6 +50,87 @@ export interface RichTextEditorProps {
 
 const TEXTBLOCKS = new Set(['paragraph', 'heading'])
 const codePointLength = (text: string) => Array.from(text).length
+
+/* ------------------------------------------------- 内部链接 `[[标题]]` */
+
+/**
+ * 内部链接 `[[标题]]`（S04-T11 D2）。
+ *
+ * 不新增 schema 节点：`[[标题]]` 在 JSON 里就是普通文字，这里只做两件事。
+ *
+ * 1. **落点**：命中位置换算成「文本块 + 块内偏移」，再在块文本里找 token；
+ * 2. **装饰**：给命中的文字加 `s4-internal-link` 类与 `data-internal-title`，
+ *    让阅读态看得出「这是链接」，也给浏览器测试一个稳定的落点。
+ *
+ * 代码块直接跳过；行内代码按 `code` mark 判定跳过——「代码区域不激活」是产品契约。
+ * 点击激活本身在组件里用 DOM 事件处理（见下方 effect）。
+ */
+
+/** 文本块 + 点击位置在块内的偏移；不在可激活的文本块内返回 null。 */
+function textBlockAt(doc: PMNode, pos: number): { node: PMNode; offset: number } | null {
+  const $pos = doc.resolve(pos)
+  let depth = $pos.depth
+  while (depth > 0 && !TEXTBLOCKS.has($pos.node(depth).type.name)) depth -= 1
+  if (depth === 0) return null
+  const node = $pos.node(depth)
+  if (node.type.name === 'codeBlock') return null
+  // 只处理「位置就落在该文本块的文字里」的情况；块边界不猜偏移。
+  if (node !== $pos.parent) return null
+  return { node, offset: $pos.textOffset }
+}
+
+function hasCodeMark(node: PMNode, start: number, end: number): boolean {
+  const code = node.type.schema.marks.code
+  return code !== undefined && node.rangeHasMark(start, end, code)
+}
+
+function internalLinkTitleAt(doc: PMNode, pos: number): string | null {
+  const block = textBlockAt(doc, pos)
+  if (block === null) return null
+  const text = block.node.textBetween(0, block.node.content.size, '\n', '\n')
+  const token = findInternalLinkAt(text, block.offset)
+  if (token === null) return null
+  if (hasCodeMark(block.node, token.start, token.end)) return null
+  return token.title
+}
+
+function internalLinkDecorations(doc: PMNode): DecorationSet {
+  const decorations: Decoration[] = []
+  doc.descendants((node, pos) => {
+    if (node.type.name === 'codeBlock') return false
+    if (!TEXTBLOCKS.has(node.type.name)) return true
+    const text = node.textBetween(0, node.content.size, '\n', '\n')
+    for (const token of internalLinkTokens(text)) {
+      if (hasCodeMark(node, token.start, token.end)) continue
+      decorations.push(Decoration.inline(pos + 1 + token.start, pos + 1 + token.end, {
+        class: 's4-internal-link',
+        'data-internal-title': token.title,
+      }))
+    }
+    return false
+  })
+  return DecorationSet.create(doc, decorations)
+}
+
+/**
+ * 只做装饰的扩展：`[[标题]]` 的点击激活在组件里按 DOM 事件处理，
+ * 这样回调可以随 props 变化重新绑定，不需要把 ref 在渲染期交给插件。
+ */
+const InternalLinkDecorations = Extension.create({
+  name: 'internalLinkDecorations',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('internalLinkDecorations'),
+        props: {
+          decorations(state) {
+            return internalLinkDecorations(state.doc)
+          },
+        },
+      }),
+    ]
+  },
+})
 
 function describeSelection(editor: Editor): EditorSelectionInfo | null {
   const { from, to, empty } = editor.state.selection
@@ -157,7 +247,7 @@ function Toolbar({ editor }: { editor: Editor }) {
 }
 
 function RichTextEditor({
-  doc, readOnly = false, onUserChange, onSelection, label, className,
+  doc, readOnly = false, onUserChange, onSelection, onLink, label, className,
 }: RichTextEditorProps) {
   const changeHandler = useRef(onUserChange)
   const selectionHandler = useRef(onSelection)
@@ -187,7 +277,10 @@ function RichTextEditor({
 
   const editor = useEditor(
     {
-      extensions: buildExtensions({ readOnly }),
+      extensions: [
+        ...buildExtensions({ readOnly }),
+        InternalLinkDecorations,
+      ],
       content: toEditorDocument(doc),
       editable: !readOnly,
       editorProps: {
@@ -213,6 +306,28 @@ function RichTextEditor({
     if (editor === null || editor.isDestroyed) return
     editor.setEditable(!readOnly)
   }, [editor, readOnly])
+
+  /**
+   * 内部链接点击：只读时普通点击激活；编辑时 Ctrl/⌘ + 点击（普通点击仍用于定位光标）。
+   * 用 DOM 事件而不是 ProseMirror 的 `handleClick`，这样回调可以直接跟随 props，
+   * 不必把最新回调塞进 ref；命中位置用 `posAtCoords` 换回文档坐标。
+   */
+  useEffect(() => {
+    if (editor === null || editor.isDestroyed || onLink === undefined) return
+    const dom = editor.view.dom
+    function handleClick(event: MouseEvent): void {
+      if (editor === null || editor.isDestroyed || onLink === undefined) return
+      if (!readOnly && !event.ctrlKey && !event.metaKey) return
+      const hit = editor.view.posAtCoords({ left: event.clientX, top: event.clientY })
+      if (hit === null) return
+      const title = internalLinkTitleAt(editor.state.doc, hit.pos)
+      if (title === null) return
+      event.preventDefault()
+      onLink(title)
+    }
+    dom.addEventListener('click', handleClick)
+    return () => { dom.removeEventListener('click', handleClick) }
+  }, [editor, onLink, readOnly])
 
   // 外部换版本（切换文件 / 服务端重载 / AI apply）时整篇替换；
   // 内容等价则不打断用户输入。
