@@ -1,0 +1,276 @@
+/*
+ * 今日概览样式（Stage 4 / S04-T05）。
+ *
+ * 颜色全部取自 AppShell 的 `--sj-*` 设计变量，并带浅色兜底值：
+ * 概览放在外壳里时跟随主题；即使将来单独预览也不会变成无样式黑字。
+ * 不引入 UI 框架，不使用图片/图标字体。
+ */
+
+.dash {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+/* ---------------- 标题区 ---------------- */
+
+.dash-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dash-eyebrow {
+  margin: 0;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.dash-title {
+  margin: 0;
+  color: var(--sj-text, #202124);
+  font: 400 30px/1.25 Georgia, 'Songti SC', serif;
+  letter-spacing: -0.4px;
+}
+.dash-sub {
+  margin: 0;
+  color: var(--sj-text-soft, #767080);
+  font-size: 13px;
+}
+
+/* ---------------- 状态块 ---------------- */
+
+.dash-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 16px;
+  background: var(--sj-surface-muted, #faf9fc);
+  min-width: 0;
+}
+.dash-loading-text {
+  margin: 0;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 14px;
+}
+.dash-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dash-skeleton-row {
+  height: 14px;
+  border-radius: 999px;
+  background: var(--sj-border, #e5e2ea);
+  animation: dash-pulse 1.6s ease-in-out infinite;
+}
+.dash-skeleton-row:nth-child(1) { width: 62%; }
+.dash-skeleton-row:nth-child(2) { width: 88%; }
+.dash-skeleton-row:nth-child(3) { width: 44%; }
+
+@keyframes dash-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.dash-error {
+  border-color: var(--sj-danger-border, #e3b7b7);
+  background: var(--sj-danger-bg, #fdf4f4);
+}
+.dash-error-text {
+  margin: 0;
+  color: var(--sj-danger, #8a2f2f);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.dash-error-hint {
+  margin: 0;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 13px;
+}
+
+.dash-empty-all {
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px dashed var(--sj-border-strong, #cfc9d6);
+  border-radius: 16px;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------- 入口卡片 ---------------- */
+
+.dash-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.dash-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 18px;
+  background: var(--sj-surface, #ffffff);
+  box-shadow: var(--sj-shadow, 0 1px 2px rgb(32 33 36 / 6%));
+  min-width: 0;
+}
+.dash-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.dash-card-title {
+  margin: 0;
+  color: var(--sj-text, #202124);
+  font-size: 18px;
+  font-weight: 600;
+}
+.dash-card-meta {
+  margin: 0;
+  color: var(--sj-text-soft, #767080);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.dash-card-desc {
+  margin: 0;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 14px;
+}
+.dash-card-empty {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--sj-border-strong, #cfc9d6);
+  border-radius: 12px;
+  color: var(--sj-text-soft, #767080);
+  font-size: 13px;
+}
+.dash-card-preview {
+  margin: 0;
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 今日写作列表 */
+.dash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.dash-list-item {
+  min-width: 0;
+}
+.dash-list-open {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 12px;
+  background: var(--sj-surface-muted, #faf9fc);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dash-list-open:hover:not(:disabled) {
+  border-color: var(--sj-border-strong, #cfc9d6);
+  background: var(--sj-bg-soft, #f7f6f8);
+}
+.dash-list-open:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.dash-list-title {
+  color: var(--sj-text, #202124);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash-list-preview {
+  color: var(--sj-text-muted, #6b6375);
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 按钮 */
+.dash-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.dash-button {
+  padding: 9px 18px;
+  border: 1px solid var(--sj-border-strong, #cfc9d6);
+  border-radius: 999px;
+  background: var(--sj-surface, #ffffff);
+  color: var(--sj-text, #202124);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.dash-button--primary {
+  border-color: var(--sj-inverse-bg, #202124);
+  background: var(--sj-inverse-bg, #202124);
+  color: var(--sj-inverse-text, #ffffff);
+}
+.dash-button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.dash-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* 手机宽度：卡片内边距与字号略收紧，保持可点面积 */
+@media (max-width: 480px) {
+  .dash {
+    gap: 18px;
+  }
+  .dash-title {
+    font-size: 26px;
+  }
+  .dash-card {
+    padding: 16px;
+    border-radius: 16px;
+  }
+  .dash-panel {
+    padding: 16px;
+  }
+  .dash-button {
+    width: 100%;
+    text-align: center;
+  }
+}

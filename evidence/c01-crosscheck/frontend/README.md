@@ -1,0 +1,173 @@
+# SeekJournal Frontend
+
+当前交付为 Stage 2 / S2-T06：在已验收的 S2-T03 Journal UI 与 S2-T05 Inbox UI 之上，
+把 Insight 从「未开放」接入真实模块（手动管理的列表、真实详情、新建、编辑、**移入回收箱**）。
+产品/API/架构/任务分别以根目录 `docs/stage2*.md` 为准；Stage 1 历史验收见 `docs/stage1-acceptance.md`。
+仍**未开放**的模块：Search、Trash、Folder 管理、Inbox→Journal、AI 辅助、Insight 的来源/历史/阅读渲染。
+Markdown 编辑态仍用普通 textarea 编辑**原始源码**；阅读态自 S2-T12 起做最小渲染（见「最小 Markdown 阅读」一节），
+渲染只在内存里，绝不写回数据库。
+
+## 已实现的流程
+
+### Journal（S2-T03，未改动）
+
+- Journal 新建、真实详情读取、按实际修改字段 PATCH，以及移入回收箱的软删除；204 不解析 JSON。
+- 主列表与新建表单的当天已有记录都按固定 20 条分页；数量使用响应 `total`。
+- 日期条件改变回第 1 页，删除导致当前页越界时按 `total` 重读最近有效页。
+- 所有卡片直接显示服务器 `display_title`，不在当前页上重算 Journal 编号，不把生成标题写回 `title`。
+- 默认 Journal 日期按本机 04:00 换日，打开编辑器时确定，后续不自动重置。
+- PATCH 只验证实际提交字段，旧空白/超长正文可继续读取、只改其他字段；历史空串标题未编辑时保持空串。
+- 阅读仍是安全普通文本，Markdown 渲染属于后续 T12。
+
+### Inbox / Daily Inbox（S2-T05）
+
+- 普通 Inbox：列表、真实详情读取、新建、按实际修改字段 PATCH、**硬删除**（含 Daily，不进回收箱）。
+- Daily 入口按业务日期查询当日身份：`GET /api/inboxes/daily?inbox_date=YYYY-MM-DD` 只返回
+  `missing` / `active` 两态。`missing` 打开空编辑器（**不发 POST**），输入有效内容保存后才创建并绑定真实 id；
+  `active` 直接打开已有记录的真实详情。再次进入同一天打开同一条记录；同一天仍可另建多条普通 Inbox。
+- 默认 Inbox 日期复用 `defaultJournalDate()`（本机 04:00 换日），不使用 UTC 截取或减 24 小时；
+  跨 04:00 不自动改写已打开编辑器的日期。
+- 创建后 `inbox_date` 与 `is_daily` **不可修改**；更新时这两个字段永不进入请求体。
+- 标题语义：POST 省略 `title` 时后端存默认 `inbox_date`；主动清空需显式发送 `null` 或空串；
+  PATCH 省略即不修改；`display_title` 只是读取回退，绝不写回 `title`。已有 `title=null/""` 打开编辑器
+  不会被回退成日期；非空标题不 trim；最多 80 个 Unicode 码点。
+- 正文最多 50,000 个 Unicode 码点（按码点而非 UTF-16 长度），非空白判定沿用既有规则，
+  Markdown 空格/缩进/换行原样保存；非法输入不改动也不发写请求。
+- 失败与竞态：保存中阻止重复提交与导航；保存成功后的列表刷新失败单独显示，不冒充保存失败；
+  保存失败保留日期/标题/正文与 Dirty 状态；Daily 并发 409 时重查同日状态并给出明确冲突提示与
+  已有记录入口，不自动覆盖也不丢弃输入；过期响应不覆盖新视图。
+- 删除：全类型硬删除，确认文案明确「永久删除、不可恢复」；成功消费 204 空响应，不调用 `response.json()`；
+  删除后刷新列表与当日 Daily 状态，删除 Daily 后允许同日重建。
+
+### Insight（S2-T06）
+
+- 列表、真实详情读取、新建、按实际修改字段 PATCH，以及**移入回收箱**的软删除（不进永久删除），
+  删除成功消费 204 空响应、不解析 JSON，末页越界按 `total` 回退有效页。
+- **没有所属日期控件，也没有 AI 入口**；Insight 只有标题与正文两个可编辑字段。
+- 无标题显示后端 `display_title`（「未命名 Insight」）；编辑框始终使用**原始** `title`，
+  绝不把展示回退值写回 `title`；已有 `title=null/""` 打开编辑器不会被回退文案替换。
+- 保存中防重复提交；保存失败保留输入与 Dirty；写成功与后续列表刷新失败分别反馈，
+  不会诱发重复创建；过期列表 / 详情响应不覆盖新视图。
+- 原始 Markdown 按现有源码方式编辑，阅读态由 S2-T12 的最小渲染组件呈现。
+
+### 最小 Markdown 阅读（S2-T12）
+
+- 新增 `components/MarkdownContent.tsx`（只读外壳）+ `utils/markdownReading.ts`（渲染配置，无 JSX），
+  Journal / Inbox / Insight 的正常详情与 Trash 详情**共用同一个组件**，替换原先的
+  `<p className="detail-content">{content}</p>`；只换「怎么显示」，不改各页面的保存、Dirty、busy、
+  请求与刷新逻辑。
+- 批准的依赖：`react-markdown@10.1.0` + `remark-gfm@4.0.1`（均 MIT，精确版本；
+  remark-gfm 只为 `- [ ]` / `- [x]` Checklist，标题与数字列表是 CommonMark 核心）。
+- 阅读支持 `#` / `##` / `###`、Checklist、数字列表；Checklist 渲染为
+  `<input type="checkbox" disabled>`，点击不产生任何请求，也不改写源码。
+- **不启用 `rehype-raw`**：原始 HTML 被降级成普通文本并由 React 转义，全程
+  **不使用 `dangerouslySetInnerHTML`**，raw HTML 不会执行。
+- 显式保留 `defaultUrlTransform`（协议白名单 https / http / irc / ircs / mailto / xmpp）：
+  普通与相对链接可读，`javascript:` 等危险协议被替换成空 `href`，不可执行。
+- 数据库仍存原始 Text Markdown，不存渲染 HTML；缩进 / 空行 / 前后空格 / 换行在源码往返中逐字保留。
+- `[[标题]]` 内部链接的扩展点在 `utils/markdownReading.ts` 的 `components.a`，
+  **本任务不实现**（留给 S2-T13），也不引入 AST 平台、富文本编辑器或图片上传链路。
+
+### 交互（S2-T03 + T05 + T06 共用）
+
+- 新建与详情编辑只保留一个活动面板；模块、文件、列表、主分页、日期筛选、返回、取消、新建、
+  Daily 入口等离开出口统一经 App 的 Dirty 检查。
+- 默认值不算改动，恢复初始字段值不再 Dirty；继续编辑保留输入，确认离开才丢弃。
+- 整张卡片是原生按钮，支持点击、Enter、Space；打开时重新请求真实详情。
+- 写入期间阻止重复提交与导航；保存失败保留输入/Dirty；保存成功重置基线。
+- 日期/详情快速切换用 AbortController 和组件身份作废旧请求；404 清掉过期详情。
+- 列表标题一行、摘要三行省略；详情保持完整正文。
+
+## 运行与配置
+
+继续使用 React + TypeScript + Vite、组件 state 和原生 fetch，无新增依赖。
+前端读取 `VITE_API_BASE_URL`，值为后端根地址，不含 `/api`；未配置时默认 `http://127.0.0.1:8000`。
+`VITE_*` 进入浏览器产物，只能放非敏感地址，不能放数据库凭据。
+
+普通开发端口由 `vite.config.ts` 设置为 `127.0.0.1:5173`，`strictPort` 防止端口占用时自动换端口。
+后端 CORS 必须允许所用前端来源。当前轮的既有 `node_modules` 直接复用，不安装或升级包。
+
+本轮 T06 自测在**当前授权工作树**运行，并**必须运行当前 T06 后端源码**（不借用旧的
+T04/Work-02 后端）。`backend/.env` 指向个人库 `seekjournal`，因此**不改 `.env`**，
+而是用一个 TEMP 启动守卫：在导入 `app` 之前用
+`scripts.prepare_test_db.get_test_database_url()` 取得仅替换库名的测试 URL，写入进程
+`DATABASE_URL`，导入当前工作目录的 `app`，查询 `current_database()` 断言
+`seekjournal_test` 后监听 `127.0.0.1:8014`，运行期把 CORS 来源设为 `http://127.0.0.1:5175`：
+
+```powershell
+# 后端（TEMP 守卫脚本显式指向当前 T06 backend；只改进程环境，不改 .env）
+& .\backend\.venv\Scripts\python.exe -B "$env:TEMP\s2t06_guard_server.py"
+# 前端（在本树 frontend，仅对本轮进程设置 VITE_API_BASE_URL）
+$env:VITE_API_BASE_URL = 'http://127.0.0.1:8014'
+npm.cmd run dev -- --host 127.0.0.1 --port 5175
+```
+
+后端启动器必须打印 `WORKSPACE_DATABASE=seekjournal_test`（以及安全的源码路径），
+并在浏览器写入前用数据库查询确认实际连接；浏览器地址为 `http://127.0.0.1:5175`。
+**不得**借用个人库 `seekjournal` 进行写测试，**不得**操作 `seekjournal_t03_ui_test`，
+不启动 Compose、不动 5173/8000/5432 服务，不运行默认可能连个人库的后端启动命令。
+UI 验证期间不得与固定使用 `seekjournal_test` 的后端 pytest 并行。
+
+## 可复现的前端检查
+
+在 `frontend/` 分别执行：
+
+```powershell
+npm.cmd run build
+npm.cmd run lint
+node --experimental-strip-types src/utils/journalDate.test.ts
+node --experimental-strip-types src/utils/journalDetail.test.ts
+node --experimental-strip-types src/utils/journalTitles.test.ts
+node --experimental-strip-types src/utils/contentValidation.test.ts
+node --experimental-strip-types src/utils/dirtyState.test.ts
+node --experimental-strip-types src/utils/pagination.test.ts
+node --experimental-strip-types src/utils/inboxDraft.test.ts
+node --experimental-strip-types src/utils/insightDraft.test.ts
+node --experimental-strip-types src/utils/markdownReading.test.ts
+```
+
+构建先运行 TypeScript 检查，再输出忽略的 `dist/`。
+纯逻辑直接用 Node 类型剥离，不添加测试框架；实际结果以当次输出为准。
+`journalTitles.ts` 和对应测试保留 Stage 1.5 完整日期编号的历史回归；
+当前 Journal UI **不调用此函数**，跨页/软删编号来自 T02 的服务器投影。
+
+真实浏览器自测必须先证明数据库隔离，记录每次自建的 `(type, id)`，
+将真实链路、合成失败和延迟真实响应分开记录；收尾只清理本轮自建记录，不重置 sequence。
+实施者自测结束后仍需 Lead 独立验收，不代表完整 Stage 2 已验收。
+
+## 核心代码
+
+- `src/App.tsx`：活动模块/文件、统一 Dirty 离开检查、主列表与写后刷新；`journal` / `inbox` / `insight` 三个模块分支。
+- `src/api/journals.ts` / `src/api/inboxes.ts` / `src/api/insights.ts`：三类文件的分页响应与 fetch；
+  `deleteInbox` / `deleteInsight` 分别按硬删除 / 软删除消费 204，均不解析 204 响应体。
+- `src/types/file.ts` / `src/types/inbox.ts` / `src/types/insight.ts`：共享契约与各类型创建/更新/分页类型。
+- `components/FileCard.tsx` / `Pagination.tsx`：被 Journal / Inbox / Insight 共用的最小共享组件。
+- `components/JournalEditor.tsx` / `JournalDetail.tsx`：Journal 的输入基线、写入锁、失败保留、当天分页。
+- `pages/InboxPage.tsx`：Inbox 工具栏/列表/分页/筛选/Daily 状态 + 创建/详情/编辑面板。
+- `pages/InsightPage.tsx`：Insight 工具栏/列表/分页 + 创建/详情/编辑/移入回收箱面板。
+- `pages/TrashPage.tsx`（S2-T10）：回收箱列表（all/journal/insight 筛选、20 条/页）+ 只读详情 +
+  恢复/永久删除；按 (type, id) 打开真实详情；恢复/删除成功与列表刷新失败分开反馈；
+  目标消失（404）提示状态变化并重读列表；Inbox 不进入回收箱。
+- `api/trash.ts` / `types/trash.ts` / `utils/trashFeedback.ts`：Trash 契约（204 不解析 JSON）
+  与操作反馈文案纯逻辑。
+- `utils/dirtyState.ts` / `pagination.ts` / `journalDetail.ts` / `inboxDraft.ts` / `insightDraft.ts`：可脱离 React
+  验证的比较、页码与 Inbox / Insight 草稿建造规则。
+- `components/MarkdownContent.tsx`（S2-T12）：只读正文外壳，四个详情位共用；
+  渲染配置在同名纯逻辑模块 `utils/markdownReading.ts` 里，因此渲染测试可以直接
+  渲染组件真正使用的那棵树（`react-dom/server` + 真实依赖，无测试框架）。
+
+当前最值得理解的是：`total` 与当前页 `items.length` 不同；
+`display_title` 是读取投影，原始 `title` 是可写字段；
+Dirty 比较编辑基线，而写成功与后续读失败是两个独立结果；
+Daily 身份的创建与更新由「保存时是否携带真实 id」区分，入口本身只读、不写库；
+Insight 与 Inbox 的删除语义不同——前者软删除进回收箱，后者硬删除，但共用同一套 Dirty 与写锁。
+## S2-T11 Search
+
+Search queries the backend across Journal/Inbox/Insight with keyword, type and
+20-item pagination. Changing keyword/type returns to page 1; returning from a
+detail re-queries the retained search conditions. Blank input, no matches,
+loading and error/retry are distinct. Old list/target requests are aborted on
+condition changes or navigation. Cards use type+id and read a live ordinary
+target before existing module navigation; 404 clears and refreshes stale results.
+Module changes use the existing Dirty confirmation. No search state framework
+or Markdown rendering is added.

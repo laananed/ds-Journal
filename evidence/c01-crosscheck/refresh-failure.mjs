@@ -1,0 +1,17 @@
+import { chromium } from 'file:///C:/Users/Free/.workbuddy/skills/guizang-social-card-skill/node_modules/playwright-core/index.mjs';
+const browser = await chromium.launch({ executablePath:'C:/Users/Free/AppData/Local/ms-playwright/chromium-1248/chrome-win64/chrome.exe', headless:true });
+const page = await browser.newPage();
+await page.goto('http://127.0.0.1:5197/harness/?seed=21');
+await page.waitForSelector('.sched-list li');
+await page.getByRole('button',{name:'下一页'}).click();
+await page.waitForFunction(()=>document.querySelectorAll('.sched-list li').length===1);
+const before = await page.locator('.sched-list').innerText();
+await page.evaluate(()=>window.__failNextList=true);
+const row=page.locator('.sched-list li').first();
+await row.getByRole('button',{name:'删除'}).click();
+await row.getByRole('button',{name:'确认删除'}).click();
+await page.waitForSelector('.sched-state--error');
+const result={before,afterRows:await page.locator('.sched-list li').count(),error:await page.locator('.sched-state--error').innerText(),notice:await page.locator('.sched-notice').allInnerTexts(),calls:await page.evaluate(()=>window.__calls)};
+console.log(JSON.stringify(result,null,2));
+await page.screenshot({path:'browser/refresh-failure.png',fullPage:true});
+await browser.close();

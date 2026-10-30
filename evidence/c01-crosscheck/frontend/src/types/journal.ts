@@ -1,0 +1,56 @@
+import type { ContentFile, FilePage } from './file'
+import type { Block } from './writing'
+import type { ContentDocument, JournalKind } from './document'
+/** 日期与时间保留服务器字符串，避免业务日期时区偏移。 */
+export interface Journal extends ContentFile {
+  type: 'journal'
+  journal_date: string
+  /** 仅在详情响应里出现；普通列表不返回 blocks。 */
+  content_blocks?: Block[] | null
+  /** Stage 4 fields are optional until the backend transition is implemented. */
+  journal_kind?: JournalKind
+  content_doc?: ContentDocument | null
+  document_schema_version?: 1 | null
+  document_format?: 'legacy' | 'tiptap'
+}
+export type JournalPage = FilePage<Journal>
+
+/**
+ * 创建请求；Stage 3 起 UI 必须携带稳定的 client_create_id。
+ *
+ * `content` 与 `content_blocks` **二选一**（`docs/stage3-api.md` §2）：
+ * 结构化写作提交 `content_blocks`，普通旧客户端提交 `content`。
+ */
+export interface JournalCreate {
+  title?: string | null
+  content?: string
+  content_blocks?: Block[]
+  content_doc?: ContentDocument
+  document_schema_version?: 1
+  journal_kind?: JournalKind
+  draft_started_at?: string
+  journal_date: string
+  folder_id?: number | null
+  client_create_id?: string
+}
+
+/**
+ * PATCH 实际提交的字段子集（只包含真正改动的字段）。
+ *
+ * `content` 与 `content_blocks` 互斥：结构化文件只提交 `content_blocks`，
+ * 普通文件只提交 `content`。
+ */
+export interface JournalUpdateFields {
+  title?: string | null
+  content?: string
+  content_blocks?: Block[]
+  content_doc?: ContentDocument
+  document_schema_version?: 1
+  journal_date?: string
+  folder_id?: number | null
+}
+
+/** 对外 PATCH 请求体：Stage 3 起必须携带 expected_revision。 */
+export interface JournalUpdate extends JournalUpdateFields {
+  expected_revision: number
+}
