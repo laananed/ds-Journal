@@ -13,6 +13,7 @@ STAMP = datetime(2020, 1, 1, tzinfo=timezone.utc)
 MODELS = {'journal': Journal, 'insight': Insight}
 TABLES = {'journal': 'journals', 'insight': 'insights'}
 ROUTES = {'journal': 'journals', 'insight': 'insights'}
+DETAIL_FIELDS = {'content_blocks', 'content_doc', 'document_schema_version', 'document_format'}
 
 
 def snapshot(db, kind, id):
@@ -57,7 +58,7 @@ def test_lifecycle_preserves_every_column_and_folder(api, kind, title):
     detail = client.get(trash)
     assert detail.status_code == 200
     assert detail.json() == {**normal, 'revision': 2, 'deleted_at': detail.json()['deleted_at']}
-    assert client.get('/api/trash').json()['items'] == [{k: v for k, v in detail.json().items() if k != 'content_blocks'}]
+    assert client.get('/api/trash').json()['items'] == [{k: v for k, v in detail.json().items() if k not in DETAIL_FIELDS}]
     assert dict(snapshot(db, kind, id)) == after
     assert client.get(base).status_code == 404
     assert client.patch(base, json={"expected_revision": 1, **{}}).status_code == 404
@@ -70,7 +71,7 @@ def test_lifecycle_preserves_every_column_and_folder(api, kind, title):
     assert restored.status_code == 200 and restored.json() == {**normal, 'revision': 3}
     assert dict(snapshot(db, kind, id)) == {**before, 'revision': 3}
     assert client.get(base).json() == {**normal, 'revision': 3}
-    assert client.get(f'/api/folders/{folder.id}/files').json()['items'] == [{k: v for k, v in {**normal, 'revision': 3}.items() if k != 'content_blocks'}]
+    assert client.get(f'/api/folders/{folder.id}/files').json()['items'] == [{k: v for k, v in {**normal, 'revision': 3}.items() if k not in DETAIL_FIELDS}]
     assert client.post(trash + '/restore', headers={"If-Match": '"2"'}).status_code == 404
     assert client.delete(trash, headers={"If-Match": '"2"'}).status_code == 404
     assert client.get('/api/trash').json()['total'] == 0
@@ -106,7 +107,7 @@ def test_global_mixed_pagination_type_and_stable_sort(api, total):
             assert (body['page'], body['page_size'], body['total'], body['has_next']) == (page, 20, len(matches), page * 20 < len(matches))
             assert [(item['type'], item['id']) for item in body['items']] == [(row[3], row[2]) for row in matches[(page-1)*20:page*20]]
             for item in body['items']:
-                assert client.get(f"/api/trash/{item['type']}/{item['id']}").json() == ({**item, "content_blocks": None} if item["type"] == "journal" else item)
+                assert client.get(f"/api/trash/{item['type']}/{item['id']}").json() == {**item, 'content_blocks': None, 'content_doc': None, 'document_schema_version': None, 'document_format': 'legacy'}
 
 
 @pytest.mark.parametrize('kind', ['inbox', 'all', 'journals', 'other', 'JOURNAL'])

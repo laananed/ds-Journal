@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Text, CheckConstraint, Index, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from sqlalchemy import BigInteger
@@ -41,6 +41,11 @@ class Journal(Base):
     """
 
     __tablename__ = "journals"
+    __table_args__ = (
+        CheckConstraint("journal_kind IN ('writing', 'set', 'end')", name='ck_journals_kind'),
+        Index('uq_journals_active_ritual', 'journal_date', 'journal_kind', unique=True,
+              postgresql_where=text("deleted_at IS NULL AND journal_kind IN ('set','end')")),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
@@ -101,3 +106,5 @@ class Journal(Base):
     client_create_id: Mapped[PythonUUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, unique=True)
     create_payload_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_blocks: Mapped[list | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    content_doc: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    journal_kind: Mapped[str] = mapped_column(Text, nullable=False, default='writing', server_default='writing')

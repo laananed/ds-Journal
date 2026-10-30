@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from app.writing.service import (require_revision, WriteConflict, create_hash, verify_create_replay, validate_blocks, writing_changes, cleanup_private_ai)
+from app.writing.service import (require_revision, WriteConflict, document_content, create_hash, verify_create_replay, validate_blocks, writing_changes, cleanup_private_ai)
 
 from app.folder.models import Folder, folder_fk_violation
 from app.insight.models import Insight
@@ -45,6 +45,7 @@ from app.insight.schemas import (
     InsightCreate,
     InsightPage,
     InsightResponse,
+    InsightDetail,
     InsightUpdate,
 )
 
@@ -89,9 +90,12 @@ def build_insight_display_title(title: str | None) -> str:
     return title  # type: ignore[return-value]
 
 
-def _to_response(insight: Insight) -> InsightResponse:
+def _to_response(insight: Insight, *, detail=False) -> InsightResponse:
     """把 ORM 行投影成完整响应。"""
-    return InsightResponse(
+    doc = insight.content_doc
+    return (InsightDetail if detail else InsightResponse)(
+        **({'content_doc': doc, 'document_schema_version': 1 if doc is not None else None,
+            'document_format': 'tiptap' if doc is not None else 'legacy'} if detail else {}),
         type="insight",
         id=insight.id,
         revision=insight.revision,
@@ -143,8 +147,9 @@ def create_insight(db: Session, data: InsightCreate) -> InsightResponse:
                 return response
         if data.folder_id is not None and not _folder_exists(db, data.folder_id):
             raise FolderNotFoundError(f"Folder {data.folder_id} does not exist")
-        content = data.content
-        row = Insight(title=data.title, content=content, folder_id=data.folder_id, client_create_id=data.client_create_id,
+        doc = data.content_doc if 'content_doc' in data.model_fields_set else None
+        content = document_content(doc) if doc is not None else data.content
+        row = Insight(title=data.title, content=content, content_doc=doc, folder_id=data.folder_id, client_create_id=data.client_create_id,
                       create_payload_hash=payload_hash if data.client_create_id else None)
         db.add(row)
         db.commit()
@@ -232,7 +237,7 @@ def get_insight(db: Session, insight_id: int) -> InsightResponse | None:
     insight = _get_active_insight(db, insight_id)
     if insight is None:
         return None
-    return _to_response(insight)
+    return _to_response(insight, detail=True)
 
 
 def update_insight(db: Session, insight_id: int, data: InsightUpdate) -> InsightResponse | None:
@@ -253,7 +258,7 @@ def update_insight(db: Session, insight_id: int, data: InsightUpdate) -> Insight
         result = db.execute(update(Insight).where(Insight.id == insight_id,
             Insight.revision == data.expected_revision, Insight.deleted_at.is_(None))
             .values(**changes, revision=Insight.revision + 1,
-                    updated_at=Insight.updated_at if changes.keys() == {"content_blocks"} else _utcnow())
+                    updated_at=Insight.updated_at if row.content_doc is None and changes.keys() == {"content_doc"} else _utcnow())
             .execution_options(synchronize_session=False))
         if result.rowcount == 0:
             db.expire_all()

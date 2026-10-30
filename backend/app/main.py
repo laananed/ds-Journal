@@ -1,4 +1,5 @@
 from app.ai import models as _ai_models  # noqa: F401
+from app.ritual import models as _ritual_models  # noqa: F401
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,6 +11,7 @@ from app.folder.router import router as folder_router
 from app.inbox import models as _inbox_models  # noqa: F401
 from app.insight import models as _insight_models  # noqa: F401
 from app.journal.router import router as journal_router
+from app.ritual.router import router as ritual_router
 from app.inbox.router import router as inbox_router
 from app.insight.router import router as insight_router
 from app.trash.router import router as trash_router
@@ -54,6 +56,7 @@ app.add_middleware(
 )
 
 app.include_router(journal_router)
+app.include_router(ritual_router)
 app.include_router(inbox_router)
 app.include_router(insight_router)
 app.include_router(folder_router)
@@ -78,7 +81,12 @@ from app.writing.router import router as writing_router
 
 @app.exception_handler(WritingError)
 async def writing_error_response(request, error):
-    return JSONResponse(status_code=error.status_code, content={"detail": str(error)})
+    body = {"detail": str(error)}
+    if getattr(error, 'code', None):
+        body['code'] = error.code
+    if getattr(error, 'code', None) == 'ritual_slot_conflict':
+        body['conflict'] = {'current_id': error.current_id, 'revision': error.revision}
+    return JSONResponse(status_code=error.status_code, content=body)
 
 
 @app.exception_handler(RequestValidationError)

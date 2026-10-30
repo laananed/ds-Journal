@@ -22,6 +22,7 @@ from app.folder import models  # noqa: F401
 from app.inbox import models  # noqa: F401
 from app.insight import models  # noqa: F401
 from app.journal import models  # noqa: F401
+from app.ritual import models  # noqa: F401
 
 # Alembic Config 对象，对应正在使用的 alembic.ini。
 config = context.config

@@ -6,7 +6,7 @@ from app.inbox.models import Inbox
 from app.insight.models import Insight
 from app.insight.service import build_insight_display_title
 from app.journal.models import Journal
-from app.journal.titles import build_display_title, numbered_subquery, untitled_predicate
+from app.journal.titles import numbered_subquery, untitled_predicate
 from app.link.schemas import JournalLinkCandidate, LinkCandidate, LinkPage
 
 PAGE_SIZE = 20
@@ -17,6 +17,8 @@ def _candidates():
     day = cast(Journal.journal_date, String)
     journal_display = case(
         (~untitled_predicate(Journal.title), Journal.title),
+        (Journal.journal_kind == 'set', literal('开始今天 ') + day),
+        (Journal.journal_kind == 'end', literal('结束今天 ') + day),
         (numbered.c.seq > 1, day + literal(' (') + cast(numbered.c.seq, String) + literal(')')),
         else_=day,
     )
@@ -53,7 +55,6 @@ def resolve_links(db: Session, title: str, page: int = 1) -> LinkPage:
         fields = dict(type=row.type, id=row.id, title=row.title,
                       display_title=row.display_title, created_at=row.created_at)
         if row.type == 'journal':
-            fields['display_title'] = build_display_title(row.title, row.journal_date, row.seq)
             items.append(JournalLinkCandidate(**fields, journal_date=row.journal_date))
         else:
             items.append(LinkCandidate(**fields))

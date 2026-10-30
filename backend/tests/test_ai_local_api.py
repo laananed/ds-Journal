@@ -53,7 +53,7 @@ def local_env(monkeypatch):
     def counts():
         with engine.connect() as c:
             assert c.scalar(text('select current_database()')) == get_test_database_name()
-            assert c.scalar(text('select version_num from alembic_version')) == '3aa16300a58a'
+            assert c.scalar(text('select version_num from alembic_version')) == '9e7a6c42d011'
             return {t: c.scalar(text('select count(*) from ' + t)) for t in BUSINESS_TABLES}
     baseline = counts()
     with Session(engine) as db:

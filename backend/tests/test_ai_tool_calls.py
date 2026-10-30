@@ -485,7 +485,7 @@ def tool_env(monkeypatch):
     def counts():
         with engine.connect() as connection:
             assert connection.scalar(text("select current_database()")) == get_test_database_name()
-            assert connection.scalar(text("select version_num from alembic_version")) == "3aa16300a58a"
+            assert connection.scalar(text("select version_num from alembic_version")) == "9e7a6c42d011"
             return {table: connection.scalar(text("select count(*) from " + table))
                     for table in BUSINESS_TABLES}
 
@@ -540,7 +540,7 @@ def tool_env(monkeypatch):
             if usage_owned:
                 db.execute(delete(AIUsage).where(AIUsage.id.in_(usage_owned)))
             if settings_created:
-                db.execute(delete(AISettings))
+                db.execute(delete(AISettings).where(AISettings.id == 1))
             db.commit()
         assert counts() == baseline
 

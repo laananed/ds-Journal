@@ -14,6 +14,8 @@ as found.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass, field
+from uuid import UUID
 import os
 import socket
 import subprocess
@@ -25,7 +27,7 @@ import urllib.request
 from pathlib import Path
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import delete, text
 from sqlalchemy.orm import Session
 
 from app.ai.settings import SEARCH_KEY_ENV
@@ -67,26 +69,37 @@ def _request(method: str, port: int, path: str, payload=None):
         return error.code, json.loads(body) if body else None
 
 
-def _cleanup() -> None:
-    """Remove every row this module committed.
+@dataclass
+class LiveServer:
+    port: int
+    journal_ids: set[int] = field(default_factory=set)
+    request_ids: set[UUID] = field(default_factory=set)
+    usage_ids: set[UUID] = field(default_factory=set)
+    settings_created: bool = False
 
-    Unlike the in-process tests, a real HTTP write is really committed, so the
-    teardown has to delete it. ``ai_usage`` and ``ai_requests`` are removed
-    first: the ledger row is intentionally *not* cascaded away when its source
-    journal disappears, which is exactly the behaviour the product wants but
-    would otherwise leave rows behind here.
-    """
+
+def _cleanup(server: LiveServer) -> None:
+    """Remove only rows explicitly created by this test's HTTP process."""
+    from app.ai.models import AIRequest, AISettings, AIUsage
+    from app.journal.models import Journal
+
     with engine.begin() as connection:
-        connection.execute(text("DELETE FROM ai_usage"))
-        connection.execute(text("DELETE FROM ai_requests"))
-        connection.execute(text("DELETE FROM ai_settings"))
-        connection.execute(text("DELETE FROM journals"))
+        if server.usage_ids:
+            connection.execute(delete(AIUsage).where(AIUsage.id.in_(server.usage_ids)))
+        if server.request_ids:
+            connection.execute(delete(AIRequest).where(AIRequest.id.in_(server.request_ids)))
+        if server.settings_created:
+            connection.execute(delete(AISettings).where(
+                AISettings.id == 1, AISettings.custom_prompt.in_(["真的 HTTP", "改了"])))
+        if server.journal_ids:
+            connection.execute(delete(Journal).where(Journal.id.in_(server.journal_ids)))
 
 
 @pytest.fixture
 def live_server():
     """One real uvicorn process bound to loopback and to seekjournal_test."""
     port = _free_port()
+    server = LiveServer(port)
     log_path = Path(tempfile.gettempdir()) / f"seekjournal-s3t03-uvicorn-{port}.log"
     with log_path.open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
@@ -112,7 +125,7 @@ def live_server():
                 tail = log_path.read_text(encoding="utf-8", errors="replace")[-600:]
                 raise AssertionError(
                     f"uvicorn did not become ready (exit={process.poll()}): {tail}")
-            yield port
+            yield server
         finally:
             process.terminate()
             try:
@@ -120,9 +133,16 @@ def live_server():
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=10)
-            _cleanup()
+            _cleanup(server)
     # Closed above; the file is removed only after the handle is released.
-    log_path.unlink(missing_ok=True)
+    for attempt in range(10):
+        try:
+            log_path.unlink(missing_ok=True)
+            break
+        except PermissionError:
+            if attempt == 9:
+                raise
+            time.sleep(0.2)
 
 
 def _usage(port: int) -> dict[str, int]:
@@ -159,7 +179,7 @@ def test_http_module_leaves_the_shared_test_database_empty():
 
 
 def test_http_settings_lifecycle_over_a_real_socket(live_server):
-    port = live_server
+    port = live_server.port
     status, first = _request("GET", port, "/api/ai/settings")
     assert status == 200
     assert first == {"custom_prompt": "", "web_enabled": True, "revision": 0,
@@ -168,6 +188,8 @@ def test_http_settings_lifecycle_over_a_real_socket(live_server):
 
     status, created = _request("PATCH", port, "/api/ai/settings",
                               {"expected_revision": 0, "custom_prompt": "真的 HTTP"})
+    if status == 200:
+        live_server.settings_created = True
     assert status == 200 and created["revision"] == 1
     assert created["custom_prompt"] == "真的 HTTP"
 
@@ -201,20 +223,24 @@ def test_http_file_calls_uses_typed_identity_over_a_real_socket(live_server):
 
     from app.ai.models import AIRequest, AIUsage
 
-    port = live_server
+    port = live_server.port
     before = _usage(port)
     status, journal = _request("POST", port, "/api/journals",
                                {"content": "synthetic http source",
                                 "journal_date": "2026-10-10"})
     assert status == 201
+    live_server.journal_ids.add(journal["id"])
     request_id = uuid4()
+    usage_id = uuid4()
+    live_server.request_ids.add(request_id)
+    live_server.usage_ids.add(usage_id)
     with Session(bind=engine) as session:
         session.add(AIRequest(id=request_id, kind="local", payload_hash="http-hash",
                               status="applied",
                               sources=[{"type": "journal", "id": journal["id"],
                                         "revision": 1, "user_text": "private snapshot"}],
                               settings={}, question="private question"))
-        session.add(AIUsage(request_id=request_id, subcall_index=0, metering="known",
+        session.add(AIUsage(id=usage_id, request_id=request_id, subcall_index=0, metering="known",
                             prompt_tokens=5, completion_tokens=6, total_tokens=11,
                             search_requests=1))
         session.commit()
@@ -241,7 +267,7 @@ def test_http_file_calls_uses_typed_identity_over_a_real_socket(live_server):
 
 def test_http_server_reports_unconfigured_model_instead_of_calling_out(live_server):
     """No key in the server environment: the status says so, and nothing is sent."""
-    port = live_server
+    port = live_server.port
     status, payload = _request("GET", port, "/api/ai/settings")
 
     assert status == 200 and payload["model_configured"] is False
@@ -250,3 +276,23 @@ def test_http_server_reports_unconfigured_model_instead_of_calling_out(live_serv
                     {"expected_revision": 0, "base_url": "http://evil.test"})[0] == 422
     assert _request("PATCH", port, "/api/ai/settings",
                     {"expected_revision": 0, "api_key": SECRET})[0] == 422
+
+
+def test_cleanup_preserves_rows_not_owned_by_the_http_test(stage3_engine, monkeypatch):
+    """An unrelated synthetic row in the private schema must survive teardown."""
+    from datetime import date
+    from app.journal.models import Journal
+    import sys
+
+    monkeypatch.setattr(sys.modules[__name__], "engine", stage3_engine)
+    with Session(bind=stage3_engine) as session:
+        owned = Journal(content="owned synthetic", journal_date=date(2026, 10, 10))
+        unrelated = Journal(content="unrelated synthetic", journal_date=date(2026, 10, 11))
+        session.add_all([owned, unrelated])
+        session.commit()
+        owned_id, unrelated_id = owned.id, unrelated.id
+    server = LiveServer(0, journal_ids={owned_id})
+    _cleanup(server)
+    with Session(bind=stage3_engine) as session:
+        assert session.get(Journal, owned_id) is None
+        assert session.get(Journal, unrelated_id) is not None

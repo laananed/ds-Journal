@@ -28,6 +28,7 @@ from app.insight.schemas import (
     InsightCreate,
     InsightPage,
     InsightResponse,
+    InsightDetail,
     InsightUpdate,
 )
 
@@ -37,7 +38,7 @@ _NOT_FOUND = "Insight not found"
 _FOLDER_NOT_FOUND = "Folder not found"
 
 
-@router.post("", response_model=InsightResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=InsightDetail, status_code=status.HTTP_201_CREATED)
 def create_insight(
     payload: InsightCreate,
     response: Response,
@@ -81,7 +82,7 @@ def list_insights(
     return service.list_insights(db, folder_id=folder_id, page=page)
 
 
-@router.get("/{id}", response_model=InsightResponse, status_code=status.HTTP_200_OK)
+@router.get("/{id}", response_model=InsightDetail, status_code=status.HTTP_200_OK)
 def get_insight(
     id: int,
     db: Session = Depends(get_db),
@@ -101,7 +102,7 @@ def get_insight(
     return insight
 
 
-@router.patch("/{id}", response_model=InsightResponse, status_code=status.HTTP_200_OK)
+@router.patch("/{id}", response_model=InsightDetail, status_code=status.HTTP_200_OK)
 def update_insight(
     id: int,
     payload: InsightUpdate,

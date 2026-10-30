@@ -1,4 +1,5 @@
 import type { ContentFile, FilePage } from './file'
+import type { ContentDocument } from './document'
 
 /**
  * Insight 是三类文件里字段最少的一种：**没有所属日期**，
@@ -6,6 +7,9 @@ import type { ContentFile, FilePage } from './file'
  */
 export interface Insight extends ContentFile {
   type: 'insight'
+  content_doc?: ContentDocument | null
+  document_schema_version?: 1 | null
+  document_format?: 'legacy' | 'tiptap'
 }
 export type InsightPage = FilePage<Insight>
 
@@ -16,7 +20,9 @@ export type InsightPage = FilePage<Insight>
  * **没有**类似 Inbox 的「省略即用业务日期做默认标题」规则。
  */
 export interface InsightCreate {
-  content: string
+  content?: string
+  content_doc?: ContentDocument
+  document_schema_version?: 1
   title?: string | null
   folder_id?: number | null
   client_create_id?: string
@@ -26,6 +32,8 @@ export interface InsightCreate {
 export interface InsightUpdateFields {
   title?: string | null
   content?: string
+  content_doc?: ContentDocument
+  document_schema_version?: 1
   folder_id?: number | null
 }
 

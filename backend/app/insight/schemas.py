@@ -27,7 +27,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, PrivateAttr, field_validator
+from pydantic import BaseModel, ConfigDict, PrivateAttr, field_validator, model_validator
 from uuid import UUID
 from app.writing.schemas import Revision
 
@@ -53,11 +53,27 @@ class InsightCreate(BaseModel):
     """
 
     title: str | None = None
-    content: str
+    content: str = None
+    content_doc: dict = None
+    document_schema_version: Literal[1] = None
     folder_id: int | None = None
 
     _check_title = field_validator("title")(_validate_title)
     _check_content = field_validator("content")(_validate_content)
+
+    @model_validator(mode='before')
+    @classmethod
+    def check_document_body(cls, data):
+        if isinstance(data, dict):
+            if 'content_blocks' in data:
+                raise ValueError('blocks are not supported for Insight creation')
+            if ('content' in data) == ('content_doc' in data):
+                raise ValueError('exactly one body is required')
+            if 'content_doc' in data and set(data) - set(cls.model_fields):
+                raise ValueError('unknown structured writing fields')
+            if 'document_schema_version' in data and 'content_doc' not in data:
+                raise ValueError('document_schema_version requires content_doc')
+        return data
 
 
 class InsightUpdate(BaseModel):
@@ -97,6 +113,9 @@ class InsightUpdate(BaseModel):
     # 默认值不参与验证，所以省略字段合法；
     # 但显式提交 null 时仍按注解 str 验证，因此会被拒绝。
     content: str = None
+    content_blocks: list = None
+    content_doc: dict = None
+    document_schema_version: Literal[1] = None
 
     # folder_id 用普通可选字段：显式 null 是有意义的（移出 Folder），
     # 不能写成「非 Optional 注解 + None 默认值」。
@@ -106,6 +125,18 @@ class InsightUpdate(BaseModel):
     # 因此下面的校验天然满足「省略字段不变、只校验实际提交字段」。
     _check_title = field_validator("title")(_validate_title)
     _check_content = field_validator("content")(_validate_content)
+
+    @model_validator(mode='before')
+    @classmethod
+    def check_document_body(cls, data):
+        if isinstance(data, dict):
+            if len({'content', 'content_doc', 'content_blocks'} & set(data)) > 1:
+                raise ValueError('body representations are mutually exclusive')
+            if 'content_doc' in data and set(data) - set(cls.model_fields):
+                raise ValueError('unknown structured writing fields')
+            if 'document_schema_version' in data and 'content_doc' not in data:
+                raise ValueError('document_schema_version requires content_doc')
+        return data
 
 
 class InsightResponse(BaseModel):
@@ -139,6 +170,13 @@ class InsightResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
+
+
+class InsightDetail(InsightResponse):
+    content_blocks: None = None
+    content_doc: dict | None = None
+    document_schema_version: Literal[1] | None = None
+    document_format: Literal['legacy', 'tiptap'] = 'legacy'
 
 
 class InsightPage(BaseModel):

@@ -32,7 +32,7 @@ DAY = date(2026, 10, 2)
 CREATED_AT = datetime(2026, 10, 2, 14, 30, tzinfo=timezone.utc)
 UPDATED_AT = datetime(2026, 10, 2, 15, 45, tzinfo=timezone.utc)
 
-CREATE_FIELDS = {"title", "content", "journal_date", "folder_id", "client_create_id", "content_blocks"}
+CREATE_FIELDS = {"title", "content", "journal_date", "folder_id", "client_create_id", "content_blocks", "content_doc", "document_schema_version", "journal_kind", "draft_started_at"}
 
 # Stage 2 / S2-T02：完整响应为十个字段。
 RESPONSE_FIELDS = {
@@ -46,7 +46,7 @@ RESPONSE_FIELDS = {
     "created_at",
     "updated_at",
     "deleted_at",
-"revision"}
+"revision", "journal_kind"}
 
 # 必填字段（没有默认值）：缺一个就必须报错。
 REQUIRED_RESPONSE_FIELDS = {
@@ -329,6 +329,10 @@ def test_create_dump_contains_only_the_contract_fields():
         "folder_id": None,
         "client_create_id": None,
         "content_blocks": None,
+        "content_doc": None,
+        "document_schema_version": None,
+        "journal_kind": "writing",
+        "draft_started_at": None,
     }
 
 

@@ -85,3 +85,4 @@ class Insight(Base):
     revision: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1, server_default="1")
     client_create_id: Mapped[PythonUUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, unique=True)
     create_payload_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_doc: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), nullable=True)

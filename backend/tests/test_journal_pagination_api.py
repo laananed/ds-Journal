@@ -67,7 +67,7 @@ RESPONSE_FIELDS = {
     "created_at",
     "updated_at",
     "deleted_at",
-"revision"}
+"revision", "journal_kind"}
 
 PAGE_SIZE = 20
 
@@ -828,7 +828,7 @@ def test_legacy_illegal_records_are_readable_in_the_new_envelope(api):
     for journal in (blank, oversized_title, oversized_content):
         detail = client.get(_detail_url(journal.id))
         assert detail.status_code == 200
-        assert set(detail.json()) == RESPONSE_FIELDS | {"content_blocks"}
+        assert set(detail.json()) == RESPONSE_FIELDS | {"content_blocks", "content_doc", "document_schema_version", "document_format"}
 
 
 # ==========================================================================

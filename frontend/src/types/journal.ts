@@ -1,11 +1,17 @@
 import type { ContentFile, FilePage } from './file'
 import type { Block } from './writing'
+import type { ContentDocument, JournalKind } from './document'
 /** 日期与时间保留服务器字符串，避免业务日期时区偏移。 */
 export interface Journal extends ContentFile {
   type: 'journal'
   journal_date: string
   /** 仅在详情响应里出现；普通列表不返回 blocks。 */
   content_blocks?: Block[] | null
+  /** Stage 4 fields are optional until the backend transition is implemented. */
+  journal_kind?: JournalKind
+  content_doc?: ContentDocument | null
+  document_schema_version?: 1 | null
+  document_format?: 'legacy' | 'tiptap'
 }
 export type JournalPage = FilePage<Journal>
 
@@ -19,6 +25,10 @@ export interface JournalCreate {
   title?: string | null
   content?: string
   content_blocks?: Block[]
+  content_doc?: ContentDocument
+  document_schema_version?: 1
+  journal_kind?: JournalKind
+  draft_started_at?: string
   journal_date: string
   folder_id?: number | null
   client_create_id?: string
@@ -34,6 +44,8 @@ export interface JournalUpdateFields {
   title?: string | null
   content?: string
   content_blocks?: Block[]
+  content_doc?: ContentDocument
+  document_schema_version?: 1
   journal_date?: string
   folder_id?: number | null
 }

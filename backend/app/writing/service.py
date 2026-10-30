@@ -17,6 +17,35 @@ class WriteConflict(WritingError):
     status_code = 409
 
 
+class LegacyConversionRequired(WriteConflict):
+    code = 'legacy_conversion_required'
+
+
+def document_content(document, old_document=None):
+    """Validate untrusted client documents and return the server's projection.
+
+    Comment references are rejected until a file-scoped database ownership
+    check exists. Pure UUID validation must never be treated as ownership.
+    """
+    from app.writing.documents import DocumentError, project_document, validate_author_changes
+    from app.journal.schemas import _validate_content
+
+    def has_comments(node):
+        return (any(m.get('type') == 'mindComment' for m in node.get('marks', []))
+                or any(has_comments(c) for c in node.get('content', [])))
+    try:
+        from app.writing.documents import validate_document
+        validate_document(document)
+        if has_comments(document):
+            raise DocumentError('comment ownership validation is unavailable')
+        validate_author_changes(old_document or {'type': 'doc', 'content': []}, document)
+        result = project_document(document)
+        _validate_content(result)
+        return result
+    except (DocumentError, ValueError) as error:
+        raise WritingError(str(error)) from error
+
+
 def require_revision(revision):
     if revision is None:
         raise PreconditionRequired("expected_revision or If-Match is required")
@@ -25,7 +54,10 @@ def require_revision(revision):
 
 def create_hash(data):
     # Defaults and omission have equal meaning except Inbox's omitted title.
-    body = data.model_dump(mode="json", exclude={"client_create_id"})
+    # Preserve Stage 3 hashes when newly introduced fields were omitted.
+    extras = {'content_doc', 'document_schema_version', 'journal_kind', 'draft_started_at'}
+    omitted = extras - data.model_fields_set
+    body = data.model_dump(mode="json", exclude={"client_create_id"} | omitted)
     if "inbox_date" in body and "title" not in data.model_fields_set:
         body["title"] = body["inbox_date"]
     return hashlib.sha256(json.dumps(body, ensure_ascii=False, sort_keys=True,
@@ -72,6 +104,8 @@ def insert_ai_reply(row, reply, request_id, captured_blocks):
     The caller has already locked/checked the source. Preserve existing user
     IDs and the preallocated empty continuation. Convert NULL only on success.
     """
+    if getattr(row, 'content_doc', None) is not None:
+        raise LegacyConversionRequired('legacy AI operations cannot modify a structured document')
     from copy import deepcopy
     from datetime import datetime, timezone
     from uuid import uuid4
@@ -144,15 +178,39 @@ def validate_blocks(blocks, *, old_blocks=None, old_content=None):
 
 
 def writing_changes(row, data):
-    changes = data.model_dump(mode="python", exclude_unset=True, exclude={"expected_revision"})
-    if "content" in changes and getattr(row, "content_blocks", None) is not None:
+    changes = data.model_dump(mode="python", exclude_unset=True, exclude={"expected_revision", "document_schema_version"})
+    current_doc = getattr(row, 'content_doc', None)
+    if current_doc is not None and ({'content', 'content_blocks'} & changes.keys()):
+        raise LegacyConversionRequired('legacy body cannot replace a structured document')
+    if 'content_blocks' in changes and not hasattr(row, 'content_blocks'):
+        raise LegacyConversionRequired('blocks are not supported for this file')
+    if 'content_doc' in changes:
+        candidate = changes['content_doc']
+        if current_doc is None:
+            blocks = getattr(row, 'content_blocks', None)
+            from app.writing.documents import DocumentError, validate_document
+            try:
+                validate_document(candidate)
+            except DocumentError as error:
+                raise WritingError(str(error)) from error
+            nodes = candidate.get('content', []) if isinstance(candidate, dict) else []
+            if (blocks is not None or len(nodes) != 1 or not isinstance(nodes[0], dict)
+                    or nodes[0].get('type') != 'legacyText'
+                    or nodes[0].get('attrs', {}).get('raw_text') != row.content
+                    or nodes[0].get('attrs', {}).get('author') != 'user'):
+                raise LegacyConversionRequired('legacy body requires safe conversion')
+            # Exact legacy conversion is a server-controlled identity transition.
+            changes['content'] = row.content
+        else:
+            changes['content'] = document_content(candidate, current_doc)
+    if "content" in changes and 'content_doc' not in changes and getattr(row, "content_blocks", None) is not None:
         raise WriteConflict("structured files must be edited using content_blocks")
     if "content_blocks" in changes:
         blocks = data.model_dump(mode="json", exclude_unset=True)["content_blocks"]
         changes["content_blocks"] = blocks
         changes["content"] = validate_blocks(blocks, old_blocks=row.content_blocks,
                                                old_content=row.content)
-    return {key: value for key, value in changes.items() if getattr(row, key) != value}
+    return {key: value for key, value in changes.items() if getattr(row, key, None) != value}
 
 
 def cleanup_private_ai(db, file_type, file_id):
@@ -180,6 +238,8 @@ def delete_ai_block(db, file_type, file_id, block_id, expected_revision):
                         .execution_options(populate_existing=True))
         if row is None:
             return False
+        if getattr(row, 'content_doc', None) is not None:
+            raise LegacyConversionRequired('legacy AI operations cannot modify a structured document')
         if row.revision != expected_revision:
             raise WriteConflict("file revision has changed")
         block = next((b for b in row.content_blocks or [] if b["id"] == block_id), None)

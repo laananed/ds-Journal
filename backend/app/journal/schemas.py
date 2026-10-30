@@ -24,9 +24,9 @@ Stage 2 / S2-T02 按新契约调整：
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 # --------------------------------------------------------------------------
 # Stage 1.5 / S1.5-T2：请求输入校验
@@ -118,8 +118,22 @@ class JournalCreate(StructuredCreate):
     journal_date: date
     folder_id: int | None = None
     client_create_id: UUID | None = None
+    content_doc: dict = None
+    document_schema_version: Literal[1] = None
+    journal_kind: Literal['writing', 'set', 'end'] = 'writing'
+    draft_started_at: datetime | None = None
     _check_title = field_validator("title")(_validate_title)
     _check_content = field_validator("content")(_validate_content)
+
+    @model_validator(mode='after')
+    def check_ritual_date(self):
+        if self.journal_kind != 'writing':
+            from app.ritual.dates import business_date
+            if self.draft_started_at is None or self.draft_started_at.utcoffset() is None:
+                raise ValueError('ritual requires an aware draft_started_at')
+            if business_date(self.draft_started_at) != self.journal_date:
+                raise ValueError('journal_date does not match draft business date')
+        return self
 
 
 class JournalUpdate(StructuredInput):
@@ -127,8 +141,17 @@ class JournalUpdate(StructuredInput):
     journal_date: date = None
     folder_id: int | None = None
     expected_revision: Revision = None
+    content_doc: dict = None
+    document_schema_version: Literal[1] = None
     _check_title = field_validator("title")(_validate_title)
     _check_content = field_validator("content")(_validate_content)
+
+    @model_validator(mode='before')
+    @classmethod
+    def no_kind_change(cls, data):
+        if isinstance(data, dict) and ('journal_kind' in data or 'draft_started_at' in data):
+            raise ValueError('journal_kind and draft_started_at cannot be changed')
+        return data
 
 
 class JournalResponse(BaseModel):
@@ -140,6 +163,7 @@ class JournalResponse(BaseModel):
     title: str | None
     display_title: str
     content: str
+    journal_kind: Literal['writing', 'set', 'end'] = 'writing'
     journal_date: date
     folder_id: int | None = None
     created_at: datetime
@@ -148,7 +172,11 @@ class JournalResponse(BaseModel):
 
 
 class JournalDetail(JournalResponse):
-    content_blocks: list[Block] | None = None
+    # Historical JSON is returned verbatim; strict Block validation applies only to input.
+    content_blocks: Any = None
+    content_doc: dict | None = None
+    document_schema_version: Literal[1] | None = None
+    document_format: Literal['legacy', 'tiptap'] = 'legacy'
 
 
 class JournalPage(BaseModel):

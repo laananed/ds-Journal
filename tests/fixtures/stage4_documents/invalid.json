@@ -1,0 +1,4 @@
+[
+  {"id":"unknown-node","input":{"type":"doc","content":[{"type":"script"}]},"valid":false,"error":"invalid node type or parent"},
+  {"id":"unsafe-link","input":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"x","marks":[{"type":"link","attrs":{"href":"javascript:alert(1)"}}]}]}]},"valid":false,"error":"unsafe link"}
+]

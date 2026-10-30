@@ -1,0 +1,7 @@
+[
+  {"id":"unicode-and-hardbreak","input":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"你好😀"},{"type":"hardBreak"},{"type":"text","text":"第二行"}]}]},"R":"你好😀\n第二行","U":"你好😀\n第二行"},
+  {"id":"legacy-user-exact","input":{"type":"doc","content":[{"type":"legacyText","attrs":{"id":"11111111-1111-4111-8111-111111111111","author":"user","raw_text":"a\n\nb\n"}}]},"R":"a\n\nb\n","U":"a\n\nb\n"},
+  {"id":"heading-list-mark","input":{"type":"doc","content":[{"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"标题"}]},{"type":"bulletList","content":[{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"重要","marks":[{"type":"bold"}]}]}]}]}]},"R":"## 标题\n- **重要**","U":"标题\n重要"},
+  {"id":"ai-author","input":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"用户😀"}]},{"type":"aiReply","attrs":{"id":"11111111-1111-4111-8111-111111111111","request_id":"22222222-2222-4222-8222-222222222222"},"content":[{"type":"paragraph","content":[{"type":"text","text":"回复"}]}]},{"type":"paragraph","content":[{"type":"text","text":"继续"}]}]},"R":"用户😀\n\n> AI 回复\n> 回复\n\n\n继续","U":"用户😀\n继续"},
+  {"id":"legacy-ai","input":{"type":"doc","content":[{"type":"legacyText","attrs":{"id":"11111111-1111-4111-8111-111111111111","author":"ai","raw_text":"一\n二"}}]},"R":"\n> AI 旧内容\n> 一\n> 二","U":""}
+]

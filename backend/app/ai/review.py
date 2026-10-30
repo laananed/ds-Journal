@@ -15,7 +15,7 @@ from app.ai.models import AIRequest, AIUsage, AICheckpoint
 from app.ai.prompts import review_messages
 from app.ai.requests import recover_pending, request_response, RequestNotFound
 from app.ai.schemas import StructuredReview
-from app.writing.service import WritingError, WriteConflict
+from app.writing.service import WritingError, WriteConflict, LegacyConversionRequired
 
 
 def lock_sources(db, sources):
@@ -24,7 +24,7 @@ def lock_sources(db, sources):
 
 
 def matches(row, source):
-    return (active(row) and row.revision == source['revision']
+    return (active(row) and getattr(row, 'content_doc', None) is None and row.revision == source['revision']
             and user_text(row.content_blocks, row.content) == source['user_text']
             and row.content_blocks == source['blocks']
             and row.title == source['title'] and row.folder_id == source['folder_id']
@@ -77,6 +77,8 @@ def register_review(db, payload):
     captured = []
     for source, row in lock_sources(db, [s.model_dump(mode='json') for s in payload.sources]):
         if not active(row): raise RequestNotFound('File not found')
+        if getattr(row, 'content_doc', None) is not None:
+            raise LegacyConversionRequired('legacy AI cannot process a structured document')
         if row.revision != source['expected_revision']: raise WriteConflict('file revision has changed')
         if db.scalar(select(AIRequest.id).where(AIRequest.status == 'pending',
                 AIRequest.sources.contains([{'type':source['type'],'id':source['id']}]))) is not None:

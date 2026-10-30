@@ -58,6 +58,8 @@ R 从 JSON 确定性生成，基础结构用安全 Markdown 表达、AI 段保�
 
 按文档存储顺序取真实用户段、答案、Set 目标文字；排除 AI、占位、问题模板、End 镜像、系统标题、评论和格式属性。原生块间采用确定的 `\n` 分界，hardBreak 为 `\n`，list 层级不引入虚构事实；legacyText 段原文和原边界逐字保留，由转换适配器明确拼接。checked、Mark、展示置底不改 U。不能按 UTF-16 code unit 实现 Python/TS 不同的码点边界。
 
+T01 投影约定：原生用户块按顺序以单个换行连接，空用户段仍保留其边界，被排除的 AI/系统块不产生用户分隔符。单个 user legacyText 在 R 与 U 中均逐字保留；AI legacyText 保留原始属性、在 R 加 AI 标识且不进入 U。R 的顶层块以单个换行连接，基础格式输出安全 Markdown，AI 回复和总结输出来源标识。四份共享 fixtures 与其散列以实际交接版本为准。
+
 C 沿用 consumed_user_text：无 C 首次读取 U；U 以 C 为前缀只取后缀，否则最长公共前缀后的当前内容为修订。保留纯删除/空白/独立问题和上下文边界；不把问题或旧总结写入 U。Go Deeper apply 时 C=调用快照 U，不包括下方续写；失败/冲突/unknown/删除回复不推进/回退 C。完整复盘保留生成成功且源一致时 ready+C 原子提交语义；Minds 不修改这份 C。
 
 转换时必须同时验证 R、U、C、节点来源和引用：能证明映射则转换 C 的相应边界且保持原分析语义；不能证明则在 schema 1 的 legacyText/AI 容器中保留旧段与原 C，U 仍等于旧作者提取结果。不直接清 C、写 C=新全文或自动重发。旧引用文本/请求快照保留原格式标识，恢复时不能把不同投影版本当成同一源。
@@ -134,7 +136,7 @@ apply 再进入文件队列：保存到序号屏障、锁有效源/请求，验�
 
 同一请求使用当前用户快照和全篇/选区范围，三个固定预置由提示词常量定义，不建自定义 Mind 模型表。一个请求统一返回多个合规评论，不为每个预置暗中独立发起功能请求；受限搜索工具与子调用预算沿用 Stage 3。
 
-评论锚点为稳定文本节点 ID、Unicode 半开范围、quote 与摘要，不能只用绝对编辑器 offset 或全文字符串首次匹配。apply 校验当前节点对应 quote；无法证明位置时落库 unavailable 侧栏结果，不挂错误 Mark。前端 Mark 的 ProseMirror transaction 映射用于正常编辑跟踪，不能替代后端来源/quote 校验。多个评论用 comment_ids 集合分段表达，Mark 不存正文。
+评论锚点使用稳定用户 paragraph/heading 块 ID、块内 Unicode 码点半开范围、quote 与摘要，不能只用绝对编辑器 offset 或全文字符串首次匹配；text 不假定具有可持久 ID，ProseMirror UTF-16 偏移需显式转换。apply 校验当前块对应 quote；无法证明位置时落库 unavailable 侧栏结果，不挂错误 Mark。前端 Mark 的 ProseMirror transaction 映射用于正常编辑跟踪，不能替代后端来源/quote 校验。多个评论用 comment_ids 集合分段表达，Mark 不存正文；UUID 形状校验不替代文件归属查询。
 
 评论存 `ai_comments`，journal_id FK（源永删 CASCADE）、request_id 可空 SET NULL、mind_preset_id、text、quote、anchor JSONB、anchor_state、created_at。软删源保留其恢复数据，普通入口隐藏；删除评论同时清 Mark，usage 不回退。删除锚点不把评论误挂邻近重复词；评论生成不改变 Go Deeper C。
 
@@ -183,7 +185,7 @@ T03 安装前提交精确版本和批准记录，所有 @tiptap 包锁定同一�
 
 接在当前单 head 之后新增线性 revision，具体 ID 由实施工具生成后登记，不编造 ID、不改历史 migration。新增字段/表/索引/元数据注册。旧 Journal 全写入 writing，不按标题分类；旧AI/日期/幂等摘要保留。
 
-在隔离合成 schema 中验证 Stage1→Stage3→M4A，包含普通/交错AI/总结、旧空白/超长、Unicode/内部链接/已有C/ready与applied请求；保存各字段/序列/投影摘要。转换采用“先证明原生映射、否则带原作者的原文兼容节点”；所有保留文件可表达为 schema1，不因失败清空。不能安全回填的意外结构使该次转换事务回滚，原文/旧字段仍在，不把迁移标记为成功。
+在隔离合成 schema 中验证 Stage1→Stage3→M4A，包含普通/交错AI/总结、旧空白/超长、Unicode/内部链接/已有C/ready与applied请求；保存各字段/序列/投影摘要。转换采用“先证明原生映射、否则带原作者的原文兼容节点”；所有保留文件最终应可表达为 schema1，不因失败清空。M4A 不代表已经完成全部转换：当前带旧 blocks 的文件仍以 legacy 原样保存并拒绝自动转换；可证明无损的 blocks 兼容映射及检查点 C、引用和 AI 来源的处理，是 T12 收缩删除 `content_blocks` 之前的前置条件。不能安全回填的意外结构使该次转换事务回滚，原文/旧字段仍在，不把迁移标记为成功。
 
 content_doc 成为权威后旧块列只作冻结回退资料，普通旧客户端不能写坏新文；不双向同步旧 blocks 作为第二权威。GET 不懒回填。已成功转换的文件后续真正编辑从 JSON生成 R，旧源码不要求逐字往返，备份保留原貌。
 

@@ -8,7 +8,7 @@ from app.ai.usage import call_payload_hash
 from app.folder.models import Folder, folder_fk_violation
 from app.journal.models import Journal
 from app.journal.service import get_journal
-from app.writing.service import WritingError, WriteConflict, summary_blocks
+from app.writing.service import WritingError, WriteConflict, LegacyConversionRequired, summary_blocks
 
 
 def save_review(db, request_id, payload):
@@ -41,6 +41,8 @@ def save_review(db, request_id, payload):
             if len(locked)!=1 or locked[0][0]['type']!='journal':
                 raise WritingError('append_source requires one Journal')
             row = locked[0][1]
+            if getattr(row, 'content_doc', None) is not None:
+                raise LegacyConversionRequired('legacy AI cannot modify a structured document')
             blocks,content = summary_blocks(payload.markdown,request_id,row.content_blocks,row.content)
             from datetime import datetime, timezone
             row.content_blocks = blocks

@@ -52,7 +52,7 @@ RESPONSE_FIELDS = {
     "created_at",
     "updated_at",
     "deleted_at",
-"revision", "content_blocks"}
+"revision", "content_blocks", "journal_kind", "content_doc", "document_schema_version", "document_format"}
 
 # 只取固定列、按 id 排序的快照 SQL。
 # 用它而不是 ORM 对象，是为了绕开 Session 的 identity map：
@@ -491,4 +491,4 @@ def test_detail_matches_the_same_record_in_the_list(api):
 
     in_detail = client.get(_detail_url(journal.id)).json()
 
-    assert {k: v for k, v in in_detail.items() if k != "content_blocks"} == in_list[0]
+    assert {k: v for k, v in in_detail.items() if k not in {"content_blocks", "content_doc", "document_schema_version", "document_format"}} == in_list[0]

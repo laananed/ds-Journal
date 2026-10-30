@@ -1,0 +1,4 @@
+[
+  {"id":"empty-document","input":{"type":"doc","content":[]},"valid":true},
+  {"id":"task-item","input":{"type":"doc","content":[{"type":"taskList","content":[{"type":"taskItem","attrs":{"checked":false},"content":[{"type":"paragraph"}]}]}]},"valid":true}
+]

@@ -68,7 +68,7 @@ RESPONSE_FIELDS = {
     "created_at",
     "updated_at",
     "deleted_at",
-"revision", "content_blocks"}
+"revision", "content_blocks", "journal_kind", "content_doc", "document_schema_version", "document_format"}
 
 # 只取固定列、按 id 排序的快照 SQL：绕开 identity map，直接读数据库列值。
 _SNAPSHOT_SQL = text(

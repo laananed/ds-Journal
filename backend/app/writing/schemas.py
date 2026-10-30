@@ -33,17 +33,19 @@ class StructuredInput(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def check_body_fields(cls, data):
-        if isinstance(data, dict) and "content_blocks" in data:
-            if "content" in data:
-                raise ValueError("content and content_blocks are mutually exclusive")
+        if isinstance(data, dict) and ("content_blocks" in data or "content_doc" in data):
+            if len({"content", "content_blocks", "content_doc"} & set(data)) > 1:
+                raise ValueError("body representations are mutually exclusive")
             if set(data) - set(cls.model_fields):
                 raise ValueError("unknown structured writing fields")
+        if isinstance(data, dict) and 'document_schema_version' in data and 'content_doc' not in data:
+            raise ValueError('document_schema_version requires content_doc')
         return data
 
 
 class StructuredCreate(StructuredInput):
     @model_validator(mode="after")
     def require_body(self):
-        if not ({"content", "content_blocks"} & self.model_fields_set):
-            raise ValueError("content or content_blocks is required")
+        if not ({"content", "content_blocks", "content_doc"} & self.model_fields_set):
+            raise ValueError("a body is required")
         return self

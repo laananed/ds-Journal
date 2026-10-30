@@ -7,12 +7,12 @@ from sqlalchemy import Date, Integer, delete, func, literal, select, union_all, 
 from sqlalchemy.orm import Session
 
 from app.insight.models import Insight
-from app.insight.schemas import InsightResponse
+from app.insight.schemas import InsightResponse, InsightDetail
 from app.insight.service import build_insight_display_title, get_insight
 from app.journal.models import Journal
 from app.journal.schemas import JournalResponse, JournalDetail
 from app.journal.service import get_journal
-from app.journal.titles import build_display_title, numbered_subquery
+from app.journal.titles import build_kind_display_title, numbered_subquery
 from app.trash.schemas import TrashFilter, TrashItem, TrashPage, TrashType
 
 from app.writing.service import require_revision, WriteConflict, cleanup_private_ai
@@ -27,6 +27,7 @@ def _deleted_statement(kind: TrashType):
         literal(0 if kind == 'journal' else 1).label('type_order'),
         model.id, model.revision, model.title, model.content, model.folder_id,
         model.created_at, model.updated_at, model.deleted_at,
+        (Journal.journal_kind if kind == 'journal' else literal('writing')).label('journal_kind'),
     ]
     if kind == 'journal':
         numbered = numbered_subquery()
@@ -42,8 +43,9 @@ def _to_response(row) -> TrashItem:
         'type', 'id', 'revision', 'title', 'content', 'folder_id', 'created_at', 'updated_at', 'deleted_at'
     )}
     if row.type == 'journal':
-        return JournalResponse(**fields, journal_date=row.business_date,
-                               display_title=build_display_title(row.title, row.business_date, row.seq))
+        title = build_kind_display_title(row.title, row.business_date, row.seq, row.journal_kind)
+        return JournalResponse(**fields, journal_date=row.business_date, journal_kind=row.journal_kind,
+                               display_title=title)
     return InsightResponse(**fields, display_title=build_insight_display_title(row.title))
 
 
@@ -70,9 +72,16 @@ def get_trash(db: Session, type: TrashType, id: int) -> TrashItem | None:
     response = _to_response(row)
     if type == 'journal':
         with db.no_autoflush:
-            blocks = db.scalar(select(Journal.content_blocks).where(Journal.id == id))
-        return JournalDetail(**response.model_dump(), content_blocks=blocks)
-    return response
+            file = db.scalar(select(Journal).where(Journal.id == id))
+        return JournalDetail(**response.model_dump(),
+                             content_blocks=file.content_blocks if file.content_doc is None else None,
+                             content_doc=file.content_doc, document_schema_version=1 if file.content_doc is not None else None,
+                             document_format='tiptap' if file.content_doc is not None else 'legacy')
+    with db.no_autoflush:
+        file = db.scalar(select(Insight).where(Insight.id == id))
+    return InsightDetail(**response.model_dump(), content_doc=file.content_doc,
+                         document_schema_version=1 if file.content_doc is not None else None,
+                         document_format='tiptap' if file.content_doc is not None else 'legacy')
 
 
 def restore_trash(db: Session, type: TrashType, id: int, expected_revision: int | None = None) -> TrashItem | None:

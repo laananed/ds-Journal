@@ -13,10 +13,10 @@ def test_stage3_has_one_new_linear_migration_after_m3():
     scripts = ScriptDirectory.from_config(config)
     heads = scripts.get_heads()
     assert len(heads) == 1
-    head = scripts.get_revision(heads[0])
-    assert head.revision != "18ecf7e09da6", "S3-T01 migration has not been created"
-    assert head.down_revision == "18ecf7e09da6"
-    assert Path(head.path).name.endswith("_stage3_writing_ai.py")
+    stage3 = scripts.get_revision('3aa16300a58a')
+    assert stage3.down_revision == "18ecf7e09da6"
+    assert Path(stage3.path).name.endswith("_stage3_writing_ai.py")
+    assert scripts.get_revision(heads[0]).down_revision == stage3.revision
 
 
 def test_stage1_m3_s3_preserve_all_existing_fields_and_sequences(stage3_schema):

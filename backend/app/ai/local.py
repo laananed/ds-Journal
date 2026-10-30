@@ -23,7 +23,7 @@ from app.ai.requests import RequestNotFound, recover_pending, request_response
 from app.inbox.models import Inbox
 from app.journal.models import Journal
 from app.journal.schemas import _is_blank
-from app.writing.service import WritingError, WriteConflict, insert_ai_reply
+from app.writing.service import WritingError, WriteConflict, LegacyConversionRequired, insert_ai_reply
 
 _slots = BoundedSemaphore(2)
 
@@ -72,6 +72,8 @@ def register(db, payload):
     row = lock_source(db, source)
     if not active(row):
         raise RequestNotFound('File not found')
+    if getattr(row, 'content_doc', None) is not None:
+        raise LegacyConversionRequired('legacy AI cannot process a structured document')
     if row.revision != source['expected_revision']:
         raise WriteConflict('file revision has changed')
     pending = db.scalar(select(AIRequest.id).where(AIRequest.status == 'pending',
@@ -189,7 +191,7 @@ def attach_reply(db, request_id, source, reply):
     if request is None or request.status != 'pending':
         db.rollback()
         return
-    if (not active(row) or row.revision != source['revision']
+    if (not active(row) or getattr(row, 'content_doc', None) is not None or row.revision != source['revision']
             or user_text(row.content_blocks, row.content) != source['user_text']
             or row.content_blocks != source['blocks']):
         request.status = 'conflict'

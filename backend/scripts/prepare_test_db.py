@@ -35,7 +35,7 @@ DEFAULT_TEST_DATABASE_NAME = "seekjournal_test"
 ALLOWED_TEST_DATABASES = ("seekjournal_test", "seekjournal_test_02")
 
 # 当前阶段的全部业务表。新增业务表时同步这个元组。
-BUSINESS_TABLES = ("folders", "journals", "inboxes", "insights", "ai_requests", "ai_checkpoints", "ai_usage", "ai_settings")
+BUSINESS_TABLES = ("folders", "journals", "inboxes", "insights", "ai_requests", "ai_checkpoints", "ai_usage", "ai_settings", "ritual_templates", "ritual_goal_links", "ai_comments")
 
 
 def get_test_database_name() -> str:

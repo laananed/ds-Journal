@@ -28,6 +28,8 @@ class AIRequest(Base):
     error_category: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    auto_dedupe_key: Mapped[str | None] = mapped_column(Text, unique=True)
 
 
 class AICheckpoint(Base):
@@ -62,4 +64,7 @@ class AISettings(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
     custom_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default=text("''"))
     web_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
+    auto_go_deeper: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text('false'))
+    auto_minds_comments: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text('false'))
+    mind_preset_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=lambda: ['gentle_reflection'], server_default=text("'[\"gentle_reflection\"]'::jsonb"))
     revision: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1, server_default=text("1"))

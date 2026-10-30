@@ -1,11 +1,14 @@
 import type { Journal, JournalCreate, JournalUpdate, JournalPage } from '../types/journal'
+import type { JournalKind } from '../types/document'
 
 export class JournalApiError extends Error {
   readonly status: number
-  constructor(status: number, message: string) {
+  readonly code?: string
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.name = 'JournalApiError'
     this.status = status
+    this.code = code
   }
 }
 function getApiBaseUrl(): string {
@@ -19,9 +22,11 @@ export async function listJournals(
   journalDate?: string,
   page = 1,
   signal?: AbortSignal,
+  journalKind: JournalKind | 'all' = 'all',
 ): Promise<JournalPage> {
   const url = new URL(`${getApiBaseUrl()}/api/journals`)
   if (journalDate) url.searchParams.set('journal_date', journalDate)
+  if (journalKind !== 'all') url.searchParams.set('journal_kind', journalKind)
   url.searchParams.set('page', String(page))
   const response = await fetch(url.toString(), { signal })
   if (!response.ok) {
@@ -29,22 +34,23 @@ export async function listJournals(
   }
   return await response.json() as JournalPage
 }
-async function readErrorMessage(response: Response): Promise<string> {
+async function readError(response: Response): Promise<JournalApiError> {
   const fallback = `请求失败（HTTP ${response.status}）`
   try {
     const body: unknown = await response.json()
-    if (typeof body !== 'object' || body === null || !('detail' in body)) return fallback
+    if (typeof body !== 'object' || body === null || !('detail' in body)) return new JournalApiError(response.status, fallback)
+    const code = 'code' in body && typeof body.code === 'string' ? body.code : undefined
     const detail = (body as { detail: unknown }).detail
-    if (typeof detail === 'string') return detail
+    if (typeof detail === 'string') return new JournalApiError(response.status, detail, code)
     if (Array.isArray(detail) && detail.length > 0) {
       const first: unknown = detail[0]
       if (typeof first === 'object' && first !== null && 'msg' in first) {
         const message = (first as { msg: unknown }).msg
-        if (typeof message === 'string') return `请求内容不合法：${message}`
+        if (typeof message === 'string') return new JournalApiError(response.status, `请求内容不合法：${message}`, code)
       }
     }
   } catch { /* 非JSON响应使用HTTP兜底消息。 */ }
-  return fallback
+  return new JournalApiError(response.status, fallback)
 }
 export async function createJournal(payload: JournalCreate): Promise<Journal> {
   const response = await fetch(`${getApiBaseUrl()}/api/journals`, {
@@ -52,13 +58,13 @@ export async function createJournal(payload: JournalCreate): Promise<Journal> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  if (!response.ok) throw new JournalApiError(response.status, await readErrorMessage(response))
+  if (!response.ok) throw await readError(response)
   return await response.json() as Journal
 }
 /** 每次打开真实读取详情，不拿列表缓存冒充当前内容。 */
 export async function getJournal(id: number, signal?: AbortSignal): Promise<Journal> {
   const response = await fetch(`${getApiBaseUrl()}/api/journals/${id}`, { signal })
-  if (!response.ok) throw new JournalApiError(response.status, await readErrorMessage(response))
+  if (!response.ok) throw await readError(response)
   return await response.json() as Journal
 }
 export async function updateJournal(id: number, payload: JournalUpdate): Promise<Journal> {
@@ -67,7 +73,7 @@ export async function updateJournal(id: number, payload: JournalUpdate): Promise
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  if (!response.ok) throw new JournalApiError(response.status, await readErrorMessage(response))
+  if (!response.ok) throw await readError(response)
   return await response.json() as Journal
 }
 /**
@@ -79,5 +85,5 @@ export async function deleteJournal(id: number, expectedRevision: number): Promi
     method: 'DELETE',
     headers: { 'If-Match': `"${expectedRevision}"` },
   })
-  if (!response.ok) throw new JournalApiError(response.status, await readErrorMessage(response))
+  if (!response.ok) throw await readError(response)
 }

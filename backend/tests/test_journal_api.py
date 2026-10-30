@@ -75,7 +75,7 @@ RESPONSE_FIELDS = {
     "created_at",
     "updated_at",
     "deleted_at",
-"revision", "content_blocks"}
+"revision", "content_blocks", "journal_kind", "content_doc", "document_schema_version", "document_format"}
 
 
 def _count_rows_in(session: Session) -> int:

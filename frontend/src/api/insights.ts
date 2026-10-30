@@ -3,10 +3,12 @@ import type { Insight, InsightCreate, InsightPage, InsightUpdate } from '../type
 /** Insight 请求错误。 */
 export class InsightApiError extends Error {
   readonly status: number
-  constructor(status: number, message: string) {
+  readonly code?: string
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.name = 'InsightApiError'
     this.status = status
+    this.code = code
   }
 }
 
@@ -23,22 +25,23 @@ function getApiBaseUrl(): string {
     ? configured : 'http://127.0.0.1:8000'
   return raw.trim().replace(/\/+$/, '')
 }
-async function readErrorMessage(response: Response): Promise<string> {
+async function readError(response: Response): Promise<InsightApiError> {
   const fallback = `请求失败（HTTP ${response.status}）`
   try {
     const body: unknown = await response.json()
-    if (typeof body !== 'object' || body === null || !('detail' in body)) return fallback
+    if (typeof body !== 'object' || body === null || !('detail' in body)) return new InsightApiError(response.status, fallback)
+    const code = 'code' in body && typeof body.code === 'string' ? body.code : undefined
     const detail = (body as { detail: unknown }).detail
-    if (typeof detail === 'string') return detail
+    if (typeof detail === 'string') return new InsightApiError(response.status, detail, code)
     if (Array.isArray(detail) && detail.length > 0) {
       const first: unknown = detail[0]
       if (typeof first === 'object' && first !== null && 'msg' in first) {
         const message = (first as { msg: unknown }).msg
-        if (typeof message === 'string') return `请求内容不合法：${message}`
+        if (typeof message === 'string') return new InsightApiError(response.status, `请求内容不合法：${message}`, code)
       }
     }
   } catch { /* 非 JSON 响应使用 HTTP 兜底消息。 */ }
-  return fallback
+  return new InsightApiError(response.status, fallback)
 }
 
 /** 筛选、排序与固定 20 条分页全部由后端处理。 */
@@ -60,7 +63,7 @@ export async function listInsights(
 /** 每次打开都真实读取详情，不拿列表缓存冒充当前内容。 */
 export async function getInsight(id: number, signal?: AbortSignal): Promise<Insight> {
   const response = await fetch(`${getApiBaseUrl()}/api/insights/${id}`, { signal })
-  if (!response.ok) throw new InsightApiError(response.status, await readErrorMessage(response))
+  if (!response.ok) throw await readError(response)
   return await response.json() as Insight
 }
 
@@ -70,7 +73,7 @@ export async function createInsight(payload: InsightCreate): Promise<Insight> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  if (!response.ok) throw new InsightApiError(response.status, await readErrorMessage(response))
+  if (!response.ok) throw await readError(response)
   return await response.json() as Insight
 }
 
@@ -80,7 +83,7 @@ export async function updateInsight(id: number, payload: InsightUpdate): Promise
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  if (!response.ok) throw new InsightApiError(response.status, await readErrorMessage(response))
+  if (!response.ok) throw await readError(response)
   return await response.json() as Insight
 }
 
@@ -90,5 +93,5 @@ export async function deleteInsight(id: number, expectedRevision: number): Promi
     method: 'DELETE',
     headers: { 'If-Match': `"${expectedRevision}"` },
   })
-  if (!response.ok) throw new InsightApiError(response.status, await readErrorMessage(response))
+  if (!response.ok) throw await readError(response)
 }

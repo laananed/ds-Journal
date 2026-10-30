@@ -71,6 +71,12 @@ def build_display_title(
     return f"{day} ({sequence})"
 
 
+def build_kind_display_title(title: str | None, journal_date: date, sequence: int | None, kind: str) -> str:
+    if kind in {'set', 'end'} and is_untitled(title):
+        return ('开始今天 ' if kind == 'set' else '结束今天 ') + journal_date.isoformat()
+    return build_display_title(title, journal_date, sequence)
+
+
 def numbered_subquery():
     """无标题 Journal 的编号子查询：`id` + 该日期内的 1 基序号 `seq`。
 
@@ -97,6 +103,6 @@ def numbered_subquery():
             )
             .label("seq"),
         )
-        .where(untitled_predicate(Journal.title))
+        .where(untitled_predicate(Journal.title), Journal.journal_kind == 'writing')
         .subquery("journal_untitled_numbered")
     )

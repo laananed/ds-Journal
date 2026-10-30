@@ -1,0 +1,4 @@
+[
+  {"id":"unstructured-user","input":{"content":"原文😀\n","content_blocks":null},"conversion":"preserve_user_raw"},
+  {"id":"structured-blocks","input":{"content":"旧投影","content_blocks":[]},"conversion":"legacy_conversion_required"}
+]

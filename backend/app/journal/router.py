@@ -26,6 +26,7 @@ Router 不写业务规则，也不直接使用 SQLAlchemy。
 from __future__ import annotations
 
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
@@ -76,6 +77,7 @@ def list_journals(
     journal_date: date | None = None,
     folder_id: int | None = None,
     page: int = Query(1, ge=1),
+    journal_kind: Literal['all', 'writing', 'set', 'end'] = 'all',
     db: Session = Depends(get_db),
 ) -> JournalPage:
     """获取分页的**有效** Journal 列表。
@@ -93,6 +95,7 @@ def list_journals(
         journal_date=journal_date,
         folder_id=folder_id,
         page=page,
+        journal_kind=journal_kind,
     )
 
 

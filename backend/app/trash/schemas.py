@@ -3,13 +3,13 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from app.insight.schemas import InsightResponse
+from app.insight.schemas import InsightResponse, InsightDetail
 from app.journal.schemas import JournalResponse, JournalDetail
 
 TrashType = Literal['journal', 'insight']
 TrashFilter = Literal['all', 'journal', 'insight']
 TrashItem = JournalResponse | InsightResponse
-TrashDetail = JournalDetail | InsightResponse
+TrashDetail = JournalDetail | InsightDetail
 
 
 class TrashPage(BaseModel):

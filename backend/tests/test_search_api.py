@@ -84,7 +84,10 @@ def test_global_pagination_counts_stable_order_and_type_ids(api):
             assert actual == [(item[3], item[2]) for item in matches[(page-1)*20:page*20]]
             seen += actual
             for item in body['items']:
-                assert client.get(f"/api/{ROUTES[item['type']]}/{item['id']}").json() == ({**item, "content_blocks": None} if item["type"] != "insight" else item)
+                expected_detail = {**item, 'content_blocks': None}
+                if item['type'] != 'inbox':
+                    expected_detail.update(content_doc=None, document_schema_version=None, document_format='legacy')
+                assert client.get(f"/api/{ROUTES[item['type']]}/{item['id']}").json() == expected_detail
         assert len(seen) == len(set(seen)) == len(matches)
 
 
@@ -129,7 +132,7 @@ def test_numbering_uses_nonmatching_deleted_and_other_folder_rows(api):
                   folder_id=f.id if i < 24 else None, deleted_at=STAMP if i == 0 else None)
     item = search(client, 'needle')['items'][0]
     assert item['id'] == id and item['display_title'] == '2020-01-01 (25)'
-    assert client.get(f'/api/journals/{id}').json() == ({**item, "content_blocks": None} if item["type"] != "insight" else item)
+    assert client.get(f'/api/journals/{id}').json() == {**item, 'content_blocks': None, 'content_doc': None, 'document_schema_version': None, 'document_format': 'legacy'}
 
 
 def test_search_only_raw_title_content_not_projection_date_or_folder(api):

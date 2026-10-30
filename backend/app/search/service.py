@@ -9,7 +9,7 @@ from app.insight.schemas import InsightResponse
 from app.insight.service import build_insight_display_title
 from app.journal.models import Journal
 from app.journal.schemas import JournalResponse
-from app.journal.titles import build_display_title, numbered_subquery
+from app.journal.titles import build_kind_display_title, numbered_subquery
 from app.search.schemas import SearchItem, SearchPage, SearchType
 
 PAGE_SIZE = 20
@@ -37,13 +37,14 @@ def _branch(kind: str, model, order: int, patterns: list[str]):
         numbered = numbered_subquery()
         return select(
             *columns, Journal.journal_date.label('business_date'),
-            literal(None, type_=Boolean).label('is_daily'), numbered.c.seq,
+            literal(None, type_=Boolean).label('is_daily'), numbered.c.seq, Journal.journal_kind.label('journal_kind'),
         ).outerjoin(numbered, numbered.c.id == Journal.id).where(*conditions)
     return select(
         *columns,
         (Inbox.inbox_date if kind == 'inbox' else literal(None, type_=Date)).label('business_date'),
         (Inbox.is_daily if kind == 'inbox' else literal(None, type_=Boolean)).label('is_daily'),
         literal(None, type_=Integer).label('seq'),
+        literal('writing').label('journal_kind'),
     ).where(*conditions)
 
 
@@ -52,8 +53,8 @@ def _to_response(row) -> SearchItem:
         'type', 'id', 'revision', 'title', 'content', 'folder_id', 'created_at', 'updated_at', 'deleted_at'
     )}
     if row.type == 'journal':
-        return JournalResponse(**fields, journal_date=row.business_date,
-                               display_title=build_display_title(row.title, row.business_date, row.seq))
+        return JournalResponse(**fields, journal_date=row.business_date, journal_kind=row.journal_kind,
+                               display_title=build_kind_display_title(row.title, row.business_date, row.seq, row.journal_kind))
     if row.type == 'inbox':
         return InboxResponse(**fields, inbox_date=row.business_date, is_daily=row.is_daily,
                              display_title=row.title or row.business_date.isoformat())

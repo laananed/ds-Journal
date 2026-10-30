@@ -41,7 +41,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from app.writing.service import (require_revision, WriteConflict, create_hash, verify_create_replay, validate_blocks, writing_changes, cleanup_private_ai)
+from app.writing.service import (require_revision, WriteConflict, WritingError, document_content, create_hash, verify_create_replay, validate_blocks, writing_changes, cleanup_private_ai)
 
 from app.folder.models import Folder, folder_fk_violation
 from app.journal.models import Journal
@@ -52,7 +52,7 @@ from app.journal.schemas import (
     JournalResponse,
     JournalUpdate,
 )
-from app.journal.titles import build_display_title, numbered_subquery
+from app.journal.titles import build_kind_display_title, numbered_subquery
 
 # 固定的每页条数。契约明确不提供客户端自定义 page_size 参数。
 PAGE_SIZE = 20
@@ -63,6 +63,15 @@ class FolderNotFoundError(LookupError):
 
     Service 不构造 HTTP 响应，只表达领域错误；Router 把它转成 404。
     """
+
+
+class RitualSlotConflict(WriteConflict):
+    code = 'ritual_slot_conflict'
+
+    def __init__(self, current_id, revision):
+        super().__init__('an active ritual already exists for this day')
+        self.current_id = current_id
+        self.revision = revision
 
 
 def _utcnow() -> datetime:
@@ -94,16 +103,20 @@ def _projected_statement():
 
 def _to_response(journal: Journal, sequence: int | None, *, detail=False) -> JournalResponse:
     """把 ORM 行 + 序号投影成完整响应。"""
+    doc = journal.content_doc
+    kind = journal.journal_kind
+    title = build_kind_display_title(journal.title, journal.journal_date, sequence, kind)
     return (JournalDetail if detail else JournalResponse)(
-        **({"content_blocks": journal.content_blocks} if detail else {}),
+        **({'content_blocks': journal.content_blocks if doc is None else None,
+            'content_doc': doc, 'document_schema_version': 1 if doc is not None else None,
+            'document_format': 'tiptap' if doc is not None else 'legacy'} if detail else {}),
         type="journal",
         id=journal.id,
         revision=journal.revision,
         title=journal.title,
-        display_title=build_display_title(
-            journal.title, journal.journal_date, sequence
-        ),
+        display_title=title,
         content=journal.content,
+        journal_kind=kind,
         journal_date=journal.journal_date,
         folder_id=journal.folder_id,
         created_at=journal.created_at,
@@ -138,10 +151,14 @@ def create_journal(db: Session, data: JournalCreate) -> JournalResponse:
             raise FolderNotFoundError(f"Folder {data.folder_id} does not exist")
         content = data.content
         blocks = None
-        if "content_blocks" in data.model_fields_set:
+        doc = None
+        if 'content_doc' in data.model_fields_set:
+            doc = data.content_doc
+            content = document_content(doc)
+        elif "content_blocks" in data.model_fields_set:
             blocks = data.model_dump(mode="json")["content_blocks"]
             content = validate_blocks(blocks)
-        row = Journal(title=data.title, content=content, folder_id=data.folder_id, journal_date=data.journal_date, content_blocks=blocks, client_create_id=data.client_create_id,
+        row = Journal(title=data.title, content=content, folder_id=data.folder_id, journal_date=data.journal_date, content_blocks=blocks, content_doc=doc, journal_kind=data.journal_kind, client_create_id=data.client_create_id,
                       create_payload_hash=payload_hash if data.client_create_id else None)
         db.add(row)
         db.commit()
@@ -164,6 +181,12 @@ def create_journal(db: Session, data: JournalCreate) -> JournalResponse:
                     raise
         if folder_fk_violation(error):
             raise FolderNotFoundError(f"Folder {data.folder_id} does not exist") from error
+        if isinstance(error, IntegrityError) and data.journal_kind != 'writing' and getattr(getattr(error.orig, 'diag', None), 'constraint_name', None) == 'uq_journals_active_ritual':
+            winner = db.scalar(select(Journal).where(Journal.journal_date == data.journal_date,
+                Journal.journal_kind == data.journal_kind, Journal.deleted_at.is_(None)))
+            if winner is not None:
+                raise RitualSlotConflict(winner.id, winner.revision) from error
+            raise
         raise
     return _project_required(db, row.id)
 
@@ -173,6 +196,7 @@ def list_journals(
     journal_date: date | None = None,
     folder_id: int | None = None,
     page: int = 1,
+    journal_kind: str = 'all',
 ) -> JournalPage:
     """返回分页的 Journal 列表，可选按 journal_date / folder_id 精确筛选。
 
@@ -204,6 +228,10 @@ def list_journals(
     if folder_id is not None:
         statement = statement.where(Journal.folder_id == folder_id)
         count_statement = count_statement.where(Journal.folder_id == folder_id)
+
+    if journal_kind != 'all':
+        statement = statement.where(Journal.journal_kind == journal_kind)
+        count_statement = count_statement.where(Journal.journal_kind == journal_kind)
 
     with db.no_autoflush:
         total = db.scalar(count_statement) or 0
@@ -273,6 +301,8 @@ def update_journal(db: Session, journal_id: int, data: JournalUpdate) -> Journal
         row = _get_active_journal(db, journal_id)
         if row is None:
             return None
+        if row.journal_kind != 'writing' and 'journal_date' in data.model_fields_set:
+            raise WritingError('ritual date cannot be changed')
         changes = writing_changes(row, data)
         if not changes:
             return _project_required(db, journal_id)
@@ -285,7 +315,7 @@ def update_journal(db: Session, journal_id: int, data: JournalUpdate) -> Journal
         result = db.execute(update(Journal).where(Journal.id == journal_id,
             Journal.revision == data.expected_revision, Journal.deleted_at.is_(None))
             .values(**changes, revision=Journal.revision + 1,
-                    updated_at=Journal.updated_at if changes.keys() == {"content_blocks"} else _utcnow())
+                    updated_at=Journal.updated_at if changes.keys() == {"content_blocks"} or (row.content_doc is None and changes.keys() == {"content_doc"}) else _utcnow())
             .execution_options(synchronize_session=False))
         if result.rowcount == 0:
             db.expire_all()

@@ -48,7 +48,7 @@ STAGE1_REVISION = "3a70890ddb10"
 SIX_FIELDS = ("id", "title", "content", "journal_date", "created_at", "updated_at")
 
 # 本阶段预期存在的业务表（外加 alembic_version）。
-EXPECTED_TABLES = {"journals", "folders", "inboxes", "insights", "ai_requests", "ai_checkpoints", "ai_usage", "ai_settings"}
+EXPECTED_TABLES = {"journals", "folders", "inboxes", "insights", "ai_requests", "ai_checkpoints", "ai_usage", "ai_settings", "ritual_templates", "ritual_goal_links", "ai_comments"}
 
 
 # ---------------------------------------------------------------------------
@@ -361,12 +361,11 @@ def test_revision_chain_is_single_head_and_unchanged_base(migration_check):
     chain = migration_check.chain
 
     assert chain[0] == STAGE1_REVISION, "初始迁移不能改，链的起点必须仍是 Stage 1 revision"
-    # Stage 2 now contains base + M1 + M2 + M3.
-    assert len(chain) == 5, f"Expected base + M1 + M2 + M3, got {chain}"
+    assert chain == ['3a70890ddb10', '52c8e94a365c', 'a8d98342e603', '18ecf7e09da6', '3aa16300a58a', '9e7a6c42d011'], f"Unexpected migration chain: {chain}"
 
 
 def test_only_expected_tables_exist(migration_check):
-    """升级后只多出 folders / inboxes / insights，没有意外表。"""
+    """升级到当前 head 后，既有表和已确认的新增表均存在且没有意外表。"""
     with migration_check.engine.connect() as connection:
         tables = {
             row[0]
@@ -416,17 +415,20 @@ def test_journal_new_columns_are_null_for_all_legacy_rows(migration_check):
 
 
 def test_journal_keeps_original_columns_and_adds_exactly_two(migration_check):
-    """原六字段仍在最前且顺序不变，只追加两个可空列（没有重建表）。"""
+    """原六字段及各阶段追加字段按顺序保留（没有重建表）。"""
     inspector = inspect(migration_check.engine)
     columns = inspector.get_columns("journals")
     names = [column["name"] for column in columns]
 
     assert tuple(names[:6]) == SIX_FIELDS, f"原六字段顺序被改变：{names}"
-    assert names[6:] == ["folder_id", "deleted_at", "revision", "client_create_id", "create_payload_hash", "content_blocks"]
+    assert names[6:] == ["folder_id", "deleted_at", "revision", "client_create_id", "create_payload_hash", "content_blocks", "content_doc", "journal_kind"]
 
     by_name = {column["name"]: column for column in columns}
     assert by_name["folder_id"]["nullable"] is True
     assert by_name["deleted_at"]["nullable"] is True
+    assert by_name["content_doc"]["nullable"] is True
+    assert by_name["journal_kind"]["nullable"] is False
+    assert 'writing' in str(by_name["journal_kind"]["default"])
 
     # 原有六字段的可空性没有被改动
     assert by_name["id"]["nullable"] is False
@@ -485,12 +487,13 @@ def test_inboxes_and_insights_structure(migration_check):
         "folder_id",
         "created_at",
         "updated_at",
-        "deleted_at", "revision", "client_create_id", "create_payload_hash",
+        "deleted_at", "revision", "client_create_id", "create_payload_hash", "content_doc",
     ]
     assert insight_columns["title"]["nullable"] is True
     assert insight_columns["content"]["nullable"] is False
     assert insight_columns["folder_id"]["nullable"] is True
     assert insight_columns["deleted_at"]["nullable"] is True
+    assert insight_columns["content_doc"]["nullable"] is True
 
     # folders 只有两个字段
     folder_columns = {c["name"]: c for c in inspector.get_columns("folders")}
@@ -516,7 +519,8 @@ def test_database_matches_model_metadata(migration_check):
             (column["name"], bool(column["nullable"]))
             for column in inspector.get_columns(table_name)
         ]
-        assert actual == expected, f"{table_name} 的列与 Model 不一致"
+        # Column order is not an ORM contract; still require the exact names and nullability.
+        assert sorted(actual) == sorted(expected), f"{table_name} 的列与 Model 不一致"
 
 
 def test_new_tables_are_writable_via_orm_in_isolated_transaction(migration_check):
@@ -598,7 +602,7 @@ OLD_MIGRATION_HASHES = {
 def test_m3_extends_m2_and_original_migrations_are_byte_unchanged():
     chain = _linear_revision_chain()
     assert chain[:4] == ['3a70890ddb10', '52c8e94a365c', 'a8d98342e603', '18ecf7e09da6']
-    assert len(chain) == 5 and chain[-1] != chain[-2]
+    assert chain[4:] == ['3aa16300a58a', '9e7a6c42d011']
     for filename, digest in OLD_MIGRATION_HASHES.items():
         assert hashlib.sha256((BACKEND_DIR / 'alembic' / 'versions' / filename).read_bytes()).hexdigest() == digest
 

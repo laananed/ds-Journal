@@ -43,7 +43,7 @@ from app.insight.schemas import InsightResponse
 from app.insight.service import build_insight_display_title
 from app.journal.models import Journal
 from app.journal.schemas import JournalResponse
-from app.journal.titles import build_display_title, numbered_subquery
+from app.journal.titles import build_kind_display_title, numbered_subquery
 
 # 固定的每页条数。契约明确不提供客户端自定义 page_size 参数。
 PAGE_SIZE = 20
@@ -224,6 +224,7 @@ def _mixed_file_statement(folder_id: int):
             Journal.journal_date.label("business_date"),
             literal(None, type_=Boolean).label("is_daily"),
             numbered.c.seq.label("seq"),
+            Journal.journal_kind.label('journal_kind'),
         )
         .outerjoin(numbered, numbered.c.id == Journal.id)
         .where(
@@ -248,6 +249,7 @@ def _mixed_file_statement(folder_id: int):
             Inbox.inbox_date.label("business_date"),
             Inbox.is_daily.label("is_daily"),
             literal(None, type_=Integer).label("seq"),
+            literal('writing').label('journal_kind'),
         ).where(Inbox.folder_id == folder_id)
     )
 
@@ -266,6 +268,7 @@ def _mixed_file_statement(folder_id: int):
             literal(None, type_=Date).label("business_date"),
             literal(None, type_=Boolean).label("is_daily"),
             literal(None, type_=Integer).label("seq"),
+            literal('writing').label('journal_kind'),
         ).where(
             Insight.folder_id == folder_id,
             Insight.deleted_at.is_(None),
@@ -289,10 +292,9 @@ def _row_to_response(row) -> FolderFileItem:
             id=row.id,
             revision=row.revision,
             title=row.title,
-            display_title=build_display_title(
-                row.title, row.business_date, row.seq
-            ),
+            display_title=build_kind_display_title(row.title, row.business_date, row.seq, row.journal_kind),
             content=row.content,
+            journal_kind=row.journal_kind,
             journal_date=row.business_date,
             folder_id=row.folder_id,
             created_at=row.created_at,

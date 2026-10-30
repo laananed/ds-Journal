@@ -13,7 +13,7 @@ from app.insight.models import Insight
 from app.journal.schemas import _WHITESPACE_CODE_POINTS
 
 MARKDOWN = '  # Heading\n\n- [ ] task  \n1. item\n    code  \n'
-FIELDS = {'type', 'id', 'title', 'display_title', 'content', 'folder_id', 'created_at', 'updated_at', 'deleted_at', "revision"}
+FIELDS = {'type', 'id', 'title', 'display_title', 'content', 'folder_id', 'created_at', 'updated_at', 'deleted_at', 'revision', 'content_blocks', 'content_doc', 'document_schema_version', 'document_format'}
 
 
 def create(client, **values):

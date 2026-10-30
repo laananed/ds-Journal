@@ -16,6 +16,8 @@ GET 零写，不创建草稿、模板、占位、评论、检查点或“今日�
 
 **过渡期 NULL 响应**：数据库 `content_doc IS NULL` 时，详情 GET 返回 `content_doc:null`、`document_schema_version:null`、`document_format:"legacy"` 和原 `content`；Journal 同时返回原 `content_blocks`（原值可为 null），Insight 没有旧 blocks 则返回 `content_blocks:null`。非 NULL 有效文档返回 `content_doc`、`document_schema_version:1`、`document_format:"tiptap"`；旧 `content_blocks` 不作为当前正文使用。Trash 详情同理。GET 只读取原值，不转换、回填、增版或改变时间；不可安全转换时保持 legacy，用户可读原文，正文写入前需明确转换流程，不能用空 JSON 覆盖。此为 T01 目标响应而非当前已实现行为。
 
+**T01 过渡选择（2026-10-30）**：非 NULL 详情的 `content_blocks` 明确返回 null，`content` 为新文档的阅读投影；旧 `content` / `content_blocks` 写入非 NULL 文档返回 409 `legacy_conversion_required`。NULL 且无 blocks 的文件，只接受单个 user `legacyText` 与原文逐字相同的等价转换；该次转换保留旧 content、检查点、引用和编辑时间。转换后用户可主动编辑 user legacyText 的 raw_text，但不能改变其 ID/作者；AI legacyText 受保护。带 blocks 的记录在有证据证明阅读投影、作者和检查点均可保留前拒绝自动转换，原字段不变；此限制不阻止旧格式继续使用旧接口。转换和普通写入均受原 revision CAS 约束。
+
 最终 POST/PATCH 正文只接收 `content_doc`；`content` 是后端投影，`content_blocks` 不再可写。格式版本错误 422。T01～T12 过渡读写兼容必须拒绝旧客户端扁平化已转换文件，不能同时把 content、blocks 和 doc 当权威；最终旧正文写请求返回 409 `legacy_conversion_required`，不会偷偷覆盖作者。具体转换与收缩顺序见架构 §10。
 
 公共节点包含基础 paragraph/heading/text/hardBreak/list/taskList/taskItem/codeBlock/blockquote/horizontalRule，以及：
@@ -41,7 +43,9 @@ GET 零写，不创建草稿、模板、占位、评论、检查点或“今日�
 
 专用块一律含 UUID `id`；`aiReply`、`aiSummary`、`aiPlaceholder` 另含 UUID `request_id`；`ritualQuestion` 含 UUID 或 null 的 `template_question_id` 和字符串 `question_snapshot`；`goalItem` 含 UUID `goal_id`、字符串 `text`、布尔 `checked`；`goalReview` 含 UUID 或 null 的 `link_id`、字符串 `goal_snapshot`、布尔 `checked_snapshot`、字符串 `review_title`，其 answer 子树是用户块；`legacyText` 含字符串 `raw_text` 和 `author`（`user|ai`），保留原文，不可执行。`aiReply`、`aiSummary` 的 content 为一个或多个 paragraph；`goalReview` 的 content 为零或多个 paragraph，全部为 answer；`aiPlaceholder`、`ritualQuestion`、`goalItem`、`legacyText` 均为无 content 原子节点；专用节点不可嵌套、只置于 doc 层。字符串计 Unicode 码点；问题快照不超过 500，目标文字/标题分别不超过 2,000，原文兼容不截断旧值，普通写入整体 R 不超过 50,000（旧值例外见架构 §3）。保护规则：普通 PATCH 不创建/修改/删除 AI reply/placeholder 的来源和内容（专用删除除外）；summary 可编辑内容但不可改来源，系统镜像只由服务写，answer 用户可编辑；外部粘贴视用户输入。服务器对旧、新受保护节点逐 ID 比较；受控创建/复制由专用服务完成，拒绝伪造。
 
-T01 独占建立共享合成样例目录 `tests/fixtures/stage4_documents/`（仓库根），包含 `valid.json`、`invalid.json`、`projections.json`、`legacy.json`：每个样例含 ID、输入、预期有效性或错误类别、R/U 和作者断言（适用时）。后端 `backend/tests/test_s4_documents.py` 与前端 `frontend/src/editor/documentProjection.test.ts` 读取同一文件，不复制第二份。T01 冻结文件 SHA256 和 schema 交给 T03；T03 若发现字段歧义或需要扩展，报 T00 补齐并复核，不能自行定版。共享样例路径是计划文件，当前尚未创建。
+T01 独占建立共享合成样例目录 `tests/fixtures/stage4_documents/`（仓库根），包含 `valid.json`、`invalid.json`、`projections.json`、`legacy.json`：样例含 ID、输入、预期有效性或错误类别、R/U 和作者断言（适用时）。后端 `backend/tests/unit/test_s4_document_foundation.py` 与前端 `frontend/src/editor/documentProjection.test.ts` 读取同一份投影样例，不复制第二份。交接时记录文件 SHA256；T03 若发现字段歧义或需要扩展，报 T00 补齐并复核，不能自行定版。
+
+**T01 锚点与归属边界（2026-10-30）**：锚点为 `{node_id,start,end,quote,quote_sha256}`；`node_id` 是用户 paragraph/heading 的 UUID，区间是该块文本的 Unicode 码点半开区间，摘要为 quote 的 UTF-8 SHA-256 小写十六进制。text 与 hardBreak 不分配 ID。前端必须将 ProseMirror 的 UTF-16 偏移与码点偏移显式转换。纯 schema 仅校验节点、UUID、区间、quote 与摘要；评论 UUID 属于文件必须由数据库服务校验。T01 期间普通写入拒绝 mindComment，直到带归属检查的服务接入；不能只凭 UUID 格式放行。
 
 阅读投影 R 用于现有列表/Search/安全阅读；用户投影 U 用于 AI 增量。AI 节点、评论、占位、模板问题、目标镜像和系统标题排除于 U；用户答案/正文和开始今天目标文字进入 U。checked、Mark 与展示排序不改变 U。Unicode 码点及换行规则见架构 §3，前后端共享样例。R 上限沿用 50,000 码点，旧数据例外及空更新语义保留；目标联动使任一端超限时整体 422 回滚。
 
