@@ -18,7 +18,14 @@
 
 import { createInsight, updateInsight } from '../api/insights.ts'
 import type { Insight } from '../types/insight.ts'
-import type { DocumentDraft, SaveTransport, ServerFile } from './editSessions.ts'
+import {
+  draftHasChanges,
+  type DocumentDraft,
+  type EditSession,
+  type EditSessionStore,
+  type SaveTransport,
+  type ServerFile,
+} from './editSessions.ts'
 import { insightCreatePayload, insightToDraft, insightUpdatePayload } from '../utils/insightDraft.ts'
 
 /**
@@ -37,6 +44,39 @@ export function insightSessionId(id: number): string {
 /** 新建草稿：稳定草稿身份（取得服务器 id 后会话内部改队列键，不重建会话）。 */
 export function insightDraftSessionId(draftId: string): string {
   return `insight:draft:${draftId}`
+}
+
+/**
+ * 按「会话核心同样的优先级」查会话：先请求键，再草稿身份，最后文件身份。
+ *
+ * 订阅方（页面）在渲染期用它解析**实际**绑定会话，而不是二次假设
+ * `insight:<id>`：创建成功后会话键仍是 `insight:draft:<key>`，只有写队列键
+ * 换成了 `insight:<id>`（`settleWrite`）。若按 `insight:<id>` 取不到会话，
+ * 编辑会绑定空草稿、自动保存不触发、导航前 flush 也找不到会话——这正是
+ * 独立测试 D1 的「同页重开一次就丢字」。
+ *
+ * 优先级与 `openSession` 的去重顺序一致（请求键 → draftId → fileId），
+ * 因此无论会话核心将来是否把键改写成 `insight:<id>`，这里都能取到同一条会话。
+ */
+export function findInsightSession(
+  store: Pick<EditSessionStore, 'listSessions'>,
+  lookup: { fileId: number | null; draftId: string },
+): EditSession | null {
+  const sessions = store.listSessions().filter((session) => session.type === 'insight')
+  const byDraft = sessions.find((session) => session.draftId === lookup.draftId)
+  if (byDraft !== undefined) return byDraft
+  if (lookup.fileId === null) return null
+  return sessions.find((session) => session.fileId === lookup.fileId) ?? null
+}
+
+/**
+ * 导航前是否需要保存：只有真实未提交输入（或在途请求）才值得拦住用户。
+ * 空会话、已同步的会话不应弹「最新改动还没保存成功」。
+ */
+export function insightHasUnsavedInput(session: EditSession | null): boolean {
+  if (session === null) return false
+  if (session.inFlight !== null) return true
+  return draftHasChanges(session.draft, session.baseline)
 }
 
 /**

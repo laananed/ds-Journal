@@ -26,7 +26,9 @@ import {
 } from '../state/editSessions'
 import {
   INSIGHT_SESSION_TAB,
+  findInsightSession,
   insightDraftSessionId,
+  insightHasUnsavedInput,
   insightSessionId,
   insightToServerFile,
   insightTransport,
@@ -114,7 +116,19 @@ function InsightPanel({
 
   // 稳定草稿身份：面板首次渲染时确定，之后不随渲染/输入变化（新建后不重建编辑器）。
   const [draftId] = useState(() => (seed ? `seed-${seed.createKey}` : newKey()))
-  const sessionId = insightId !== null ? insightSessionId(insightId) : insightDraftSessionId(draftId)
+  /** 请求键：新建草稿键或 `insight:<id>`，只用于「打开会话」这一步。 */
+  const requestedSessionId = insightId !== null ? insightSessionId(insightId) : insightDraftSessionId(draftId)
+  /**
+   * 实际绑定会话（D1）：创建成功后会话仍在 `insight:draft:<key>` 下（会话核心按
+   * 同一草稿 / 同一文件去重），因此除了请求键还要按草稿与文件身份解析；
+   * 订阅、写操作、关闭与冲突恢复都用解析结果，不再二次假设 `insight:<id>`。
+   */
+  const requestedSession = useEditSession(requestedSessionId)
+  const session = requestedSession ?? findInsightSession(editSessionStore, { fileId: insightId, draftId })
+  const sessionId = session?.sessionId ?? requestedSessionId
+  // 卸载清理必须拿到「当时」的绑定键：清理不能在依赖变化时提前关会话。
+  const sessionIdRef = useRef(sessionId)
+  useEffect(() => { sessionIdRef.current = sessionId }, [sessionId])
 
   const [file, setFile] = useState<Insight | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(insightId === null ? 'ready' : 'loading')
@@ -139,7 +153,6 @@ function InsightPanel({
   // 传输层只建一次：会话凭对象身份判断是否需要在重新打开时更新它。
   const transport = useMemo(() => insightTransport({ onSaved: setLastSaved }), [])
 
-  const session = useEditSession(sessionId)
   const actions = useEditSessionActions(sessionId)
 
   const fallbackDraft = useMemo<DocumentDraft>(
@@ -158,7 +171,7 @@ function InsightPanel({
   useEffect(() => {
     if (panel.kind !== 'create') return
     editSessionStore.openSession({
-      sessionId,
+      sessionId: requestedSessionId,
       type: 'insight',
       tabId: INSIGHT_SESSION_TAB,
       draft: seed ? seedInsightDraft(seed) : blankInsightDraft(),
@@ -166,7 +179,7 @@ function InsightPanel({
       transport,
       isSavable: insightDraftSavable,
     })
-  }, [panel.kind, seed, sessionId, transport])
+  }, [panel.kind, seed, requestedSessionId, transport])
 
   // 已有 Insight：真实读取详情后再登记会话（legacy 用等价转换文档作基线）。
   // 初值已是 `loading`；重读入口在事件处理里显式改状态，避免在 effect 内同步 setState。
@@ -179,7 +192,7 @@ function InsightPanel({
       setNotFound(false)
       setLoadError('')
       editSessionStore.openSession({
-        sessionId,
+        sessionId: requestedSessionId,
         type: 'insight',
         tabId: INSIGHT_SESSION_TAB,
         draft: insightToDraft(data, legacyNodeIdFor(data.id)),
@@ -196,16 +209,19 @@ function InsightPanel({
       setStatus('error')
     })
     return () => controller.abort()
-  }, [insightId, reloadToken, sessionId, transport])
+  }, [insightId, reloadToken, requestedSessionId, transport])
 
   // ---- 保存 -----------------------------------------------------------
 
   const guardedSave = useCallback(async (): Promise<FlushResult> => {
+    // 没有未提交输入（刚打开就走 / 内容已同步 / 空草稿）不拦住导航，
+    // 避免把「空白草稿」误报成「最新改动还没保存成功」。
+    if (!insightHasUnsavedInput(editSessionStore.getSession(sessionId))) return 'clean'
     // 空白/超长不提交，由界面说明原因；不制造空记录。
     if (issue !== '') return 'blocked'
     const result = await actions.save()
     return result.kind === 'blocked' ? 'blocked' : 'clean'
-  }, [actions, issue])
+  }, [actions, issue, sessionId])
 
   const saveRef = useRef(guardedSave)
   useEffect(() => { saveRef.current = guardedSave }, [guardedSave])
@@ -227,13 +243,14 @@ function InsightPanel({
   // 面板卸载：尽力提交一次（会话是应用级的，请求不会因卸载被取消）；
   // 从未输入、也没有服务器身份的空草稿会话直接关闭，避免残留空会话。
   useEffect(() => () => {
-    const current = editSessionStore.getSession(sessionId)
+    const key = sessionIdRef.current
+    const current = editSessionStore.getSession(key)
     if (current !== null && current.fileId === null && current.inputSeq === 0) {
-      editSessionStore.closeSession(sessionId)
+      editSessionStore.closeSession(key)
       return
     }
     void saveRef.current()
-  }, [sessionId])
+  }, [])
 
   // 服务器确认后同步详情与列表：只用真实响应，不把「已排队」当成已保存。
   useEffect(() => {
@@ -424,6 +441,7 @@ function InsightPanel({
         <>
           <p className="detail-hint">
             Insight 没有所属日期，也不需要来源或 AI 信息；正文以统一富文本 JSON 保存。
+            正文里的 <code>[[标题]]</code> 在阅读态可直接点击；编辑时按住 Ctrl（⌘）再点击。
           </p>
           {seed && (
             <p className="detail-hint" role="status">
@@ -454,7 +472,7 @@ function InsightPanel({
             {!legacyLocked && (
               <div className="editor-field"><span>正文</span>
                 <RichTextEditor doc={draft.content_doc as ContentDocument} label="Insight 正文"
-                  onUserChange={changeContent} />
+                  onUserChange={changeContent} onLink={onResolveLink} />
               </div>
             )}
             {legacyLocked && <MarkdownContent source={file?.content ?? ''} onLink={onResolveLink} disabled={busy} />}
@@ -495,7 +513,11 @@ function InsightPanel({
 
       {status === 'ready' && file && mode === 'view' && (
         <>
-          <h3 className="detail-title">{file.display_title}</h3>
+          <h3 className="detail-title">
+            {session !== null && insightHasUnsavedInput(session) && draft.title.trim() !== ''
+              ? draft.title
+              : file.display_title}
+          </h3>
           <dl className="detail-meta">
             <div className="detail-meta-row"><dt>id</dt><dd>{file.id}</dd></div>
             <div className="detail-meta-row"><dt>版本</dt><dd>{file.revision}</dd></div>
@@ -508,11 +530,22 @@ function InsightPanel({
             <div className="detail-meta-row"><dt>修改时间</dt><dd>{formatServerTimestamp(file.updated_at)}</dd></div>
           </dl>
           {/* 阅读态：有 JSON 正文就用统一只读编辑器（与编辑态同一 schema）；
+              本地还有未提交输入时优先显示本地草稿，避免「看起来丢字」；
               legacy 记录只呈现服务器投影的原文，不做任何自动转换。 */}
+          {session !== null && insightHasUnsavedInput(session) && (
+            <p className="detail-hint" role="status">
+              当前显示本地尚未提交到服务器的输入（服务器版本 v{file.revision}）。
+              返回列表或切页前会先尝试保存，保存失败时不会丢弃这些改动。
+            </p>
+          )}
           {file.content_doc
             ? (
               <div className="writing-reading">
-                <RichTextEditor doc={file.content_doc} readOnly label="Insight 正文（只读）" />
+                <RichTextEditor
+                  doc={session !== null && insightHasUnsavedInput(session)
+                    ? draft.content_doc as ContentDocument
+                    : file.content_doc}
+                  readOnly label="Insight 正文（只读）" onLink={onResolveLink} />
               </div>
             )
             : <MarkdownContent source={file.content} onLink={onResolveLink} disabled={busy} />}
