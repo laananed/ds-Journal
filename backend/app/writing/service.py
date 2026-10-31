@@ -194,11 +194,62 @@ def writing_changes(row, data, *, db=None):
             except DocumentError as error:
                 raise WritingError(str(error)) from error
             nodes = candidate.get('content', []) if isinstance(candidate, dict) else []
-            if (blocks is not None or len(nodes) != 1 or not isinstance(nodes[0], dict)
+            if (isinstance(blocks, list) and len(blocks) > 1 and len(nodes) == 1
+                    and nodes[0].get('type') == 'legacyBlocks'):
+                from app.ai.models import AIRequest
+                from app.ritual.models import AIComment
+                from app.writing.documents import project_document, user_text_document
+                if (db is None or getattr(row, 'journal_kind', None) != 'writing'
+                        or set(changes) != {'content_doc'}
+                        or nodes[0]['attrs']['blocks'] != blocks
+                        or any(b.get('kind') != 'user' for b in blocks)
+                        or not isinstance(row.content, str)
+                        or any(not (c.isalnum() or c.isspace()) for c in row.content)
+                        or project_blocks(blocks) != row.content
+                        or project_document(candidate) != row.content
+                        or user_text_document(candidate) != ''.join(b['text'] for b in blocks)
+                        or db.scalar(select(AIRequest.id).limit(1)) is not None
+                        or db.scalar(select(AIComment.id).where(AIComment.journal_id == row.id).limit(1)) is not None):
+                    raise LegacyConversionRequired('legacy blocks require safe conversion')
+                changes['content'] = row.content
+                return {key: value for key, value in changes.items() if getattr(row, key, None) != value}
+            if (len(nodes) != 1 or not isinstance(nodes[0], dict)
                     or nodes[0].get('type') != 'legacyText'
                     or nodes[0].get('attrs', {}).get('raw_text') != row.content
                     or nodes[0].get('attrs', {}).get('author') != 'user'):
                 raise LegacyConversionRequired('legacy body requires safe conversion')
+            if blocks is not None:
+                # Only a single, exact user block has identical old/new R and U.
+                # Existing snapshots/comments and link syntax need a separate
+                # proof of their rendering and identity after conversion.
+                from app.ai.models import AIRequest
+                from app.ritual.models import AIComment
+                from app.writing.documents import project_document, user_text_document
+                from uuid import UUID
+                if (not isinstance(blocks, list) or len(blocks) != 1
+                        or not isinstance(blocks[0], dict)
+                        or set(blocks[0]) != {'id', 'kind', 'text'}
+                        or blocks[0]['kind'] != 'user'
+                        or not isinstance(blocks[0]['text'], str)
+                        or not isinstance(row.content, str)
+                        or not isinstance(blocks[0]['id'], str)
+                        or blocks[0]['id'] != nodes[0]['attrs']['id']
+                        or blocks[0]['text'] != row.content
+                        or any(not (char.isalnum() or char.isspace()) for char in row.content)
+                        or getattr(row, 'journal_kind', None) != 'writing'
+                        or set(changes) != {'content_doc'}
+                        or db is None):
+                    raise LegacyConversionRequired('legacy block requires safe conversion')
+                try:
+                    UUID(blocks[0]['id'])
+                except ValueError as error:
+                    raise LegacyConversionRequired('invalid legacy block identity') from error
+                if (project_blocks(blocks) != row.content
+                        or project_document(candidate) != row.content
+                        or user_text_document(candidate) != blocks[0]['text']
+                        or db.scalar(select(AIRequest.id).limit(1)) is not None
+                        or db.scalar(select(AIComment.id).where(AIComment.journal_id == row.id).limit(1)) is not None):
+                    raise LegacyConversionRequired('legacy references require review')
             # Exact legacy conversion is a server-controlled identity transition.
             changes['content'] = row.content
         else:

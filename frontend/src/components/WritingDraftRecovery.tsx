@@ -14,7 +14,7 @@
  * 因此它是纯展示层，页面逻辑仍集中在页面与 `utils/writingSession.ts`。
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CandidatePlan } from '../utils/writingSession'
 import {
   candidateMeta,
@@ -22,27 +22,11 @@ import {
   planLabel,
 } from '../utils/writingSession'
 import type { DraftCandidate } from '../state/localJournalDrafts'
+import { ACTION_LABELS, actionsFor } from './writingDraftActions'
+import type { DraftAction } from './writingDraftActions'
 
-/** 用户可以对一份本地草稿做的动作。 */
-export type DraftAction =
-  /** 继续这份草稿（未落库或同版本可编辑）。 */
-  | 'restore'
-  /** 版本不同：打开左右对照。 */
-  | 'compare'
-  /**
-   * 创建结果未确认：用**原创建键 + 原首次 payload** 重放取回那次提交。
-   * 与「另存为新草稿」是两件事：这条不会新建第二条记录。
-   */
-  | 'replayOriginal'
-  /**
-   * 服务器上已不存在 / 创建未确认：以**新的创建键**另存为一份独立新记录。
-   * 这不是对原创建请求的恢复或重放——原内容会变成一篇新的服务器文件。
-   */
-  | 'saveAsNew'
-  /** 稍后处理：关闭面板，记录继续保留。 */
-  | 'later'
-  /** 明确丢弃：删除本机记录（二次确认）。 */
-  | 'discard'
+/** 动作计划与文案见 `./writingDraftActions.ts`；对外类型保持原导出位置。 */
+export type { DraftAction } from './writingDraftActions'
 
 export interface DraftPanelItem {
   candidate: DraftCandidate
@@ -66,37 +50,6 @@ export interface LocalDraftPanelProps {
   onClearAll: () => void
 }
 
-/** 计划决定可用的动作；没有计划的候选先「恢复」以触发探测。 */
-function actionsFor(plan: CandidatePlan | null): DraftAction[] {
-  if (plan === null) return ['restore', 'later', 'discard']
-  switch (plan.kind) {
-    case 'editable':
-    case 'fresh':
-      return ['restore', 'later', 'discard']
-    case 'conflict':
-      return ['compare', 'later', 'discard']
-    case 'server_missing':
-      return ['saveAsNew', 'later', 'discard']
-    case 'replay_pending':
-      // 「恢复原请求」必须在最前：它才是找回原来那次提交；
-      // 「另存为新草稿」会在服务器上多出一篇独立记录。
-      return ['replayOriginal', 'saveAsNew', 'later', 'discard']
-    case 'server_unreadable':
-      return ['restore', 'later', 'discard']
-    default:
-      return ['later', 'discard']
-  }
-}
-
-const ACTION_LABELS: Record<DraftAction, string> = {
-  restore: '恢复',
-  compare: '对照服务器版本',
-  replayOriginal: '恢复原请求',
-  saveAsNew: '另存为新草稿',
-  later: '稍后',
-  discard: '丢弃',
-}
-
 const PLAN_HINTS: Record<CandidatePlan['kind'], string> = {
   editable: '版本一致，可以恢复编辑；保存时仍按版本比对。',
   fresh: '这份草稿还没提交到服务器，可以继续写。',
@@ -111,6 +64,31 @@ function LocalDraftPanel({
 }: LocalDraftPanelProps) {
   const [confirmDiscard, setConfirmDiscard] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
+  /**
+   * 进入确认态时把焦点放到「取消」上：键盘用户不会因为「丢弃」按钮被替换
+   * 而掉到页面顶部，默认回车执行的是安全动作（保留草稿）。
+   */
+  const cancelRef = useRef<HTMLButtonElement | null>(null)
+  /** 记录每个候选的「丢弃」按钮，取消后把焦点还回去，键盘不丢位置。 */
+  const discardRefs = useRef(new Map<string, HTMLButtonElement>())
+  const refocusKey = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (confirmDiscard !== null) {
+      cancelRef.current?.focus()
+      return
+    }
+    const key = refocusKey.current
+    if (key === null) return
+    refocusKey.current = null
+    discardRefs.current.get(key)?.focus()
+  }, [confirmDiscard])
+
+  /** 取消 = 只复位本地确认状态；不调用 onAction，不删除，不写服务器。 */
+  function cancelDiscard(key: string): void {
+    refocusKey.current = key
+    setConfirmDiscard(null)
+  }
 
   return (
     <section className="writing-drafts" aria-label="本地未提交草稿">
@@ -151,6 +129,8 @@ function LocalDraftPanel({
                   </p>
                 </div>
                 <div className="writing-draft-actions">
+                  {/* 动作列表来自 `actionsFor`，不含 'discard'：丢弃只有下方
+                      唯一的「丢弃」按钮这一个入口，且必须先经二次确认。 */}
                   {!discarding && actions.map((action) => (
                     <button
                       key={action}
@@ -173,18 +153,24 @@ function LocalDraftPanel({
                       >
                         确认丢弃
                       </button>
-                      <button type="button" disabled={busy} onClick={() => setConfirmDiscard(null)}>取消</button>
+                      <button type="button" disabled={busy} onClick={() => cancelDiscard(candidate.key)} ref={cancelRef}>取消</button>
                     </>
                   )}
                   {!discarding && (
                     <button
                       type="button"
                       disabled={disabled || busy}
+                      ref={(node) => {
+                        if (node === null) discardRefs.current.delete(candidate.key)
+                        else discardRefs.current.set(candidate.key, node)
+                      }}
                       onClick={() => setConfirmDiscard(candidate.key)}
                     >
                       丢弃
                     </button>
                   )}
+                  {/* 确认态：确认才执行丢弃；「取消」只复位本地状态，
+                      不触发 onAction、不删除、不写服务器。 */}
                 </div>
               </li>
             )

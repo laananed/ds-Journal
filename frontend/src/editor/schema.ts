@@ -34,6 +34,7 @@ import { AiSummary } from './extensions/AiSummary.ts'
 import { GoalItem } from './extensions/GoalItem.ts'
 import { GoalReview } from './extensions/GoalReview.ts'
 import { LegacyText } from './extensions/LegacyText.ts'
+import { LegacyBlocks } from './extensions/LegacyBlocks.ts'
 import { MindComment } from './extensions/MindComment.ts'
 import { RitualQuestion } from './extensions/RitualQuestion.ts'
 
@@ -56,6 +57,7 @@ export const SERVER_OWNED_TYPES = new Set([
   'goalItem',
   'goalReview',
   'legacyText',
+  'legacyBlocks',
 ])
 
 /** 需要稳定 `id` 的基础块；`text`/`hardBreak` 不分配 ID（API §2.1）。 */
@@ -91,6 +93,7 @@ const SPECIAL_ATTR_KEYS: Record<string, readonly string[]> = {
   goalItem: ['id', 'goal_id', 'text', 'checked'],
   goalReview: ['id', 'link_id', 'goal_snapshot', 'checked_snapshot', 'review_title'],
   legacyText: ['id', 'raw_text', 'author'],
+  legacyBlocks: ['id', 'format_version', 'blocks'],
 }
 
 const SPECIAL_ATTR_DEFAULTS: Record<string, Record<string, unknown>> = {
@@ -100,7 +103,7 @@ const SPECIAL_ATTR_DEFAULTS: Record<string, Record<string, unknown>> = {
   legacyText: { raw_text: '', author: 'user' },
 }
 
-const ATOMIC_TYPES = new Set(['hardBreak', 'horizontalRule', 'aiPlaceholder', 'ritualQuestion', 'goalItem', 'legacyText'])
+const ATOMIC_TYPES = new Set(['hardBreak', 'horizontalRule', 'aiPlaceholder', 'ritualQuestion', 'goalItem', 'legacyText', 'legacyBlocks'])
 const SIMPLE_MARKS = new Set(['bold', 'italic', 'strike', 'code'])
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -232,6 +235,9 @@ export function protectedSignature(document: PMNode): string {
     const attrs: Record<string, unknown> = {}
     for (const key of Object.keys(node.attrs).sort()) attrs[key] = (node.attrs as Record<string, unknown>)[key]
     if (type === 'legacyText' && attrs.author === 'user') delete attrs.raw_text
+    if (type === 'legacyBlocks' && Array.isArray(attrs.blocks)) attrs.blocks = attrs.blocks.map((block: Record<string, unknown>) => {
+      const copy = { ...block }; if (copy.kind === 'user' || copy.kind === 'ai_summary') delete copy.text; return copy
+    })
     const editableContent = type === 'aiSummary' || type === 'goalReview'
     const content = editableContent ? null : ((node.toJSON() as { content?: unknown }).content ?? null)
     entries.push(JSON.stringify([type, attrs, content]))
@@ -352,6 +358,7 @@ export function buildExtensions({ readOnly = false }: EditorExtensionOptions = {
     GoalItem,
     GoalReview,
     LegacyText,
+    LegacyBlocks,
     MindComment,
   ]
 }

@@ -25,4 +25,5 @@ export type SpecialBlock =
   | { type: 'goalItem'; attrs: { id: string; goal_id: string; text: string; checked: boolean } }
   | { type: 'goalReview'; attrs: { id: string; link_id: string | null; goal_snapshot: string; checked_snapshot: boolean; review_title: string }; content?: Paragraph[] }
   | { type: 'legacyText'; attrs: { id: string; raw_text: string; author: 'user' | 'ai' } }
+  | { type: 'legacyBlocks'; attrs: { id: string; format_version: 1; blocks: ({ id: string; kind: 'user'; text: string } | { id: string; kind: 'ai_reply' | 'ai_summary'; text: string; request_id: string })[] } }
 export type ContentDocument = { type: 'doc'; content: (BasicBlock | SpecialBlock)[] }

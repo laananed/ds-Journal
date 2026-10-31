@@ -18,6 +18,10 @@ GET 零写，不创建草稿、模板、占位、评论、检查点或“今日�
 
 **T01 过渡选择（2026-10-30）**：非 NULL 详情的 `content_blocks` 明确返回 null，`content` 为新文档的阅读投影；旧 `content` / `content_blocks` 写入非 NULL 文档返回 409 `legacy_conversion_required`。NULL 且无 blocks 的文件，只接受单个 user `legacyText` 与原文逐字相同的等价转换；该次转换保留旧 content、检查点、引用和编辑时间。转换后用户可主动编辑 user legacyText 的 raw_text，但不能改变其 ID/作者；AI legacyText 受保护。带 blocks 的记录在有证据证明阅读投影、作者和检查点均可保留前拒绝自动转换，原字段不变；此限制不阻止旧格式继续使用旧接口。转换和普通写入均受原 revision CAS 约束。
 
+**单 user block 保守子集（用户已批准，待验证）**：仅 writing Journal 的单个结构合法 user block，候选为沿用其 ID、原文和 user 作者的单个 `legacyText`，且旧 content、旧 R/U 与新 R/U 完全相等。为避免未经证明的引用和恢复语义，存在任何 AI 请求、该文件存在评论、正文包含字母数字和空白之外的字符、无法检查关联时拒绝；转换请求不能同时修改元数据。这是严格的临时限制，不代表其他正文不可安全转换。空数组、多块、AI、未知或损坏结构以及投影不一致均保留 legacy。转换使用原 PATCH 和 revision CAS，保留旧 blocks、content、C 和编辑时间，不自动执行批量转换；本条不宣称相关能力已验证。
+
+**旧多块兼容表示（用户批准，实施和验证中）**：schema 1 增加顶层原子节点 `legacyBlocks`，属性为 `id`、`format_version:1`、`blocks`。blocks 按原顺序严格保留 user `{id,kind,text}` 或 AI `{id,kind,text,request_id}`，不接受其他字段、类型或重复 ID。其内部按 Stage 3 原拼接规则计算 R/U，内部块间不插入新分隔；与其他顶层节点仍按既有规则分隔。候选由客户端提交，服务端从真实旧数据严格比对，普通写入不可伪造或删除该节点、改变块身份、顺序、类型或 AI 来源及 reply 正文；user 和 summary 文字可按既有权限编辑。当前转换路径仅尝试全部为 user 的多块，其他沿用单块限制；AI 块、无法验证来源、引用、请求或评论时拒绝并保留旧记录。转换前后 R/U 必须精确相同，C 不修改；此表示待验证，不授权丢弃旧列或自动批量转换。
+
 最终 POST/PATCH 正文只接收 `content_doc`；`content` 是后端投影，`content_blocks` 不再可写。格式版本错误 422。T01～T12 过渡读写兼容必须拒绝旧客户端扁平化已转换文件，不能同时把 content、blocks 和 doc 当权威；最终旧正文写请求返回 409 `legacy_conversion_required`，不会偷偷覆盖作者。具体转换与收缩顺序见架构 §10。
 
 公共节点包含基础 paragraph/heading/text/hardBreak/list/taskList/taskItem/codeBlock/blockquote/horizontalRule，以及：

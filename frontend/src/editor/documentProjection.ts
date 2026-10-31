@@ -2,6 +2,15 @@
 type Node = { type: string; text?: string; attrs?: Record<string, unknown>; content?: Node[]; marks?: {type: string; attrs?: Record<string, unknown>}[] }
 const html = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 const str = (value: unknown) => typeof value === 'string' ? value : ''
+function legacyBlocks(node: Node, userOnly: boolean): string {
+  const blocks = Array.isArray(node.attrs?.blocks) ? node.attrs.blocks as { kind: string; text: string }[] : []
+  return blocks.map(block => {
+    if (block.kind === 'user') return block.text
+    if (userOnly) return ''
+    if (block.kind === 'ai_reply') return '\n\n> AI 回复\n' + block.text.split('\n').map(line => '> ' + line).join('\n') + '\n\n'
+    return '\n\n---\n\nAI 复盘\n\n' + block.text
+  }).join('')
+}
 
 export function utf16ToCodePoint(text: string, offset: number): number {
   if (!Number.isInteger(offset) || offset < 0 || offset > text.length) throw new RangeError('invalid offset')
@@ -17,6 +26,7 @@ function user(node: Node): string | null {
   if (type === 'text') return node.text ?? ''
   if (type === 'hardBreak') return '\n'
   if (type === 'legacyText') return node.attrs?.author === 'user' ? str(node.attrs?.raw_text) : null
+  if (type === 'legacyBlocks') return legacyBlocks(node, true)
   if (['aiReply', 'aiSummary', 'aiPlaceholder', 'ritualQuestion', 'horizontalRule'].includes(type)) return null
   if (type === 'goalItem') return str(node.attrs?.text)
   const parts = (node.content ?? []).map(user).filter((part): part is string => part !== null)
@@ -39,6 +49,7 @@ function markdown(node: Node): string {
   }
   if (type === 'hardBreak') return '\n'
   if (type === 'legacyText') return str(attrs.raw_text)
+  if (type === 'legacyBlocks') return legacyBlocks(node, false)
   if (type === 'horizontalRule') return '---'
   if (type === 'goalItem') return (attrs.checked ? '- [x] ' : '- [ ] ') + html(str(attrs.text))
   if (type === 'ritualQuestion') return html(str(attrs.question_snapshot))
