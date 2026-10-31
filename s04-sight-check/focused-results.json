@@ -1,0 +1,530 @@
+{
+  "generatedAt": "2026-10-31T11:36:26.049Z",
+  "results": [
+    {
+      "id": "I-NEW-0",
+      "name": "新建 Insight：标题+正文后立即刷新（<800ms）",
+      "status": "ok",
+      "data": {
+        "elapsedMs": 74,
+        "local": {
+          "localStorage": {
+            "seekjournal-theme-preference": "light"
+          },
+          "idb": {}
+        },
+        "dialogs": [],
+        "POST": 0,
+        "PATCH": 0,
+        "postTitles": [],
+        "postHasClientKey": [],
+        "serverCount": 1,
+        "serverTitles": [
+          "已有洞察"
+        ],
+        "serverHasMarker": false,
+        "after": {
+          "pageShowsMarker": false,
+          "detailShowsMarker": false,
+          "cards": [
+            "已有洞察\nInsight · 2026-10-31 02:00:00Z\n参见 [[目标条目]]\n打开"
+          ],
+          "detailSnippet": ""
+        }
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "I-NEW-400",
+      "name": "新建 Insight：输入后等 400ms 刷新",
+      "status": "ok",
+      "data": {
+        "elapsedMs": 473,
+        "local": {
+          "localStorage": {
+            "seekjournal-theme-preference": "light"
+          },
+          "idb": {}
+        },
+        "dialogs": [],
+        "POST": 0,
+        "PATCH": 0,
+        "postTitles": [],
+        "postHasClientKey": [],
+        "serverCount": 1,
+        "serverTitles": [
+          "已有洞察"
+        ],
+        "serverHasMarker": false,
+        "after": {
+          "pageShowsMarker": false,
+          "detailShowsMarker": false,
+          "cards": [
+            "已有洞察\nInsight · 2026-10-31 02:00:00Z\n参见 [[目标条目]]\n打开"
+          ],
+          "detailSnippet": ""
+        }
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "I-NEW-1200",
+      "name": "新建 Insight：输入后等 1200ms（超过 800ms 防抖）刷新",
+      "status": "ok",
+      "data": {
+        "elapsedMs": 1274,
+        "local": {
+          "localStorage": {
+            "seekjournal-theme-preference": "light"
+          },
+          "idb": {}
+        },
+        "dialogs": [],
+        "POST": 1,
+        "PATCH": 0,
+        "postTitles": [
+          "标题-MNEW12"
+        ],
+        "postHasClientKey": [
+          true
+        ],
+        "serverCount": 2,
+        "serverTitles": [
+          "标题-MNEW12",
+          "已有洞察"
+        ],
+        "serverHasMarker": true,
+        "after": {
+          "pageShowsMarker": true,
+          "detailShowsMarker": true,
+          "cards": [
+            "标题-MNEW12\nInsight · 2026-10-31 02:00:00Z\n正文-MNEW12\n打开",
+            "已有洞察\nInsight · 2026-10-31 02:00:00Z\n参见 [[目标条目]]\n打开"
+          ],
+          "detailSnippet": "正文-MNEW12"
+        }
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "I-NEW-CLOSE",
+      "name": "新建 Insight：输入后立即关闭页面",
+      "status": "ok",
+      "data": {
+        "local": {
+          "localStorage": {
+            "seekjournal-theme-preference": "light"
+          },
+          "idb": {}
+        },
+        "dialogs": [],
+        "POST": 0,
+        "PATCH": 0,
+        "postTitles": [],
+        "postHasClientKey": [],
+        "serverCount": 1,
+        "serverTitles": [
+          "已有洞察"
+        ],
+        "serverHasMarker": false
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "I-EDIT-0",
+      "name": "已有 Insight：追加正文后立即刷新（<800ms）",
+      "status": "ok",
+      "data": {
+        "elapsedMs": 74,
+        "local": {
+          "localStorage": {
+            "seekjournal-theme-preference": "light"
+          },
+          "idb": {}
+        },
+        "dialogs": [],
+        "POST": 0,
+        "PATCH": 0,
+        "postTitles": [],
+        "postHasClientKey": [],
+        "serverCount": 1,
+        "serverTitles": [
+          "已有洞察"
+        ],
+        "serverHasMarker": false,
+        "after": {
+          "pageShowsMarker": false,
+          "detailShowsMarker": false,
+          "cards": [
+            "已有洞察\nInsight · 2026-10-31 02:00:00Z\n参见 [[目标条目]]\n打开"
+          ],
+          "detailSnippet": ""
+        }
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "I-EDIT-400",
+      "name": "已有 Insight：追加正文后等 400ms 刷新",
+      "status": "ok",
+      "data": {
+        "elapsedMs": 484,
+        "local": {
+          "localStorage": {
+            "seekjournal-theme-preference": "light"
+          },
+          "idb": {}
+        },
+        "dialogs": [],
+        "POST": 0,
+        "PATCH": 0,
+        "postTitles": [],
+        "postHasClientKey": [],
+        "serverCount": 1,
+        "serverTitles": [
+          "已有洞察"
+        ],
+        "serverHasMarker": false,
+        "after": {
+          "pageShowsMarker": false,
+          "detailShowsMarker": false,
+          "cards": [
+            "已有洞察\nInsight · 2026-10-31 02:00:00Z\n参见 [[目标条目]]\n打开"
+          ],
+          "detailSnippet": ""
+        }
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "I-EDIT-1200",
+      "name": "已有 Insight：追加正文后等 1200ms 刷新",
+      "status": "ok",
+      "data": {
+        "elapsedMs": 1281,
+        "local": {
+          "localStorage": {
+            "seekjournal-theme-preference": "light"
+          },
+          "idb": {}
+        },
+        "dialogs": [],
+        "POST": 0,
+        "PATCH": 1,
+        "postTitles": [],
+        "postHasClientKey": [],
+        "serverCount": 1,
+        "serverTitles": [
+          "已有洞察"
+        ],
+        "serverHasMarker": true,
+        "after": {
+          "pageShowsMarker": true,
+          "detailShowsMarker": true,
+          "cards": [
+            "已有洞察\nInsight · 2026-10-31 02:00:00Z\n参见 [[目标条目]]追加-MEDT12\n打开"
+          ],
+          "detailSnippet": "参见 [[目标条目]]追加-MEDT12"
+        }
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "I-EDIT-CLOSE",
+      "name": "已有 Insight：追加正文后立即关闭页面",
+      "status": "ok",
+      "data": {
+        "local": {
+          "localStorage": {
+            "seekjournal-theme-preference": "light"
+          },
+          "idb": {}
+        },
+        "dialogs": [],
+        "POST": 0,
+        "PATCH": 0,
+        "postTitles": [],
+        "postHasClientKey": [],
+        "serverCount": 1,
+        "serverTitles": [
+          "已有洞察"
+        ],
+        "serverHasMarker": false
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "I-CANCEL-EMPTY",
+      "name": "取消新建：空内容（点新建后立即取消）",
+      "status": "ok",
+      "data": {
+        "buttonText": "取消新建",
+        "panelStillOpen": true,
+        "leaveDialogVisible": false,
+        "POST": 0,
+        "PATCH": 0,
+        "postTitles": [],
+        "postHasClientKey": [],
+        "serverCount": 1,
+        "serverTitles": [
+          "已有洞察"
+        ],
+        "serverHasMarker": true,
+        "cards": [
+          "已有洞察\nInsight · 2026-10-31 02:00:00Z\n参见 [[目标条目]]\n打开"
+        ]
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "I-CANCEL-TITLE",
+      "name": "取消新建：仅输入标题（无正文）",
+      "status": "ok",
+      "data": {
+        "panelStillOpen": true,
+        "leaveDialogVisible": false,
+        "dialogText": null,
+        "POST": 0,
+        "PATCH": 0,
+        "postTitles": [],
+        "postHasClientKey": [],
+        "serverCount": 1,
+        "serverTitles": [
+          "已有洞察"
+        ],
+        "serverHasMarker": true,
+        "cards": [
+          "已有洞察\nInsight · 2026-10-31 02:00:00Z\n参见 [[目标条目]]\n打开"
+        ]
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "I-CANCEL-BODY",
+      "name": "取消新建：已输入正文",
+      "status": "ok",
+      "data": {
+        "panelStillOpen": false,
+        "leaveDialogVisible": false,
+        "POST": 1,
+        "PATCH": 0,
+        "postTitles": [
+          "打算取消的标题MCB"
+        ],
+        "postHasClientKey": [
+          true
+        ],
+        "serverCount": 2,
+        "serverTitles": [
+          "打算取消的标题MCB",
+          "已有洞察"
+        ],
+        "serverHasMarker": true,
+        "cards": [
+          "打算取消的标题MCB\nInsight · 2026-10-31 02:00:00Z\n打算取消的正文MCB\n打开",
+          "已有洞察\nInsight · 2026-10-31 02:00:00Z\n参见 [[目标条目]]\n打开"
+        ],
+        "notice": "无保存提示"
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "S-EDIT-RELOAD",
+      "name": "日程编辑：改标题后立即刷新",
+      "status": "ok",
+      "data": {
+        "elapsedMs": 70,
+        "local": {
+          "localStorage": {
+            "seekjournal-theme-preference": "light"
+          },
+          "idb": {}
+        },
+        "dialogs": [],
+        "POST": 0,
+        "PATCH": 0,
+        "postTitles": [],
+        "postKeys": [],
+        "serverCount": 2,
+        "serverTitles": [
+          "与导师讨论提纲",
+          "跑步"
+        ],
+        "formReopened": false,
+        "pageShowsMarker": false,
+        "listTitles": [
+          "与导师讨论提纲",
+          "跑步"
+        ]
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "S-EDIT-SAVED-RELOAD",
+      "name": "日程编辑：点保存成功后再刷新（对照）",
+      "status": "ok",
+      "data": {
+        "beforeReload": {
+          "formOpen": false,
+          "notice": true
+        },
+        "dialogs": [],
+        "POST": 0,
+        "PATCH": 1,
+        "postTitles": [],
+        "postKeys": [],
+        "serverCount": 2,
+        "serverTitles": [
+          "日程已保存MSS",
+          "跑步"
+        ],
+        "pageShowsMarker": true,
+        "listTitles": [
+          "日程已保存MSS",
+          "跑步"
+        ]
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "S-EDIT-CLOSE",
+      "name": "日程编辑：改标题后立即关闭页面",
+      "status": "ok",
+      "data": {
+        "local": {
+          "localStorage": {
+            "seekjournal-theme-preference": "light"
+          },
+          "idb": {}
+        },
+        "dialogs": [],
+        "POST": 0,
+        "PATCH": 0,
+        "postTitles": [],
+        "postKeys": [],
+        "serverCount": 2,
+        "serverTitles": [
+          "与导师讨论提纲",
+          "跑步"
+        ]
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "S-CREATE-RELOAD",
+      "name": "日程新建：填表单后立即刷新",
+      "status": "ok",
+      "data": {
+        "local": {
+          "localStorage": {
+            "seekjournal-theme-preference": "light"
+          },
+          "idb": {}
+        },
+        "dialogs": [],
+        "POST": 0,
+        "PATCH": 0,
+        "postTitles": [],
+        "postKeys": [],
+        "serverCount": 2,
+        "serverTitles": [
+          "与导师讨论提纲",
+          "跑步"
+        ],
+        "formReopened": false,
+        "pageShowsMarker": false
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "S-EDIT-NAV",
+      "name": "日程编辑：站内切换模块（对照，验证离开确认）",
+      "status": "ok",
+      "data": {
+        "dialogOpen": true,
+        "dialogText": "当前内容尚未保存，确定离开？\n\n确认离开会丢弃本次未保存的改动。\n\n继续编辑\n确认离开",
+        "stillOnSchedule": true,
+        "POST": 0,
+        "PATCH": 0,
+        "postTitles": [],
+        "postKeys": [],
+        "serverCount": 2,
+        "serverTitles": [
+          "与导师讨论提纲",
+          "跑步"
+        ]
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "S-LISTFAIL",
+      "name": "日程创建成功但列表刷新失败：计数/提示/列表/重试",
+      "status": "ok",
+      "data": {
+        "first": {
+          "beforeCount": 2,
+          "beforeTitles": [
+            "与导师讨论提纲",
+            "跑步"
+          ],
+          "serverCount": 3,
+          "serverTitles": [
+            "与导师讨论提纲",
+            "跑步",
+            "刷新失败MSF"
+          ],
+          "listTitles": [
+            "与导师讨论提纲",
+            "跑步"
+          ],
+          "successNoticeShown": true,
+          "bannerShown": false,
+          "bannerText": [
+            "重新读取"
+          ],
+          "formOpen": false,
+          "POST": 1
+        },
+        "second": {
+          "serverCount": 4,
+          "serverTitles": [
+            "与导师讨论提纲",
+            "跑步",
+            "刷新失败MSF",
+            "刷新失败MSF"
+          ],
+          "postKeys": [
+            "c614cb57-d9c8-4c2e-a057-401067918738",
+            "93fd7ce6-c212-4cdc-911b-d3370e9a702f"
+          ],
+          "duplicateCount": 2,
+          "listTitles": [
+            "与导师讨论提纲",
+            "跑步"
+          ]
+        },
+        "retry": {
+          "listTitles": [
+            "与导师讨论提纲",
+            "跑步",
+            "刷新失败MSF",
+            "刷新失败MSF"
+          ],
+          "bannerGone": true
+        }
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "CTRL-DIALOG",
+      "name": "方法学对照：手工注册 beforeunload 后刷新，确认检查能捕获提示",
+      "status": "ok",
+      "data": {
+        "dialogs": [
+          "beforeunload"
+        ]
+      },
+      "pageErrors": []
+    }
+  ]
+}

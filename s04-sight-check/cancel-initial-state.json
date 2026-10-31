@@ -1,0 +1,14 @@
+{
+  "initial": {
+    "text": "未提交到服务器 | 仍在编辑器中，尚未提交到服务器。",
+    "cls": "autosave-status autosave-unsaved"
+  },
+  "requests": [
+    "GET /api/business-day",
+    "GET /api/journals",
+    "GET /api/rituals",
+    "GET /api/insights",
+    "GET /api/folders"
+  ],
+  "serverCount": 1
+}

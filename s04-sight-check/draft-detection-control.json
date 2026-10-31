@@ -1,0 +1,20 @@
+{
+  "idb": {
+    "seekjournal.local.drafts": {
+      "journal_drafts": 0
+    }
+  },
+  "label": "本地草稿（1）,查看本地草稿",
+  "requests": [
+    "GET /api/business-day",
+    "GET /api/journals",
+    "GET /api/rituals",
+    "GET /api/ai/settings",
+    "GET /api/business-day",
+    "GET /api/journals",
+    "GET /api/folders",
+    "POST /api/journals",
+    "GET /api/journals/undefined/comments",
+    "GET /api/journals"
+  ]
+}

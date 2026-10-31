@@ -56,11 +56,12 @@ import {
   emptyScheduleDraft,
   newClientCreateId,
   SCHEDULE_TITLE_MAX_CODE_POINTS,
+  scheduleDraftEquals,
   validateScheduleDraft,
 } from '../utils/scheduleForm'
 import type { ScheduleDraft, ScheduleDraftErrors, ScheduleFailure } from '../utils/scheduleForm'
 import { pageAfterEmptyRead } from '../utils/schedulePaging'
-import { formatShanghaiTimeRange, scheduleKey, SHANGHAI_TIME_ZONE_LABEL } from '../utils/scheduleTime'
+import { compareSchedulesByStartThenId, formatShanghaiTimeRange, scheduleKey, SHANGHAI_TIME_ZONE_LABEL } from '../utils/scheduleTime'
 
 /**
  * Mock 来源的界面声明。
@@ -91,8 +92,8 @@ type ListState =
  * 用独立横幅说明失败并给出重试入口；列表内容不被错误态覆盖。
  */
 const REFRESH_FAILED_HINT =
-  '下面显示的是最近一次成功读取的列表，可能不是最新内容；' +
-  '刚才的删除或保存是否成功，以操作提示为准，这里不会重复发送删除或保存。'
+  '下面显示的是最近一次成功读取的列表，可能还没有刚创建或刚修改的日程；' +
+  '如果刚保存过，先点「重新读取」确认，避免重复创建；这里不会重复发送保存或删除。'
 
 /**
  * 编辑时的版本冲突（CAS 409）。
@@ -182,6 +183,29 @@ function SchedulePage({ client, suggest, disabled = false, onDirtyChange }: Sche
     onDirtyChange?.(editor !== null)
     return () => onDirtyChange?.(false)
   }, [editor, onDirtyChange])
+
+  /**
+   * 表单里是否有未提交的改动。
+   *
+   * 新建与空表单比、编辑与打开时的基线比：只切表单/点输入框不算改动，
+   * 已经点过「保存」的编辑区会关闭，因此不会误拦刷新。
+   */
+  const draftDirty = editor === null
+    ? false
+    : editor.mode === 'create'
+      ? !scheduleDraftEquals(editor.draft, emptyScheduleDraft())
+      : !scheduleDraftEquals(editor.draft, draftFromSchedule(editor.baseline))
+
+  // 刷新 / 关闭：有未提交输入时让浏览器明确询问；站内切页由 App 的离开对话框负责。
+  useEffect(() => {
+    if (!draftDirty) return
+    function onBeforeUnload(event: BeforeUnloadEvent): void {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [draftDirty])
   const [errors, setErrors] = useState<ScheduleDraftErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -232,7 +256,7 @@ function SchedulePage({ client, suggest, disabled = false, onDirtyChange }: Sche
           // 已经有可见条目（保存/删除后的后台刷新）：刷新失败**不能**把列表换成
           // 错误态——那会让用户刚确认过的操作看起来像把数据弄丢了。
           // 保留现有列表（可能过期），用横幅说明失败并给出重试入口。
-          setListRefreshError(failure.message)
+          setListRefreshError(`日程列表刷新失败：${failure.message}`)
           return
         }
         setListState({ status: 'error', failure })
@@ -289,6 +313,24 @@ function SchedulePage({ client, suggest, disabled = false, onDirtyChange }: Sche
           items: current.page.items.filter((item) => scheduleKey(item.id) !== scheduleKey(id)),
         },
       }
+    })
+  }
+
+  /**
+   * 新建已被服务端确认（201）后，把这条放进当前列表。
+   *
+   * 只用于「服务端明确返回了资源」的情况，不靠本地拼状态；排序与
+   * `GET /api/schedules` 一致（开始时间、ID）。这样即使随后的列表刷新失败，
+   * 用户也能看到刚创建的那条，不会因为旧列表而重复创建。
+   */
+  function insertItemLocally(created: Schedule): void {
+    setListState((current) => {
+      if (current.status !== 'ready') return current
+      const items = current.page.items
+        .filter((item) => scheduleKey(item.id) !== scheduleKey(created.id))
+        .concat(created)
+        .sort(compareSchedulesByStartThenId)
+      return { status: 'ready', page: { ...current.page, items } }
     })
   }
 
@@ -476,9 +518,11 @@ function SchedulePage({ client, suggest, disabled = false, onDirtyChange }: Sche
     if (editor.mode === 'create') {
       setSubmitting(true)
       try {
-        await client.create(buildCreateInput(payload, editor.clientCreateId))
+        const created = await client.create(buildCreateInput(payload, editor.clientCreateId))
         closeEditor()
-        setNotice({ tone: 'success', text: '已创建日程（不影响 Set 目标）。' })
+        // 服务端已经确认创建：先放进列表，刷新失败也不会让用户以为没建成。
+        insertItemLocally(created)
+        setNotice({ tone: 'success', text: `已创建「${created.title}」（不影响 Set 目标）。` })
         reload()
       } catch (error) {
         // 创建失败一律保留表单与同一个创建键：未经用户确认不清空输入。

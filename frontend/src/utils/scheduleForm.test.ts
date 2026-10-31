@@ -20,6 +20,7 @@ import {
   emptyScheduleDraft,
   newClientCreateId,
   SCHEDULE_TITLE_MAX_CODE_POINTS,
+  scheduleDraftEquals,
   validateScheduleDraft,
 } from './scheduleForm.ts'
 
@@ -339,5 +340,14 @@ expectEqual(networkOnList.message.includes('改动未确认'), false, '读取失
 const unknownStatus = describeScheduleFailure({ status: 500, message: '' }, 'list')
 expectEqual(unknownStatus.kind, 'unknown', '其它状态码归类')
 expectTrue(unknownStatus.message.includes('500'), '未知状态码回显状态数字')
+
+// 离开提示只认「有实际改动」：空表单、仅切换焦点都不应触发。
+const emptyDraft = emptyScheduleDraft()
+expectEqual(scheduleDraftEquals(emptyDraft, emptyScheduleDraft()), true, '空表单与空表单一致')
+expectEqual(scheduleDraftEquals({ ...emptyDraft, title: '跑步' }, emptyDraft), false, '填写标题算改动')
+expectEqual(scheduleDraftEquals({ ...emptyDraft, startsAtInput: '2026-11-05T09:00' }, emptyDraft), false, '填写开始时间算改动')
+expectEqual(scheduleDraftEquals({ ...emptyDraft, endsAtInput: '2026-11-05T10:00' }, emptyDraft), false, '填写结束时间算改动')
+expectEqual(scheduleDraftEquals({ ...emptyDraft, completed: true }, emptyDraft), false, '勾选完成算改动')
+expectEqual(scheduleDraftEquals({ ...emptyDraft, title: '跑步' }, { ...emptyDraft, title: '跑步' }), true, '相同输入判定一致')
 
 console.log(`scheduleForm: ${assertions} assertions passed`)
