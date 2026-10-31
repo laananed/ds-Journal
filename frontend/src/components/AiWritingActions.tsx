@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AiApiError, getAIRequest, postAILocal } from '../api/ai'
 import TokenUsage from './TokenUsage'
+import { allowNewAiCall } from '../utils/legacyInboxPolicy'
 import type { AILocalResponse, AIRequestDetail } from '../types/ai'
 import {
   POLL_INTERVAL_MS,
@@ -58,6 +59,8 @@ import {
 export type AiPrepareResult = { ok: true; revision: number } | { ok: false; message: string }
 
 export interface AiWritingActionsProps {
+  /** 历史来源只允许查询已有请求，不再发起新调用。 */
+  recoveryOnly?: boolean
   /** 文件身份；为 null（新建尚未成功保存）时不能调用 AI。 */
   source: AiSourceRef | null
   /** 外部忙碌（例如正在删除某个 AI 段）：禁用入口，但不改变 AI 自身状态机。 */
@@ -97,11 +100,12 @@ function reduceResponse(state: AiCallState, body: AILocalResponse | AIRequestDet
 }
 
 function AiWritingActions({
-  source, disabled = false, prepare, onServerFile, onLockChange, onActivity,
+  source, disabled = false, recoveryOnly = false, prepare, onServerFile, onLockChange, onActivity,
 }: AiWritingActionsProps) {
   const [state, setState] = useState<AiCallState>(initialAiCallState)
   const [question, setQuestion] = useState('')
   const [questionError, setQuestionError] = useState('')
+  const [kindUnverified, setKindUnverified] = useState(false)
 
   const stateRef = useRef(state)
   const mountedRef = useRef(true)
@@ -140,7 +144,7 @@ function AiWritingActions({
     const key = `${source.type}:${source.id}`
     if (recoveredRef.current === key) return
     recoveredRef.current = key
-    const entry = findRecoveryEntry(readRecoveryIndex(storage()), { type: source.type, id: source.id })
+    const entry = findRecoveryEntry(readRecoveryIndex(storage()), { type: source.type, id: source.id }, 'local')
     if (entry === null) return
     // 只登记「有待查询的入口」，真正的结果由下面的有限轮询取回。
     setState({
@@ -193,6 +197,11 @@ function AiWritingActions({
       }
       querying = false
       if (cancelled) return
+      if (result !== 'missing' && result.kind !== 'local') {
+        setKindUnverified(true)
+        setState((value) => ({ ...value, phase: 'unknown', message: '请求类型无法确认，已保留恢复入口；不会自动重发。' }))
+        return
+      }
       setState((value) => applyAiQuery(value, result))
       // 恢复查询拿到 applied：把后端**完整文件**交给页面刷新保存基线。
       // 少了这一步，页面只知道「结果已附着」，草稿基线却停在旧版本，下一次
@@ -240,7 +249,7 @@ function AiWritingActions({
   /* ----------------------------------------------------------- 发起调用 */
 
   const runCall = useCallback(async (): Promise<void> => {
-    if (busyRef.current) return
+    if (busyRef.current || !allowNewAiCall(recoveryOnly)) return
     const current = stateRef.current
     if (source === null || !canStartAiCall(current)) return
 
@@ -317,7 +326,7 @@ function AiWritingActions({
     if (next.phase === 'applied' && file !== null && file !== undefined) {
       onServerFileRef.current(file, 'call')
     }
-  }, [question, source])
+  }, [question, source, recoveryOnly])
 
   const queryStatus = useCallback(async (): Promise<void> => {
     const requestId = stateRef.current.requestId
@@ -327,6 +336,12 @@ function AiWritingActions({
     try {
       const detail = await getAIRequest(requestId)
       if (!mountedRef.current) { busyRef.current = false; return }
+      if (detail.kind !== 'local') {
+        setKindUnverified(true)
+        setState((value) => ({ ...value, phase: 'unknown', message: '请求类型无法确认，已保留恢复入口；不会自动重发。' }))
+        return
+      }
+      setKindUnverified(false)
       setState((value) => applyAiQuery(value, detail))
       if (detail.status === 'applied' && detail.file !== null && detail.file !== undefined) {
         onServerFileRef.current(detail.file, 'recovery')
@@ -352,6 +367,7 @@ function AiWritingActions({
     if (requestId !== null) {
       writeRecoveryIndex(storage(), removeRecoveryEntry(readRecoveryIndex(storage()), requestId))
     }
+    setKindUnverified(false)
     setState(clearCallResult(stateRef.current))
   }, [])
 
@@ -381,7 +397,7 @@ function AiWritingActions({
           )}
           {state.message !== '' && <p className="ai-actions-message" role="status">{state.message}</p>}
 
-          <label className="ai-question">
+          {!recoveryOnly && <label className="ai-question">
             <span>单独问一句（独立对话，不会写进日记正文）</span>
             <textarea
               className="ai-question-input"
@@ -392,20 +408,20 @@ function AiWritingActions({
               aria-label="单独问一句"
               onChange={(event) => setQuestion(event.target.value)}
             />
-          </label>
-          {questionError !== '' && <p className="ai-actions-error" role="alert">{questionError}</p>}
+          </label>}
+          {!recoveryOnly && questionError !== '' && <p className="ai-actions-error" role="alert">{questionError}</p>}
 
           <div className="ai-actions-buttons">
-            <button type="button" onClick={() => void runCall()}
+            {!recoveryOnly && !kindUnverified && <button type="button" onClick={() => void runCall()}
               disabled={callDisabled || !canStartAiCall(state)}>
               {locked ? '处理中……' : '让 AI 看看'}
-            </button>
+            </button>}
             {showQuery && (
               <button type="button" onClick={() => void queryStatus()} disabled={callDisabled}>
                 查询状态
               </button>
             )}
-            {showResend && (
+            {!recoveryOnly && !kindUnverified && showResend && (
               <button type="button" onClick={() => void runCall()} disabled={callDisabled}
                 title="会创建一个新的 request_id，可能产生新的计费">
                 重新提问（新的付费调用）

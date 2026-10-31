@@ -156,6 +156,9 @@ T01 若从提交 HEAD 创建隔离工作区，不会自动带入未提交四份�
 
 ### 3.13 S04-T12 — Inbox 退出与最终收缩
 
+- 2026-10-31 用户要求 Web 非破坏性退役：保留历史记录访问和旧 AI 恢复，停止 Web 新建和新 AI 选源；后端 API 暂保留兼容。空过渡 revision 未提交/执行，予以移除。最终验收和真实库授权不变。
+- 待办：隔离 PostgreSQL 完成旧文作者/R/U/C/引用转换、混合 Inbox/Journal 请求与匿名 usage 清理验证；确认 pending/unknown、迟到执行者隔离及未知依赖；完整备份和隔离恢复验证；编写后续收缩迁移、旧客户端切换、独立测试和 Codex 风险审核。未完成前不删除 Inbox 表、AI 快照或 `content_blocks`。
+
 - 文件：删除当前 `backend/app/inbox/`、`frontend/src/pages/InboxPage.tsx`、`api/inboxes.ts`、`types/inbox.ts`、`utils/inboxDraft.ts` 与仅属Inbox的废弃实现；修改 `backend/app/{main.py,ai/models.py,ai/requests.py,writing/service.py}`、`backend/alembic/env.py`、新增 `backend/alembic/versions/*_stage4_retire_inbox_blocks.py`、测试守卫/fixture、公共FileType、App/恢复索引与残留消费者；**不删除/改写历史迁移文件**。
 - 验收：无Inbox UI/功能/API/OpenAPI/当前Model/表/type分支；旧路由404、非法type422；混合sources请求整行清理、Inbox C清理、其他C保留、usage匿名累计保持、已存Journal/Insight/总结不动、Folder不级联、失效链接合理、旧执行者不复活私人快照；旧blocks字段所有保留内容安全转JSON后才DROP。
 - 测试：新增 `backend/tests/test_s4_retirement.py`；在合成数据上完整M3→M4A→M4B、带Inbox混合review/已有结果/usage/C/Folder/内部引用、旧进程迟到模拟、事务失败/未知依赖拒绝；升级/回退备份恢复比较正文/作者/序列/时间/累计。现有Inbox专属测试被退役契约测试替代，不能只删除失败测试获取绿灯。

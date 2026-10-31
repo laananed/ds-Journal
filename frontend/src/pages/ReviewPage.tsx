@@ -30,12 +30,14 @@ import {
   addRecoveryEntry,
   newRequestId,
   readRecoveryIndex,
+  recoveryKindMatches,
   removeRecoveryEntry,
   writeRecoveryIndex,
   type AiRecoveryEntry,
 } from '../utils/aiRequestState'
 import { validateContent } from '../utils/contentValidation'
 import { defaultJournalDate } from '../utils/journalDate'
+import { allowNewReview } from '../utils/legacyInboxPolicy'
 import { reviewDraftsToSeeds, type InsightDraftSeed } from '../utils/insightAiDraft'
 import {
   REVIEW_MAX_DATES,
@@ -314,6 +316,11 @@ function ReviewPage({
 
   function applyReviewDetail(detail: AIRequestDetail, businessDate: string): void {
     setRequestId(detail.request_id)
+    if (!recoveryKindMatches(detail, 'review')) {
+      setPhase('unknown')
+      setMessage('请求类型无法确认，已保留恢复入口；不会自动重发。')
+      return
+    }
     if (detail.status === 'pending') {
       setPhase('polling')
       setMessage('后端仍在生成复盘，正在等待结果……')
@@ -371,6 +378,10 @@ function ReviewPage({
 
   async function generate(): Promise<void> {
     if (busyRef.current || reviewInFlight(phase)) return
+    if (!allowNewReview(selected.map(item => item.source))) {
+      setActionError('历史 Inbox 不再作为新复盘来源；已有复盘请求仍可恢复。')
+      return
+    }
     if (selected.length === 0) {
       setActionError('先选择要复盘的 Journal 或 Inbox。')
       return
@@ -478,6 +489,11 @@ function ReviewPage({
       try {
         const detail = await getAIRequest(id)
         if (cancelled) return
+        if (!recoveryKindMatches(detail, 'review')) {
+          setPhase('unknown')
+          setMessage('请求类型无法确认，已保留恢复入口；不会自动重发。')
+          return
+        }
         if (reviewRecoveryAction(detail.status) === 'drop') {
           dropRecovery(id)
           setPhase('failed')
@@ -524,6 +540,12 @@ function ReviewPage({
       const detail = await getAIRequest(entry.requestId)
       if (!mountedRef.current) return
       busyRef.current = false
+      if (!recoveryKindMatches(detail, 'review')) {
+        setRequestId(entry.requestId)
+        setPhase('unknown')
+        setMessage('请求类型无法确认，已保留恢复入口；不会自动重发。')
+        return
+      }
       if (reviewRecoveryAction(detail.status) === 'drop') {
         dropRecovery(entry.requestId)
         setPhase('failed')
@@ -621,7 +643,7 @@ function ReviewPage({
         <span className={`ai-phase ai-phase-${phase}`} role="status">{reviewPhaseLabel(phase)}</span>
       </div>
       <p className="detail-hint">
-        选择 1～{REVIEW_MAX_SOURCES} 个 Journal / Inbox（最多 {REVIEW_MAX_DATES} 个不同业务日期，非连续也可以，
+        选择 1～{REVIEW_MAX_SOURCES} 个 Journal（最多 {REVIEW_MAX_DATES} 个不同业务日期，非连续也可以，
         同一天多篇不重复占名额）。生成只创建可编辑预览，**不会**改动任何原文件；确认保存只会有一次。
       </p>
 
@@ -649,7 +671,7 @@ function ReviewPage({
         <div className="review-tabs" role="group" aria-label="源类型">
           <button type="button" aria-pressed={browseType === 'journal'} disabled={lockInFlight}
             onClick={() => { setBrowseType('journal'); setPage(1) }}>Journal</button>
-          <button type="button" aria-pressed={browseType === 'inbox'} disabled={lockInFlight}
+          <button type="button" aria-pressed={browseType === 'inbox'} disabled={lockInFlight} hidden style={{ display: 'none' }}
             onClick={() => { setBrowseType('inbox'); setPage(1) }}>Inbox</button>
           <button type="button" onClick={() => setListRevision((value) => value + 1)} disabled={lockInFlight}>刷新列表</button>
         </div>

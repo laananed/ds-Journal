@@ -201,6 +201,8 @@ content_doc 成为权威后旧块列只作冻结回退资料，普通旧客户�
 
 ### 10.2 M4B 退出 Inbox 与旧正文列（T12）
 
+**2026-10-31 分阶段安排**：Web 使用历史 Inbox 访问路径，停止新建及新 AI 选源，保留旧请求恢复与旧链接；后端及数据库暂时保持兼容。无业务作用且未提交、未执行的 `d4b12f61a903` 草稿删除，迁移链仍以 `c01a7e421b50` 为 head。未来实际收缩从当时实际唯一 head 新建迁移，必须完成本节全部门禁及独立验证。
+
 先完成所有消费者/新测试/AI恢复适配，确认未处理在途请求为零或已受控unknown，并停下旧执行进程；未核实进程归属不擅自终止。记录每个待删 Inbox、含其快照的混合请求与用量归属，备份及恢复演练通过后再进入收缩。
 
 删除所有 inbox C，删除 sources 含 inbox 的 ai_requests 整行，usage FK SET NULL 保留累计；不删其他 Journal C、不删已保存 Journal/Insight/AI总结；不裁剪 JSON 单项后保留私密 question/result。清理 Inbox 客户端索引和类型/查询/路由/当前Model，DROP inboxes，所有保留文件JSON验证通过后才DROP旧content_blocks列。未知引用、未转换结构或陌生测试对象使收缩拒绝，不用CASCADE掩盖依赖。

@@ -75,7 +75,7 @@ const modules: { id: Module; label: string }[] = [
   { id: 'end', label: '结束今天' },
   { id: 'schedule', label: '日程' },
   { id: 'journal', label: '所有日记' },
-  { id: 'inbox', label: '收件箱' },
+  { id: 'inbox', label: '历史收件箱' },
   { id: 'review', label: '复盘' },
   { id: 'insight', label: '洞察' },
   { id: 'search', label: '全部搜索' },

@@ -41,9 +41,6 @@ export const POLL_INTERVAL_MS = 2000
 /** 最多轮询次数：45 × 2 秒 = 90 秒。 */
 export const POLL_MAX_ATTEMPTS = 45
 
-/** 恢复索引最多保留的条目数（按源去重，天然远小于该上限）。 */
-export const RECOVERY_INDEX_LIMIT = 16
-
 /** 未知状态的固定说明；不承诺服务器未计费。 */
 export const CLIENT_TIMEOUT_NOTE = '客户端超时不代表服务器已取消或未计费。'
 
@@ -122,6 +119,11 @@ export interface AiRequestLike {
   citations?: unknown
   error?: { category?: string | null; message?: string | null } | null
   file?: unknown
+}
+
+/** A missing or different kind is not evidence that a result belongs to this flow. */
+export function recoveryKindMatches(detail: AiRequestLike, expected: AiCallKind): boolean {
+  return detail.kind === expected
 }
 
 /** 后端 `POST /api/ai/local` 的 noop 分支。 */
@@ -617,7 +619,7 @@ export function parseRecoveryIndex(raw: string | null): AiRecoveryEntry[] {
   } catch {
     return []
   }
-  if (!isRecord(parsed) || !Array.isArray(parsed.entries)) return []
+  if (!isRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.entries)) return []
   const entries: AiRecoveryEntry[] = []
   for (const item of parsed.entries) {
     if (!isRecord(item)) continue
@@ -649,13 +651,23 @@ export function writeRecoveryIndex(
 ): void {
   if (storage === null || storage === undefined) return
   try {
-    storage.setItem(RECOVERY_STORAGE_KEY, serializeRecoveryIndex(entries))
+    const raw = storage.getItem(RECOVERY_STORAGE_KEY)
+    let retained: unknown[] = []
+    if (raw !== null && raw.trim() !== '') {
+      const existing: unknown = JSON.parse(raw)
+      if (!isRecord(existing) || existing.version !== 1 || !Array.isArray(existing.entries)) return
+      retained = existing.entries.filter((entry) => {
+        const one = JSON.stringify({ version: 1, entries: [entry] })
+        return parseRecoveryIndex(one).length === 0
+      })
+    }
+    const known = JSON.parse(serializeRecoveryIndex(entries)) as { entries: AiRecoveryEntry[] }
+    storage.setItem(RECOVERY_STORAGE_KEY, JSON.stringify({ version: 1, entries: [...known.entries, ...retained] }))
   } catch { /* 隐私模式 / 配额满：恢复索引失败不影响本次调用。 */ }
 }
 
 /**
- * 登记一条入口：同一 request_id 不重复；同一源只保留**最近一次**。
- * 这样重开页面时每篇文件最多提示一个待恢复的调用。
+ * 同一 request_id 不重复；同一来源和类型保留最近一次，不覆盖其他类型。
  */
 export function addRecoveryEntry(
   entries: AiRecoveryEntry[],
@@ -663,9 +675,9 @@ export function addRecoveryEntry(
 ): AiRecoveryEntry[] {
   const kept = entries.filter(
     (item) => item.requestId !== entry.requestId
-      && !(item.source.type === entry.source.type && item.source.id === entry.source.id),
+      && !(item.kind === entry.kind && item.source.type === entry.source.type && item.source.id === entry.source.id),
   )
-  return [...kept, toEntry(entry.requestId, entry.kind, entry.source)].slice(-RECOVERY_INDEX_LIMIT)
+  return [...kept, toEntry(entry.requestId, entry.kind, entry.source)]
 }
 
 export function removeRecoveryEntry(entries: AiRecoveryEntry[], requestId: string): AiRecoveryEntry[] {
@@ -675,11 +687,12 @@ export function removeRecoveryEntry(entries: AiRecoveryEntry[], requestId: strin
 export function findRecoveryEntry(
   entries: AiRecoveryEntry[],
   source: AiSourceRef | null,
+  kind: AiCallKind = 'local',
 ): AiRecoveryEntry | null {
   if (source === null) return null
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]
-    if (entry.source.type === source.type && entry.source.id === source.id) return entry
+    if (entry.kind === kind && entry.source.type === source.type && entry.source.id === source.id) return entry
   }
   return null
 }

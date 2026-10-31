@@ -553,7 +553,11 @@ function InboxPanel({
           </dl>
           <WritingContent blocks={file.content_blocks} content={file.content}
             onLink={onResolveLink} disabled={busy} />
-          <div className="detail-actions">
+          <p className="detail-hint">历史 Inbox 仅供查看与恢复既有 AI 请求；记录仍然保留。新内容请使用写作。</p>
+          <AiWritingActions recoveryOnly source={{ type: 'inbox', id: file.id }}
+            disabled={busy} prepare={prepareAiCall} onServerFile={applyAiFile}
+            onLockChange={changeAiLock} onActivity={() => onChanged(file)} />
+          <div className="detail-actions" hidden style={{ display: 'none' }}>
             <button type="button" onClick={startEditing} disabled={busy}>修改</button>
             {/* T09 单篇入口：Inbox 单篇复盘默认新建 Journal，不改动本文。 */}
             <button type="button" onClick={() => onStartReview({ type: 'inbox', id: file.id })}
@@ -769,9 +773,9 @@ function InboxPage({
   return (
     <section className="inbox-page" aria-label="Inbox 模块">
       <section className="app-toolbar" aria-label="Inbox 工具">
-        <button type="button" onClick={newInbox} disabled={uiLocked}>新建 Inbox</button>
-        <button type="button" onClick={openDaily} disabled={uiLocked}>打开今日 Daily</button>
-        <button type="button" onClick={() => onNavigate(showList)} disabled={uiLocked}>Inbox 列表</button>
+        <button type="button" onClick={newInbox} disabled={uiLocked} hidden style={{ display: 'none' }}>新建 Inbox</button>
+        <button type="button" onClick={openDaily} disabled={uiLocked} hidden style={{ display: 'none' }}>打开今日 Daily</button>
+        <button type="button" onClick={() => onNavigate(showList)} disabled={uiLocked}>历史 Inbox 列表</button>
         <label className="app-filter">
           <span>按日期查看</span>
           <input type="date" value={listFilter} disabled={uiLocked}
@@ -781,7 +785,7 @@ function InboxPage({
       </section>
 
       {dailyInfo && (
-        <p className="inbox-daily-status">
+        <p className="inbox-daily-status" hidden style={{ display: 'none' }}>
           今日 Daily（{dailyInfo.date}）：{dailyInfo.state === 'active' ? '已创建' : '尚未创建'}
           {dailyInfo.state === 'missing' ? '，保存有效正文后才会创建。' : '，点击“打开今日 Daily”查看。'}
         </p>

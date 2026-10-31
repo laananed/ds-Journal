@@ -15,7 +15,7 @@ interface SearchPageProps {
 
 const FILTERS: { type: SearchFilter; label: string }[] = [
   { type: 'all', label: '全部' }, { type: 'journal', label: 'Journal' },
-  { type: 'inbox', label: 'Inbox' }, { type: 'insight', label: 'Insight' },
+  { type: 'inbox', label: '历史 Inbox' }, { type: 'insight', label: 'Insight' },
 ]
 
 function SearchPage({ conditions, onConditionsChange, onNavigate, onOpenFile }: SearchPageProps) {

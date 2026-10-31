@@ -8,7 +8,7 @@ interface FileCardProps {
 }
 /** 单个原生button覆盖整张卡片，鼠标、Enter和Space使用同一打开动作。 */
 function FileCard({ file, onOpen, selected = false, disabled = false }: FileCardProps) {
-  const typeLabel = { journal: 'Journal', inbox: 'Inbox', insight: 'Insight' }[file.type]
+  const typeLabel = { journal: 'Journal', inbox: '历史 Inbox', insight: 'Insight' }[file.type]
   return (
     <button type="button" className="file-card" onClick={() => onOpen({ type: file.type, id: file.id })}
       disabled={disabled} aria-current={selected ? 'true' : undefined}

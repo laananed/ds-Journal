@@ -210,6 +210,8 @@ files 为受影响完整详情，effects 是与这些详情对应的受控变化
 
 ## 11. Inbox 退出与旧请求
 
+**2026-10-31 过渡安排**：Web 将 Inbox 标为历史记录并停止新建及新 AI 选源，仍通过历史入口、搜索、Folder 和链接访问旧记录，保留旧 AI 请求恢复。后端旧 API 暂保留兼容，旧客户端仍可调用，不能称后端已退役。下述 404/422 与移除行为是最终目标。
+
 最终 `/api/inboxes` 及 Daily 路由从 OpenAPI/注册中消失，旧路径404；type=inbox 的 Search/Folder/AI/Link 等过滤值422。Search/Folder/Link 只查询 Journal/Insight；Folder 仍保护有效和回收箱引用，不能因为 Inbox 退出删掉 Folder 或其他文件。
 
 删除全部 Inbox 检查点和 sources 包含任一 Inbox 的 ai_requests 整行；包含 Journal 的混合请求也整行清除，不能只删 sources 中的一项而遗留 question/result/settings 快照。ai_usage 断开 FK 保留匿名累计，其他 Journal 的 C 不因 request 消失被重置。已保存独立 Journal/Insight/总结文本保留，旧 AI 来源缺请求时显示记录已清除；内部标题引用不自动重写、猜测或新建。

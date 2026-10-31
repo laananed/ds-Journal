@@ -11,7 +11,7 @@ interface Props {
   onOpen: (file: FileIdentity) => void
   onClose: () => void
 }
-const labels = { journal: 'Journal', inbox: 'Inbox', insight: 'Insight' }
+const labels = { journal: 'Journal', inbox: '历史 Inbox', insight: 'Insight' }
 
 function LinkCandidates({ title, disabled, onOpen, onClose }: Props) {
   const [page, setPage] = useState(1)
