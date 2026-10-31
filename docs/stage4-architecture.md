@@ -98,6 +98,8 @@ Journal 增 `journal_kind text NOT NULL DEFAULT 'writing'`，检查枚举；在 
 
 模板表按 kind 两行，questions JSONB、revision；缺行读空列表/revision0，首次 PATCH 创建。模板不是正文外键，插入为当时文字快照；内容编辑不回写模板。0～4 的上限在 Schema 和服务校验，模板请求不生成 AI。
 
+2026-10-31 用户批准 API §4 的问题插入与 Set Checklist 转换命令。服务端持锁读取已保存节点及模板、验证版本后构造受控节点并在同一事务维护投影；不接受客户端提供系统快照或目标文字。复用既有文件写队列和 FileMutation；不支持安全合并的较新草稿进入冲突。丢响应先读取核对，不以过期请求重复创建；不新增持久幂等表。
+
 所有 Ritual 跨文件变更以业务日期短事务锁协调，接着按 Journal ID 升序锁对象，再锁 link/request，统一生命周期入口复用这个顺序；多日期复盘按日期排序后锁源。HTTP 期间不持锁。通用 Journal PATCH/Delete、Trash Restore/Purge 也接入对应 Ritual 处理，不能另写绕过唯一/关联的分支。
 
 普通恢复校验有效名额，冲突仅返回身份。完整替换同时软删 current、解除其关联、恢复 source 并增版；旧关联不自动恢复。AI/C 的原文身份保留，但在途旧请求不因恢复被自动应用。左右对照是两个只读/编辑视图，复制需用户明确选择，后端只按源 revision 与真实节点构造新内容、重新分配 ID/受保护来源；不做自动合并。

@@ -42,3 +42,22 @@ export function restoreRitualReplace(sourceId: number, sourceRevision: number, p
 export function copyRitualContent(sourceId: number, payload: RitualCopyRequest): Promise<RitualMutation> {
   return write(`/api/rituals/${sourceId}/copy-content`, 'POST', payload)
 }
+
+/**
+ * 受控问题插入（API §4）。只提交模板问题 ID 与两个版本号：快照文字、节点 ID、
+ * 答案段落全部由服务端生成，客户端无法伪造受保护节点。
+ */
+export function insertRitualQuestion(
+  journalId: number,
+  payload: { expected_revision: number; expected_template_revision: number; question_id: string },
+): Promise<RitualMutation> {
+  return write(`/api/rituals/${journalId}/questions`, 'POST', payload)
+}
+
+/** 受控目标创建（API §4）：把已保存 Set 中指定的 Checklist 条目转换为目标。 */
+export function createRitualGoal(
+  journalId: number,
+  payload: { expected_revision: number; task_item_id: string },
+): Promise<RitualMutation> {
+  return write(`/api/rituals/${journalId}/goals`, 'POST', payload)
+}

@@ -17,6 +17,17 @@ class SourceUnavailable(WriteConflict):
     code = 'source_unavailable'
 
 
+def require_existing_goals(old_goals, new_goals):
+    """Only a controlled command may add a goal (API §4, product §7).
+
+    An ordinary Set PATCH may edit or delete existing goals — that is how goal
+    text/checkbox changes reach the End mirror — but it must not mint a new
+    `goal_id`, otherwise a client could forge target identity from free text.
+    """
+    if new_goals.keys() - old_goals.keys():
+        raise WritingError('goal creation requires a controlled command')
+
+
 def _locked_day(db, source_id, end_id=None):
     source = db.get(Journal, source_id)
     if source is None:
@@ -192,6 +203,7 @@ def patch_set_document(db, set_id, data):
                     result[attrs['goal_id']] = node
             return result
         old_goals, new_goals = goals(source.content_doc), goals(candidate)
+        require_existing_goals(old_goals, new_goals)
         for link in links:
             end = found[link.end_journal_id]
             review = next((node for node in (end.content_doc or {}).get('content', [])

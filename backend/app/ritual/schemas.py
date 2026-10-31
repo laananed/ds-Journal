@@ -19,6 +19,27 @@ class TemplateQuestion(BaseModel):
         return value
 
 
+class ControlledCreate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    expected_revision: int | None = Field(default=None, strict=True, gt=0)
+
+    @model_validator(mode='after')
+    def non_null_revision(self):
+        for name in ('expected_revision', 'expected_template_revision'):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f'{name} cannot be null')
+        return self
+
+
+class QuestionInsert(ControlledCreate):
+    expected_template_revision: int | None = Field(default=None, strict=True, ge=0)
+    question_id: UUID
+
+
+class GoalCreate(ControlledCreate):
+    task_item_id: UUID
+
+
 class TemplateUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid')
     expected_revision: int | None = Field(default=None, strict=True, ge=0)

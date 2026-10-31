@@ -261,6 +261,11 @@ export type InsertQuestionResult =
  * 插入的是**当时文字的快照**：`template_question_id` 只记录来源，之后改模板
  * 不回写正文；同时补一个空段落作为答案位置（用户答案是独立正文）。
  * 新文档是新对象，绝不修改传入的 `content_doc`。
+ *
+ * 说明（2026-10-31）：真正的写入走服务端受控命令
+ * `POST /api/rituals/{id}/questions`（API §4），节点 ID 与快照都由后端生成；
+ * 本函数只作为「插入后文档长什么样」的纯形状参考与回归断言使用，
+ * 页面不得用它本地拼节点后保存（受保护节点会被 422 拒绝）。
  */
 export function insertQuestion(
   document: ContentDocument | null | undefined,
@@ -289,21 +294,6 @@ export function insertQuestion(
   base.content = content
   return { ok: true, value: { document: base as unknown as ContentDocument, questionId, answerId } }
 }
-
-/**
- * 问题插入是否可用。
- *
- * 现状（2026-10-30，T04/T07 已交付）：`POST/PATCH /api/journals` 走
- * `validate_author_changes`，`ritualQuestion` 属于受保护节点，**普通写入
- * 创建它一律 422**（`protected node creation or removal`），后端也还没有
- * 受控插入端点。所以页面不能真的插入后保存，只能如实禁用并说明原因，
- * 而不是让用户点一下再收到保存失败。契约与实现细节见交付报告「已知问题」。
- */
-export const QUESTION_INSERT_AVAILABLE = false
-
-export const QUESTION_INSERT_BLOCKED_REASON =
-  '服务端尚未提供受控插入端点：当前写入会因受保护节点校验（ritualQuestion）返回 422，' +
-  '插入结果无法保存。模板编辑与正文编辑不受影响。'
 
 /* --------------------------------------------------- 可复制块与插入位置 */
 

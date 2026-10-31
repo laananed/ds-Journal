@@ -9,7 +9,6 @@
  */
 
 import {
-  QUESTION_INSERT_AVAILABLE,
   TEMPLATE_CAPACITY,
   addTemplateQuestion,
   applyBusinessDay,
@@ -158,7 +157,6 @@ if (inserted.ok) {
 equal(JSON.stringify(body), before, '插入不修改传入文档')
 check(!insertQuestion(body, { id: 'tpl-2', text: '   ' }).ok, '空白问题不能插入')
 check(!insertQuestion(null, { id: 'tpl-3', text: '问题' }).ok, '正文未加载时不能插入')
-equal(QUESTION_INSERT_AVAILABLE, false, '插入可用性默认关闭（服务端无受控端点）')
 
 /* --------------------------------------------------- 4. 正文与可保存 */
 

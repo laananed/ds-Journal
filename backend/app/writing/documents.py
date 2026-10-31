@@ -15,6 +15,77 @@ class DocumentError(ValueError):
     pass
 
 
+def insert_ritual_question(document, node_id, answer_id, template_id, question):
+    """Append a server-owned question snapshot and an empty user answer block.
+
+    The template text is copied, not referenced: later template edits cannot
+    rewrite history (product §5). IDs are supplied by the service; the client
+    never chooses them. Returns a new document and never mutates the input.
+    """
+    if not isinstance(question, str) or not question.strip():
+        raise DocumentError('invalid question snapshot')
+    result = deepcopy(document)
+    result['content'].extend([
+        {'type': 'ritualQuestion', 'attrs': {'id': node_id, 'template_question_id': template_id,
+                                             'question_snapshot': question}},
+        {'type': 'paragraph', 'attrs': {'id': answer_id}},
+    ])
+    return result
+
+
+def convert_ritual_task_item(document, item_id, node_id, goal_id):
+    """Convert one top-level plain checklist item into a Set goal.
+
+    `goalItem` carries only `text`/`checked` in schema 1 (API §2.1), so marks,
+    comments, extra blocks or nested lists have nowhere to go. Those forms are
+    rejected and the original document is returned untouched instead of being
+    flattened, because dropping them would silently destroy user content.
+    The remaining items keep their order; a split list keeps the original block
+    identity on its first half and gets a fresh ID on the second.
+    """
+    result = deepcopy(document)
+    matches = [(li, ii) for li, block in enumerate(result.get('content', []))
+               if block.get('type') == 'taskList'
+               for ii, item in enumerate(block.get('content', []))
+               if item.get('attrs', {}).get('id') == item_id]
+    if len(matches) != 1:
+        raise DocumentError('checklist item unavailable')
+    li, ii = matches[0]
+    block = result['content'][li]
+    item = block['content'][ii]
+    checked = item.get('attrs', {}).get('checked')
+    if type(checked) is not bool:
+        raise DocumentError('checklist item must have a checkbox state')
+    children = item.get('content', [])
+    if len(children) != 1 or children[0].get('type') != 'paragraph':
+        raise DocumentError('checklist item must be plain text')
+    parts = []
+    for child in children[0].get('content', []):
+        if child.get('marks') or child.get('type') not in ('text', 'hardBreak'):
+            raise DocumentError('checklist formatting cannot be converted')
+        parts.append(child.get('text', '') if child['type'] == 'text' else '\n')
+    value = ''.join(parts)
+    if not value.strip() or len(value) > 2000:
+        raise DocumentError('invalid goal text')
+    goal = {'type': 'goalItem', 'attrs': {'id': node_id, 'goal_id': goal_id,
+                                          'text': value, 'checked': checked}}
+    before, after = block['content'][:ii], block['content'][ii + 1:]
+    replacement = []
+    if before:
+        first = deepcopy(block)
+        first['content'] = before
+        replacement.append(first)
+    replacement.append(goal)
+    if after:
+        last = deepcopy(block)
+        last['content'] = after
+        if before and 'id' in last.get('attrs', {}):
+            last['attrs']['id'] = str(uuid4())
+        replacement.append(last)
+    result['content'][li:li + 1] = replacement
+    return result
+
+
 SPECIAL = {'aiReply', 'aiSummary', 'aiPlaceholder', 'ritualQuestion', 'goalItem', 'goalReview', 'legacyText'}
 BLOCKS = {'paragraph', 'heading', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'blockquote', 'horizontalRule'}
 CHILDREN = {

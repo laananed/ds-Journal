@@ -21,6 +21,13 @@ export interface RitualRestoreRequest {
 }
 export interface RitualMutation {
   files: Journal[]
-  effects: Array<{ type: 'journal'; id: number; base_revision: number; revision: number; ops: Array<{ kind: string }> }>
+  effects: Array<{
+    type: 'journal'
+    id: number
+    base_revision: number
+    revision: number
+    /** `node_id` 定位受控节点；复制类命令用 `nodes` 列出复制结果（API §5/§10）。 */
+    ops: Array<{ kind: string; node_id?: string; nodes?: unknown[] }>
+  }>
   request_id: null
 }

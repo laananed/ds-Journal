@@ -8,7 +8,7 @@ from app.database import get_db
 from app.ritual.dates import DAY_START_HOUR, business_date
 from app.ritual.models import RitualTemplate
 from typing import Literal
-from app.ritual.schemas import TemplateUpdate, RestoreReplace, CopyContent, GoalLinkCreate, GoalUpdate
+from app.ritual.schemas import TemplateUpdate, RestoreReplace, CopyContent, GoalLinkCreate, GoalUpdate, QuestionInsert, GoalCreate
 from app.ritual.service import update_template, restore_replace
 from app.writing.router import matched_revision
 
@@ -71,6 +71,18 @@ def copy_ritual(source_id: int, data: CopyContent, db: Session = Depends(get_db)
 def link_goals(data: GoalLinkCreate, db: Session = Depends(get_db)):
     from app.ritual.goals import create_links
     return create_links(db, data)
+
+
+@router.post('/rituals/{journal_id}/questions')
+def insert_question(journal_id: int, data: QuestionInsert, db: Session = Depends(get_db)):
+    from app.ritual.controlled import create_controlled_node
+    return create_controlled_node(db, journal_id, data, question=True)
+
+
+@router.post('/rituals/{journal_id}/goals')
+def create_goal(journal_id: int, data: GoalCreate, db: Session = Depends(get_db)):
+    from app.ritual.controlled import create_controlled_node
+    return create_controlled_node(db, journal_id, data, question=False)
 
 
 @router.patch('/ritual-goals/{set_id}/{goal_id}')

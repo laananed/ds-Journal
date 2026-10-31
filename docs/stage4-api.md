@@ -76,6 +76,11 @@ Writing 左侧用 journals 的当日 writing 筛选；今日总览用当日 all 
 
 `PATCH /api/ritual-templates/{kind}`，kind 仅 set/end，body `{expected_revision,questions}`。缺行用 revision=0 首次建立，否则 CAS；冲突 409，成功返回该模板。没有生成问题 API。模板 ID 仅供插入时记录来源，不以 FK/联动改正文。点击插入产生新的文档节点 ID，不复用模板 ID 当正文 ID。
 
+**2026-10-31 受控创建补充（用户批准）**：以下命令仅对已有、有效且已转换的 Ritual 执行；调用前写队列先保存用户正文。缺少版本 428，非法参数 422，版本过期、目标已变或重复提交 409；失败事务零写。重试先 GET 核对结果，不能用新版本盲目重发。响应为 §10 FileMutation，变更使用 `copy_nodes`，并提供完整文件及前后版本；若期间产生较新草稿且无法安全应用，客户端保留草稿并进入冲突，不自动覆盖。
+
+- `POST /api/rituals/{id}/questions`：`{expected_revision, expected_template_revision, question_id}`。锁定该文件及其类型的当前模板，验证两个版本和问题归属，服务端生成新节点 ID，在正文末尾插入模板文字快照与空答案段落。模板随后修改不更改快照；每次新点击为独立操作。
+- `POST /api/rituals/{id}/goals`：`{expected_revision, task_item_id}`。仅有效 Set；服务端从已保存文档定位顶层 Checklist 中指定 taskItem，将其转换为新的 goalItem 并保留勾选及文字，生成独立节点 ID 和 goal_id；不创建 End 或 link。仅支持单段纯文本（可包含 hardBreak）的条目，带格式、评论、嵌套或其他块的条目拒绝并保留原文，以免丢失信息；普通 Writing/Insight 的 Checklist 不受影响。多项清单在转换位置拆分，保留其他项及顺序。
+
 ## 5. Trash 与两种 Ritual 恢复
 
 普通 `GET /api/trash`、详情、单条永久删除及普通恢复沿用 Stage 3，但详情换 JSON。`POST /api/trash/journal/{id}/restore` 仍用 If-Match；若 Ritual 同日同类有有效占位，409 `ritual_slot_conflict`，不修改任何对象。

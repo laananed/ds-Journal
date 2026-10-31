@@ -30,9 +30,11 @@ import RichTextEditor from '../editor/RichTextEditor'
 import { EMPTY_DOCUMENT } from '../editor/schema'
 import {
   copyRitualContent,
+  createRitualGoal,
   getBusinessDay,
   getRitualTemplates,
   getRituals,
+  insertRitualQuestion,
   restoreRitualReplace,
   updateRitualTemplate,
 } from '../api/rituals'
@@ -77,8 +79,6 @@ import type { BusinessDay, RitualKind, RitualMutation, RitualQuestion, RitualSel
 import type { FlushResult } from '../hooks/useAutosave'
 import {
   KIND_LABEL,
-  QUESTION_INSERT_AVAILABLE,
-  QUESTION_INSERT_BLOCKED_REASON,
   applyBusinessDay,
   buildCopyPayload,
   buildRestorePayload,
@@ -86,7 +86,6 @@ import {
   deletedRitualsOf,
   displayTitle,
   goalsOf,
-  insertQuestion,
   isRitualDraftSavable,
   newNodeId,
   relatedRevisionsFor,
@@ -99,6 +98,7 @@ import {
   type RitualCapture,
   type RitualFileRef,
 } from '../utils/ritualView'
+import { checklistCandidates } from '../utils/ritualControlled'
 
 export interface RitualPageProps {
   /** 页面处理哪一种 Ritual；界面只显示「开始今天 / 结束今天」。 */
@@ -157,7 +157,7 @@ function toFileMutation(result: RitualMutation): FileMutation {
       id: effect.id,
       base_revision: effect.base_revision,
       revision: effect.revision,
-      ops: effect.ops.map((op) => ({ kind: op.kind })),
+      ops: effect.ops.map((op) => ({ kind: op.kind, node_id: op.node_id })),
     })),
     request_id: result.request_id,
   }
@@ -783,6 +783,16 @@ function RitualPage({
 
   const currentTemplate = templates[kind] ?? EMPTY_TEMPLATE
 
+  async function refreshRitualMetadata(): Promise<boolean> {
+    try {
+      const latest = await getRituals(effectiveDate)
+      setRituals({ set: latest.set, end: latest.end })
+      return true
+    } catch {
+      return false
+    }
+  }
+
   async function saveTemplate(questions: RitualQuestion[]) {
     setTemplateSaving(true)
     setTemplateError('')
@@ -812,16 +822,49 @@ function RitualPage({
     }
   }
 
-  function insertTemplateQuestion(question: RitualQuestion) {
+  async function insertTemplateQuestion(question: RitualQuestion) {
     setInsertError('')
-    const result = insertQuestion(document, question, newNodeId)
-    if (!result.ok) {
-      setInsertError(result.message)
+    if (sessionId === null) return
+    if (!currentTemplate.questions.some((saved) => saved.id === question.id && saved.text === question.text)) {
+      setInsertError('请先保存模板修改，再插入问题。')
       return
     }
-    // 系统写入：不推进用户输入序号，也不触发任何 AI 调度（产品 §9）。
-    changeDraft({ ...(draft ?? { title: '', date: effectiveDate, folder_id: null }), content_doc: result.value.document }, 'system')
-    setNotice('问题已插入正文，可以继续在后面写答案。')
+    setGoalBusy('question')
+    try {
+      await editSessionStore.runFileCommand(sessionId, async () => {
+        const fresh = editSessionStore.getSession(sessionId)
+        if (fresh?.fileId == null || fresh.revision == null) throw new Error('请先写入并保存正文，再插入问题。')
+        return toFileMutation(await insertRitualQuestion(fresh.fileId, {
+          expected_revision: fresh.revision, expected_template_revision: currentTemplate.revision, question_id: question.id,
+        }))
+      })
+      if (editSessionStore.getSession(sessionId)?.status === 'conflict') {
+        setInsertError('问题可能已写入服务器；本地有更新，请对照版本后处理，不要重复点击。')
+      } else setNotice('问题已插入正文，可以继续在后面写答案。')
+    } catch (error: unknown) {
+      setInsertError(errorStatus(error) === 409 ? '文件或模板版本已变化，请重新读取后检查是否已插入。' : errorText(error, '插入失败，请先检查服务器内容再重试。'))
+    } finally { setGoalBusy('') }
+  }
+
+  async function convertGoal(itemId: string) {
+    if (sessionId === null) return
+    setGoalBusy(itemId)
+    setGoalError('')
+    try {
+      await editSessionStore.runFileCommand(sessionId, async () => {
+        const fresh = editSessionStore.getSession(sessionId)
+        if (fresh?.fileId == null || fresh.revision == null) throw new Error('请先保存清单。')
+        return toFileMutation(await createRitualGoal(fresh.fileId, {
+          expected_revision: fresh.revision, task_item_id: itemId,
+        }))
+      })
+      if (editSessionStore.getSession(sessionId)?.status === 'conflict') {
+        setGoalError('目标可能已创建；本地有更新，请对照版本后处理。')
+      } else if (await refreshRitualMetadata()) setNotice('清单条目已转换为目标；可主动加入结束今天。')
+      else setGoalError('目标已创建，但关联信息读取失败；请重新打开页面后再关联。')
+    } catch (error: unknown) {
+      setGoalError(errorStatus(error) === 409 ? '文件版本已变化，请重新读取并确认目标状态。' : errorText(error, '转换失败，请先检查服务器内容再重试。'))
+    } finally { setGoalBusy('') }
   }
 
   /* ------------------------------------------------------- 保存状态 */
@@ -914,7 +957,12 @@ function RitualPage({
           checked,
         })
       })
-      setNotice('目标完成状态已提交；关联的结束今天会同步更新，回答不变。')
+      if (editSessionStore.getSession(sessionId)?.status === 'conflict') {
+        setGoalError('修改已提交，但本地草稿无法安全合并；请对照版本处理。')
+        return
+      }
+      if (await refreshRitualMetadata()) setNotice('目标完成状态已提交；关联的结束今天会同步更新，回答不变。')
+      else setGoalError('目标修改已提交，但关联信息读取失败；请重新打开页面。')
     } catch (error: unknown) {
       setGoalError(errorStatus(error) === 409
         ? '关联文件版本已变化（或关联集合改变），本次勾选没有写入；本地草稿与回答都保留。'
@@ -947,7 +995,12 @@ function RitualPage({
           checked,
         })
       })
-      setNotice('目标状态已回写到开始今天，回答保持不变。')
+      if (editSessionStore.getSession(sessionId)?.status === 'conflict') {
+        setGoalError('修改已提交，但本地草稿无法安全合并；请对照版本处理。')
+        return
+      }
+      if (await refreshRitualMetadata()) setNotice('目标状态已回写到开始今天，回答保持不变。')
+      else setGoalError('目标修改已提交，但关联信息读取失败；请重新打开页面。')
     } catch (error: unknown) {
       setGoalError(errorStatus(error) === 409
         ? '开始今天或关联集合已变化，本次修改没有写入；本地草稿保留。'
@@ -980,7 +1033,12 @@ function RitualPage({
           expected_end_revision: availability.entry.revision,
         })
       })
-      setNotice('已把目标加入结束今天；之后两端修改文字或完成状态会同步，回答不会被改写。')
+      if (editSessionStore.getSession(sessionId)?.status === 'conflict') {
+        setGoalError('关联已提交，但本地草稿无法安全合并；请对照版本处理。')
+        return
+      }
+      if (await refreshRitualMetadata()) setNotice('已把目标加入结束今天；之后两端修改文字或完成状态会同步，回答不会被改写。')
+      else setGoalError('关联请求已提交，但关联信息读取失败；请重新打开页面确认。')
     } catch (error: unknown) {
       setGoalError(errorStatus(error) === 409
         ? '开始今天或结束今天已被修改，本次关联没有写入。'
@@ -1217,20 +1275,25 @@ function RitualPage({
               loading={templatesLoading}
               disabled={disabled || busy}
               error={templateError}
-              canInsert={QUESTION_INSERT_AVAILABLE}
-              insertBlockedReason={QUESTION_INSERT_BLOCKED_REASON}
+              canInsert={sessionId !== null}
+              insertBlockedReason="请先写入并保存正文。"
               onSave={(questions) => void saveTemplate(questions)}
               onReload={() => void reloadTemplates()}
-              onInsert={insertTemplateQuestion}
+              onInsert={(question) => void insertTemplateQuestion(question)}
               insertError={insertError}
             />
 
             <section className="ritual-goals" aria-labelledby="ritual-goals-title">
               <h3 id="ritual-goals-title">{kind === 'set' ? '今天的目标' : '目标回顾'}</h3>
+              {kind === 'set' && checklistCandidates(document).map((item) => (
+                <div key={item.id} className="ritual-goal-item">
+                  <span>{item.text}</span>{' '}
+                  <button type="button" disabled={disabled || busy} onClick={() => void convertGoal(item.id)}>转为目标</button>
+                </div>
+              ))}
               {kind === 'set' && goals.length === 0 && (
                 <p className="ritual-hint">
-                  还没有目标。开始今天的 Checklist 目标创建入口尚未交付（服务端没有受控创建端点），
-                  这里只展示与同步已有目标。
+                  还没有目标。可将正文中的纯文字清单条目转为目标；含格式或嵌套的条目需先调整。
                 </p>
               )}
               {kind === 'set' && goals.length > 0 && (
