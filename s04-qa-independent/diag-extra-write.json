@@ -1,0 +1,8 @@
+file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-independent/diag-extra-write.mjs:76
+  if (box === null) throw new Error('no goal checkbox')
+                          ^
+
+Error: no goal checkbox
+    at file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-independent/diag-extra-write.mjs:76:27
+
+Node.js v22.22.2

@@ -1,0 +1,40 @@
+
+### R1 Set 组合跨过保存窗口（保持 1.4s）
+{"base":{"id":1,"revision":1,"text":"R1 已保存句。","goals":[]},"during":{"editor":"R1 已保存句。nihao","focused":false,"writes":[{"dt":921,"method":"PATCH","path":"/api/journals/1","text":"R1 已保存句。nihao","expectedRevision":1,"result":200}],"status":"服务器已保存"},"after":{"editor":"R1 已保存句。nihao你好","writes":[{"dt":921,"method":"PATCH","path":"/api/journals/1","text":"R1 已保存句。nihao","expectedRevision":1,"result":200},{"dt":2600,"method":"PATCH","path":"/api/journals/1","text":"R1 已保存句。nihao你好","expectedRevision":2,"result":200}],"journal":{"id":1,"revision":3,"text":"R1 已保存句。nihao你好","goals":[]}},"events":[{"dt":1,"type":"compositionstart","data":"","inputType":null},{"dt":1,"type":"compositionupdate","data":"nihao","inputType":null},{"dt":1,"type":"beforeinput","data":"nihao","inputType":"insertComposit
+
+### R2 Set 组合在窗口内上屏（0.3s）
+{"base":{"id":1,"revision":1,"text":"R2 已保存句。","goals":[]},"focusedAfterCommit":true,"after":{"editor":"R2 已保存句。你好","writes":[{"dt":1239,"method":"PATCH","path":"/api/journals/1","text":"R2 已保存句。你好","expectedRevision":1,"result":200}],"journal":{"id":1,"revision":2,"text":"R2 已保存句。你好","goals":[]},"status":"服务器已保存"},"events":[{"dt":1,"type":"compositionstart","data":"","inputType":null},{"dt":1,"type":"compositionupdate","data":"nihao","inputType":null},{"dt":1,"type":"beforeinput","data":"nihao","inputType":"insertCompositionText"},{"dt":1,"type":"input","data":"nihao","inputType":"insertCompositionText"},{"dt":322,"type":"compositionupdate","data":"你好","inputType":null},{"dt":322,"type":"beforeinput","data":"你好","inputType":"insertCompositionText"},{"dt":322,"type":"input","data":"你好","in
+
+### R3 Set 组合窗口内取消（0.3s）
+{"base":{"id":1,"revision":1,"text":"R3 已保存句。","goals":[]},"after":{"editor":"R3 已保存句。","writes":[],"journal":{"id":1,"revision":1,"text":"R3 已保存句。","goals":[]}},"events":[{"dt":1,"type":"compositionstart","data":"","inputType":null},{"dt":1,"type":"compositionupdate","data":"shijie","inputType":null},{"dt":1,"type":"beforeinput","data":"shijie","inputType":"insertCompositionText"},{"dt":2,"type":"input","data":"shijie","inputType":"insertCompositionText"},{"dt":310,"type":"compositionupdate","data":"","inputType":null},{"dt":310,"type":"beforeinput","data":"","inputType":"insertCompositionText"},{"dt":315,"type":"input","data":null,"inputType":"insertCompositionText"},{"dt":315,"type":"compositionend","data":"","inputType":null}]}
+
+### R4 Set 组合跨窗口后取消
+{"base":{"id":1,"revision":1,"text":"R4 已保存句。","goals":[]},"beforeCancel":{"editor":"R4 已保存句。shijie","focused":false},"after":{"editor":"R4 已保存句。shijie","writes":[{"dt":912,"method":"PATCH","path":"/api/journals/1","text":"R4 已保存句。shijie","expectedRevision":1,"result":200}],"journal":{"id":1,"revision":2,"text":"R4 已保存句。shijie","goals":[]}},"reopened":{"editor":"R4 已保存句。shijie","journal":{"id":1,"revision":2,"text":"R4 已保存句。shijie","goals":[]}},"events":[]}
+
+### R5 Set 组合中切页 FAILED: Error: 等待超时：document.querySelector('.ritual-page') !== null
+
+### R6 Set 组合跨窗口且保存失败
+{"base":{"id":1,"revision":1,"text":"R6 已保存句。","goals":[]},"during":{"editor":"R6 已保存句。shibai","focused":false,"writes":[{"dt":909,"method":"PATCH","path":"/api/journals/1","text":"R6 已保存句。shibai","expectedRevision":1,"result":503}],"status":"保存失败 本地草稿已保存（仅本机浏览器） 还有改动未提交","alert":"injected failure 重试保存 读取服务器最新版本"},"events":[{"dt":1,"type":"compositionstart","data":"","inputType":null},{"dt":1,"type":"compositionupdate","data":"shibai","inputType":null},{"dt":1,"type":"beforeinput","data":"shibai","inputType":"insertCompositionText"},{"dt":2,"type":"input","data":"shibai","inputType":"insertCompositionText"}],"journal":{"id":1,"revision":1,"text":"R6 已保存句。","goals":[]}}
+
+### R7 End 组合跨窗口
+{"base":{"id":1,"revision":1,"text":"R7 已保存句。","goals":[]},"during":{"editor":"R7 已保存句。nihao","focused":false,"writes":[{"dt":918,"method":"PATCH","path":"/api/journals/1","text":"R7 已保存句。nihao","expectedRevision":1,"result":200}]},"events":[{"dt":0,"type":"compositionstart","data":"","inputType":null},{"dt":1,"type":"compositionupdate","data":"nihao","inputType":null},{"dt":1,"type":"beforeinput","data":"nihao","inputType":"insertCompositionText"},{"dt":1,"type":"input","data":"nihao","inputType":"insertCompositionText"}],"journal":{"id":1,"revision":2,"text":"R7 已保存句。nihao","goals":[]}}
+
+### R8 Set 既有正文 + 组合跨窗口
+{"base":{"id":1,"revision":2,"text":"第一段已保存。 第二段已保存。","goals":[]},"polluted":{"editor":"第一段已保存。 第二段已保存。nihao","journal":{"id":1,"revision":3,"text":"第一段已保存。 第二段已保存。nihao","goals":[]},"writes":[{"dt":911,"method":"PATCH","path":"/api/journals/1","text":"第一段已保存。 第二段已保存。nihao","expectedRevision":2,"result":200}]},"reopened":{"editor":"第一段已保存。 第二段已保存。nihao","journal":{"id":1,"revision":3,"text":"第一段已保存。 第二段已保存。nihao","goals":[]}}}
+
+### R9 Set 组合跨窗口触发自动转目标
+{"mid":{"editor":"目标\n系统内容 · 由服务维护\n买ni","writes":[{"dt":917,"method":"POST","path":"/api/journals","text":"买ni","expectedRevision":null,"result":200},{"dt":942,"method":"POST","path":"/api/rituals/1/goals","text":null,"expectedRevision":1,"result":200}],"journal":{"id":1,"revision":2,"text":"","goals":["买ni"]},"goalsPanel":"今天的目标 买ni 加入结束今天"},"after":{"editor":"目标\n系统内容 · 由服务维护\n买ni","writes":[{"dt":917,"method":"POST","path":"/api/journals","text":"买ni","expectedRevision":null,"result":200},{"dt":942,"method":"POST","path":"/api/rituals/1/goals","text":null,"expectedRevision":1,"result":200}],"journal":{"id":1,"revision":2,"text":"","goals":["买ni"]},"goalsPanel":"今天的目标 买ni 加入结束今天"},"reopened":{"goalsPanel":"今天的目标 买ni 加入结束今天","journal":{"id":1,"revision":2,"text":"","goals":["买ni"]}}}
+
+### R10 Writing 组合跨窗口（对照）
+{"base":{"id":1,"revision":1,"text":"R10 已保存句。","goals":[]},"during":{"editor":"R10 已保存句。nihao","focused":true,"writes":[],"status":"未提交到服务器 文件 #1 · 版本 1 本地草稿已保存（仅本机浏览器）"},"after":{"editor":"R10 已保存句。你好","writes":[{"dt":2325,"method":"PATCH","path":"/api/journals/1","text":"R10 已保存句。你好","expectedRevision":1,"result":200}],"journal":{"id":1,"revision":2,"text":"R10 已保存句。你好","goals":[]}},"events":[{"dt":1,"type":"compositionstart","data":"","inputType":null},{"dt":1,"type":"compositionupdate","data":"nihao","inputType":null},{"dt":1,"type":"beforeinput","data":"nihao","inputType":"insertCompositionText"},{"dt":2,"type":"input","data":"nihao","inputType":"insertCompositionText"},{"dt":1518,"type":"compositionupdate","data":"你好","inputType":null},{"dt":1518,"type":"beforeinput","data":"你好","in
+
+### R11 Writing 组合中切页
+{"base":{"id":1,"revision":1,"text":"R11 已保存句。","goals":[]},"afterNav":{"writes":[{"dt":812,"method":"PATCH","path":"/api/journals/1","text":"R11 已保存句。qiehuan","expectedRevision":1,"result":200}],"journal":{"id":1,"revision":2,"text":"R11 已保存句。qiehuan","goals":[]}}}
+
+### R12 Writing 保存中点导航
+{"navBefore":[{"label":"概览","disabled":false,"title":null},{"label":"写作","disabled":false,"title":null},{"label":"开始今天","disabled":false,"title":null}],"during":{"changedWithin1500ms":false,"msToChange":null,"bodyHasSavingHint":false,"status":""},"after":{"onDashboard":false,"msTotal":6286,"journal":{"id":1,"revision":2,"text":"R12 慢保存句。 追加。","goals":[]}},"patchSentAt":[803]}
+
+### R13 Set 保存中点导航
+{"navBefore":[{"label":"概览","disabled":true,"title":null},{"label":"写作","disabled":true,"title":null},{"label":"开始今天","disabled":true,"title":null}],"during":{"clicked":{"found":true,"disabled":true,"title":null},"stillOnRitual":true,"status":"正在保存到服务器…… 本地草稿已保存（仅本机浏览器）","navTitleAttr":null},"after":{"nav":[false,false,false,false],"journal":{"id":1,"revision":2,"text":"R13 慢保存句。 追加。","goals":[]},"stillOnRitual":true}}
+
+第十一轮完成：14 条

@@ -1,0 +1,56 @@
+
+### I1 Set 组合保持 1.6s  通过 7/8
+   FAIL 服务器文档正确且版本 +1 :: {"id":1,"revision":3,"title":null,"text":"I1 已保存句。你好","goals":[],"reviews":[]}
+
+### I2 End 组合保持 1.6s  通过 5/5
+
+### I3 Set 清单组合不转目标  通过 5/6
+   FAIL 上屏后目标文本为「买牛奶」 :: [{"text":"I3 空白起点。买牛奶","checked":false}]
+
+### I4 Set 组合后取消  通过 3/3
+
+### I5 Set 组合窗口内上屏  通过 2/3
+   FAIL 版本只 +1 :: 3
+
+### I6 标题组合 1.5s  通过 3/3
+
+### I7 组合中失焦到标题框  通过 2/3
+   FAIL 失焦提交的是已上屏/已提交文本，不含未确认拼音 :: "I7 已保存句。shiqu"
+
+### I8 Set 上屏后 503 重试  通过 2/5
+   FAIL 失败后服务器未变 :: {"id":1,"revision":2,"title":null,"text":"I8 已保存句。","goals":[],"reviews":[]}
+   FAIL 失败提示包含本地草稿已保存 :: "injected failure 重试保存 读取服务器最新版本"
+   FAIL 重试成功后内容落库且版本 2 :: {"id":1,"revision":3,"title":null,"text":"I8 已保存句。失败","goals":[],"reviews":[]}
+
+### I9 Set 真实 409 冲突恢复 ERROR: Error: 找不到可点击按钮：读取服务器最新版本
+
+### I10 目标转换失败后手动重试  通过 4/5
+   FAIL 重试后恰好 1 个目标且文本正确 :: [{"text":"I10 起点。买咖啡","checked":false}]
+
+### I11 Set 普通保存焦点稳定  通过 5/5
+
+### I12 Writing 保存与立即保存  通过 3/4
+   FAIL 内容落库 :: {"id":1,"revision":1,"title":null,"text":"I12 已保存句。","goals":[],"reviews":[]}
+
+### I13 Writing 组合对照  通过 2/3
+   FAIL 上屏后正确保存 :: {"after":{"writes":[{"dt":2430,"method":"POST","path":"/api/journals","text":"你好","expectedRevision":null,"result":200}],"journal":{"id":1,"revision":1,"title":null,"text":"I13 已保存句。","goals":[],"reviews":[]},"mark":"E"}
+
+### I14 在途继续输入  通过 5/7
+   FAIL 无 409 且第二次请求版本正确 :: [{"dt":916,"method":"PATCH","path":"/api/journals/1","text":" 在途一。I14 第一段。","expectedRevision":2,"result":200},{"dt":4844,"method":"PATCH","path":"/api/journals/1","text":" 在途一。 在途二。I14 第一段。","expectedRevision":3,"result
+   FAIL 两段输入都落库且无重复 :: {"id":1,"revision":4,"title":null,"text":" 在途一。 在途二。I14 第一段。","goals":[],"reviews":[]}
+
+### I15 在途时开始组合  通过 5/5
+
+### I16 目标勾选与脏草稿并发  通过 4/5
+   FAIL 命令期间编辑器被锁 :: "true"
+
+### I17 模板保存期间锁定  通过 5/6
+   FAIL 模板已更新 :: "当前问题模板 开始今天 2026-10-31 · 1 / 4 点击「插入正文」才会把当时的文字写进正文；之后修改模板不会改动已插入内容。 第 1 个问题 插入正文 移除 添加问题"
+
+### I18 组合中真实切页  通过 5/5
+
+### I19 Insight 编辑器回归  通过 2/2
+
+控制台异常：0
+
+独立复测完成：场景 19，断言 69/83 通过

@@ -1,0 +1,274 @@
+{
+  "baseline": {
+    "before": "写作",
+    "clicked": {
+      "found": true,
+      "disabled": false,
+      "title": null
+    },
+    "msToChange": 16,
+    "finalModule": "概览"
+  },
+  "writingSlow": {
+    "navBefore": [
+      {
+        "label": "概览",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "写作",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "开始今天",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "结束今天",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "日程",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "所有日记",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "收件箱",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "复盘",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "洞察",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "全部搜索",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "回收箱",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "文件夹",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "设置",
+        "disabled": false,
+        "title": null
+      }
+    ],
+    "hintBefore": {
+      "saving": true,
+      "notice": "",
+      "status": "正在保存到服务器…… 文件 #1 · 版本 1 本地草稿已保存（仅本机浏览器）"
+    },
+    "clicked": {
+      "found": true,
+      "disabled": false,
+      "title": null
+    },
+    "msToChange": 2684,
+    "finalModule": "概览",
+    "hintAfterClick": {
+      "saving": false,
+      "notice": "",
+      "status": ""
+    },
+    "journal": [
+      {
+        "id": 1,
+        "revision": 2,
+        "text": "N1 慢保存句。 追加。"
+      }
+    ]
+  },
+  "setSlow": {
+    "navBefore": [
+      {
+        "label": "概览",
+        "disabled": true,
+        "title": null
+      },
+      {
+        "label": "写作",
+        "disabled": true,
+        "title": null
+      },
+      {
+        "label": "开始今天",
+        "disabled": true,
+        "title": null
+      },
+      {
+        "label": "结束今天",
+        "disabled": true,
+        "title": null
+      },
+      {
+        "label": "日程",
+        "disabled": true,
+        "title": null
+      },
+      {
+        "label": "所有日记",
+        "disabled": true,
+        "title": null
+      },
+      {
+        "label": "收件箱",
+        "disabled": true,
+        "title": null
+      },
+      {
+        "label": "复盘",
+        "disabled": true,
+        "title": null
+      },
+      {
+        "label": "洞察",
+        "disabled": true,
+        "title": null
+      },
+      {
+        "label": "全部搜索",
+        "disabled": true,
+        "title": null
+      },
+      {
+        "label": "回收箱",
+        "disabled": true,
+        "title": null
+      },
+      {
+        "label": "文件夹",
+        "disabled": true,
+        "title": null
+      },
+      {
+        "label": "设置",
+        "disabled": true,
+        "title": null
+      }
+    ],
+    "hintBefore": {
+      "saving": true,
+      "notice": "",
+      "status": "正在保存到服务器…… 本地草稿已保存（仅本机浏览器）"
+    },
+    "clicked": {
+      "found": true,
+      "disabled": true,
+      "title": null
+    },
+    "msToChange": null,
+    "finalModule": "开始今天",
+    "hintAfterClick": {
+      "saving": false,
+      "notice": "",
+      "status": "服务器已保存"
+    },
+    "navAfter": [
+      {
+        "label": "概览",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "写作",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "开始今天",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "结束今天",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "日程",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "所有日记",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "收件箱",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "复盘",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "洞察",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "全部搜索",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "回收箱",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "文件夹",
+        "disabled": false,
+        "title": null
+      },
+      {
+        "label": "设置",
+        "disabled": false,
+        "title": null
+      }
+    ],
+    "journal": [
+      {
+        "id": 1,
+        "revision": 2,
+        "text": "N2 慢保存句。 追加。"
+      }
+    ]
+  },
+  "setAfterSave": {
+    "clicked": {
+      "found": true,
+      "disabled": false,
+      "title": null
+    },
+    "msToChange": 4,
+    "finalModule": "写作"
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "afterFirstSave": {
+    "active": "BODY",
+    "ce": "true"
+  },
+  "setSaveTimeline": {
+    "changes": [
+      {
+        "dt": 59,
+        "active": "editor",
+        "ce": "true",
+        "text": " 第二段。D1 基础。"
+      },
+      {
+        "dt": 955,
+        "active": "BODY",
+        "ce": "true",
+        "text": " 第二段。D1 基础。"
+      }
+    ],
+    "writes": [
+      {
+        "dt": 916,
+        "method": "PATCH",
+        "text": " 第二段。D1 基础。"
+      }
+    ]
+  },
+  "blindTyping": {
+    "before": " 第二段。D1 基础。",
+    "after": " 第二段。D1 基础。",
+    "inserted": false
+  },
+  "writingSaveTimeline": {
+    "changes": [
+      {
+        "dt": 61,
+        "active": "editor",
+        "ce": "true",
+        "text": "D2 基础。 第二段。"
+      }
+    ],
+    "writes": [
+      {
+        "dt": 809,
+        "method": "PATCH",
+        "text": "D2 基础。 第二段。"
+      }
+    ]
+  },
+  "setCompositionSave": {
+    "timeline": [
+      {
+        "dt": 60,
+        "active": "editor",
+        "ce": "true",
+        "text": "nihaoD3 基础。 第二段。D1 基础。"
+      },
+      {
+        "dt": 963,
+        "active": "BODY",
+        "ce": "true",
+        "text": "nihaoD3 基础。 第二段。D1 基础。"
+      }
+    ],
+    "events": [
+      {
+        "dt": 1,
+        "type": "compositionstart",
+        "data": "",
+        "inputType": null
+      },
+      {
+        "dt": 2,
+        "type": "compositionupdate",
+        "data": "nihao",
+        "inputType": null
+      },
+      {
+        "dt": 2,
+        "type": "beforeinput",
+        "data": "nihao",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "dt": 2,
+        "type": "input",
+        "data": "nihao",
+        "inputType": "insertCompositionText"
+      }
+    ],
+    "writes": [
+      {
+        "dt": 916,
+        "method": "PATCH",
+        "text": "nihaoD3 基础。 第二段。D1 基础。"
+      }
+    ],
+    "editor": "nihaoD3 基础。 第二段。D1 基础。"
+  },
+  "writingCompositionSave": {
+    "events": [
+      {
+        "dt": 1,
+        "type": "compositionstart",
+        "data": "",
+        "inputType": null
+      },
+      {
+        "dt": 3,
+        "type": "compositionupdate",
+        "data": "nihao",
+        "inputType": null
+      },
+      {
+        "dt": 3,
+        "type": "beforeinput",
+        "data": "nihao",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "dt": 3,
+        "type": "input",
+        "data": "nihao",
+        "inputType": "insertCompositionText"
+      }
+    ],
+    "writes": [],
+    "editor": "D4 基础。nihao"
+  }
+}

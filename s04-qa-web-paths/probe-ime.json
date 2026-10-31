@@ -1,0 +1,191 @@
+{
+  "whileComposing": {
+    "text": "前缀。nihaoa",
+    "events": [
+      {
+        "type": "beforeinput",
+        "data": "前缀。",
+        "inputType": "insertText"
+      },
+      {
+        "type": "input",
+        "data": "前缀。",
+        "inputType": "insertText"
+      },
+      {
+        "type": "compositionstart",
+        "data": "",
+        "inputType": null
+      },
+      {
+        "type": "compositionupdate",
+        "data": "nihao",
+        "inputType": null
+      },
+      {
+        "type": "beforeinput",
+        "data": "nihao",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "input",
+        "data": "nihao",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "compositionupdate",
+        "data": "nihaoa",
+        "inputType": null
+      },
+      {
+        "type": "beforeinput",
+        "data": "nihaoa",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "input",
+        "data": "nihaoa",
+        "inputType": "insertCompositionText"
+      }
+    ]
+  },
+  "afterCommit": {
+    "text": "前缀。你好",
+    "events": [
+      {
+        "type": "beforeinput",
+        "data": "前缀。",
+        "inputType": "insertText"
+      },
+      {
+        "type": "input",
+        "data": "前缀。",
+        "inputType": "insertText"
+      },
+      {
+        "type": "compositionstart",
+        "data": "",
+        "inputType": null
+      },
+      {
+        "type": "compositionupdate",
+        "data": "nihao",
+        "inputType": null
+      },
+      {
+        "type": "beforeinput",
+        "data": "nihao",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "input",
+        "data": "nihao",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "compositionupdate",
+        "data": "nihaoa",
+        "inputType": null
+      },
+      {
+        "type": "beforeinput",
+        "data": "nihaoa",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "input",
+        "data": "nihaoa",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "compositionupdate",
+        "data": "你好",
+        "inputType": null
+      },
+      {
+        "type": "beforeinput",
+        "data": "你好",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "input",
+        "data": "你好",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "compositionend",
+        "data": "你好",
+        "inputType": null
+      }
+    ]
+  },
+  "cancelByEmpty": {
+    "during": "前缀。你好shijie",
+    "after": "前缀。你好",
+    "events": [
+      {
+        "type": "compositionstart",
+        "data": ""
+      },
+      {
+        "type": "compositionupdate",
+        "data": "shijie"
+      },
+      {
+        "type": "beforeinput",
+        "data": "shijie"
+      },
+      {
+        "type": "input",
+        "data": "shijie"
+      },
+      {
+        "type": "compositionupdate",
+        "data": ""
+      },
+      {
+        "type": "beforeinput",
+        "data": ""
+      },
+      {
+        "type": "input",
+        "data": null
+      },
+      {
+        "type": "compositionend",
+        "data": ""
+      }
+    ]
+  },
+  "cancelByEscape": {
+    "during": "前缀。你好quxiao",
+    "after": "前缀。你好quxiao",
+    "events": [
+      {
+        "type": "compositionstart",
+        "data": "",
+        "key": null
+      },
+      {
+        "type": "compositionupdate",
+        "data": "quxiao",
+        "key": null
+      },
+      {
+        "type": "beforeinput",
+        "data": "quxiao",
+        "key": null
+      },
+      {
+        "type": "input",
+        "data": "quxiao",
+        "key": null
+      },
+      {
+        "type": "keydown",
+        "data": null,
+        "key": "Escape"
+      }
+    ]
+  }
+}

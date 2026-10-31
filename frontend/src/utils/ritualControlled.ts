@@ -35,3 +35,29 @@ export function nextAutomaticGoal(document: unknown, kind: string, ready: boolea
   if (kind !== 'set' || !ready) return null
   return checklistCandidates(document).find((item) => !attempted.has(item.id))?.id ?? null
 }
+
+/**
+ * 自动转目标的前置闸门（S04 输入法缺陷修复）。
+ *
+ * 单独抽成纯函数的原因：这是「预编辑拼音被固化成目标」的唯一防线。
+ * `imeComposing` 一旦漏判，拼音会先落库、再被当作 taskItem 文本快照进
+ * `goalItem.attrs.text`，刷新也不会自愈。把判定从页面里提出来用纯逻辑测试钉住，
+ * 可以避免页面接线再次漏掉组合状态。
+ */
+export interface GoalConversionGate {
+  /** 页面级写锁（AI 在途等外部原因）。 */
+  disabled: boolean
+  /** 页面自身的显式动作或保存正在执行。 */
+  busy: boolean
+  status: string
+  inFlight: boolean
+  /** 输入法组合中：预编辑内容尚未上屏。 */
+  imeComposing: boolean
+  /** 草稿仍有未提交改动。 */
+  dirty: boolean
+}
+
+export function goalConversionReady(gate: GoalConversionGate): boolean {
+  return !gate.disabled && !gate.busy && gate.status === 'saved'
+    && !gate.inFlight && !gate.imeComposing && !gate.dirty
+}

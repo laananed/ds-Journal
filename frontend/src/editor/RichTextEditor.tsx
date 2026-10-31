@@ -1,9 +1,13 @@
 /**
  * Stage 4 / S04-T03：统一的 `RichTextEditor`（编辑 + 只读共用一套基础）。
  *
- * 对外只有五个约定（`docs/stage4-tasks.md` §3.4、§3.12）：
+ * 对外只有六个约定（`docs/stage4-tasks.md` §3.4、§3.12）：
  * - `doc`：服务端 `content_doc`；受控输入，外部换版本时整体替换；
- * - `readOnly`：只读，不建 ID、不发 `onUserChange`（Trash/阅读态复用）；
+ * - `readOnly`：只读，不建 ID、不发 `onUserChange`（Trash/阅读态复用）。
+ *   这是**视图级**语义，参与扩展装配，因此切换它会重建编辑器实例；
+ * - `locked`：暂态编辑锁（保存中、显式动作进行中）。只切 `contenteditable`，
+ *   **不重建实例、不换 DOM 节点**，所以不会丢焦点、不会打断输入法组合。
+ *   保存类状态一律走这里，不要用 `readOnly`（S04 输入法缺陷修复）；
  * - `onUserChange`：**只**在真实用户输入后上报，载荷已按服务端白名单归一；
  * - `onSelection`：当前选区对应的用户段落 ID 与 Unicode 码点区间，
  *   供后续 Minds 范围分析使用（ProseMirror 是 UTF-16，必须显式换算）；
@@ -38,7 +42,13 @@ export interface EditorSelectionInfo {
 
 export interface RichTextEditorProps {
   doc: ContentDocument | null
+  /** 视图级只读：不建 ID、不发 `onUserChange`、隐藏工具栏。切换会重建编辑器。 */
   readOnly?: boolean
+  /**
+   * 暂态编辑锁：保存/显式动作期间禁止键入，但不重建实例、不丢焦点、
+   * 不打断正在进行的输入法组合。保存状态变化只用这个，不要切换 `readOnly`。
+   */
+  locked?: boolean
   onUserChange?: (document: ContentDocument, schemaVersion: number) => void
   onSelection?: (selection: EditorSelectionInfo | null) => void
   /** 点击正文内部链接（`[[显示标题]]`）时上报标题；不传则不拦截任何点击。 */
@@ -191,7 +201,7 @@ function requestLink(editor: Editor): void {
   editor.chain().focus().extendMarkRange('link').setLink({ href }).run()
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({ editor, locked = false }: { editor: Editor; locked?: boolean }) {
   const [, bump] = useReducer((value: number) => value + 1, 0)
   useEffect(() => {
     const update = () => bump()
@@ -234,7 +244,7 @@ function Toolbar({ editor }: { editor: Editor }) {
           title={button.title}
           aria-label={button.title}
           aria-pressed={button.active === true}
-          disabled={button.disabled === true}
+          disabled={button.disabled === true || locked}
           // 不抢编辑器焦点，避免点按钮时选区丢失。
           onMouseDown={(event) => event.preventDefault()}
           onClick={button.run}
@@ -247,8 +257,9 @@ function Toolbar({ editor }: { editor: Editor }) {
 }
 
 function RichTextEditor({
-  doc, readOnly = false, onUserChange, onSelection, onLink, label, className,
+  doc, readOnly = false, locked = false, onUserChange, onSelection, onLink, label, className,
 }: RichTextEditorProps) {
+  const editableNow = !readOnly && !locked
   const changeHandler = useRef(onUserChange)
   const selectionHandler = useRef(onSelection)
   useEffect(() => {
@@ -282,7 +293,7 @@ function RichTextEditor({
         InternalLinkDecorations,
       ],
       content: toEditorDocument(doc),
-      editable: !readOnly,
+      editable: editableNow,
       editorProps: {
         attributes: {
           class: 's4-editor-content',
@@ -299,13 +310,15 @@ function RichTextEditor({
         reportSelection(instance)
       },
     },
+    // 依赖只放 `readOnly`：它是扩展装配的一部分（UniqueID 是否补 ID），变化必须重建。
+    // `locked` 故意不在这里——它只走下面的 setEditable，否则每次保存都会换 DOM 节点。
     [readOnly],
   )
 
   useEffect(() => {
     if (editor === null || editor.isDestroyed) return
-    editor.setEditable(!readOnly)
-  }, [editor, readOnly])
+    editor.setEditable(editableNow)
+  }, [editor, editableNow])
 
   /**
    * 内部链接点击：只读时普通点击激活；编辑时 Ctrl/⌘ + 点击（普通点击仍用于定位光标）。
@@ -342,8 +355,8 @@ function RichTextEditor({
   if (editor === null) return null
 
   return (
-    <div className={`s4-editor${readOnly ? ' is-readonly' : ''}${className === undefined ? '' : ` ${className}`}`}>
-      {!readOnly && <Toolbar editor={editor} />}
+    <div className={`s4-editor${readOnly ? ' is-readonly' : ''}${locked ? ' is-locked' : ''}${className === undefined ? '' : ` ${className}`}`}>
+      {!readOnly && <Toolbar editor={editor} locked={locked} />}
       <EditorContent editor={editor} />
     </div>
   )

@@ -1,0 +1,110 @@
+{
+  "at": "2026-10-31T07:23:56.488Z",
+  "results": [
+    {
+      "scenario": "N Set 慢保存导航",
+      "step": "保存中点「写作」",
+      "expected": "记录导航是否被禁用",
+      "actual": {
+        "nav": [
+          {
+            "text": "概览",
+            "disabled": true
+          },
+          {
+            "text": "写作",
+            "disabled": true
+          },
+          {
+            "text": "开始今天",
+            "disabled": true
+          },
+          {
+            "text": "结束今天",
+            "disabled": true
+          }
+        ],
+        "clicked": {
+          "disabled": true
+        },
+        "stillOnRitual": true
+      }
+    },
+    {
+      "scenario": "N Set 慢保存导航",
+      "step": "保存完成后",
+      "expected": "内容落库，导航恢复",
+      "actual": {
+        "serverHas": true,
+        "nav": [
+          {
+            "text": "概览",
+            "disabled": false
+          },
+          {
+            "text": "写作",
+            "disabled": false
+          },
+          {
+            "text": "开始今天",
+            "disabled": false
+          },
+          {
+            "text": "结束今天",
+            "disabled": false
+          }
+        ],
+        "status": "服务器已保存"
+      }
+    },
+    {
+      "scenario": "O Set 冲突",
+      "step": "其他客户端先修改 Set",
+      "expected": "PATCH 200",
+      "actual": {
+        "status": 200
+      }
+    },
+    {
+      "scenario": "O Set 冲突",
+      "step": "保存遇到 409",
+      "expected": "输入保留并提示冲突",
+      "actual": {
+        "body": "N0 已保存。 N1 慢保存。 O1 冲突文字。",
+        "status": "版本冲突 本地草稿已保存（仅本机浏览器） 还有改动未提交",
+        "alert": "服务器上这份文件已被更新（版本冲突），本次保存没有写入。本地草稿没有被覆盖，请选择采用服务器版本，或保留本地草稿后基于最新版本重新提交。 读取服务器最新版本"
+      }
+    },
+    {
+      "scenario": "O Set 冲突",
+      "step": "读取服务器最新版本后",
+      "expected": "出现双方选择",
+      "actual": {
+        "keepButton": true,
+        "notice": "已读取服务器最新版本（revision 3）。本地草稿没有被覆盖。"
+      }
+    },
+    {
+      "scenario": "O Set 冲突",
+      "step": "保留本地草稿并基于最新重写",
+      "expected": "服务器保存 O1",
+      "actual": {
+        "serverHas": true,
+        "status": "服务器已保存"
+      }
+    },
+    {
+      "scenario": "F 控制台",
+      "step": "整轮未捕获异常",
+      "expected": "无",
+      "actual": {
+        "errors": []
+      }
+    }
+  ],
+  "shots": [
+    "r9-01-set-nav-during-save.png",
+    "r9-02-set-conflict.png",
+    "r9-03-set-conflict-resolved.png"
+  ]
+}

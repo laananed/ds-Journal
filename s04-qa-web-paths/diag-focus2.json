@@ -1,0 +1,34 @@
+{
+ "set": {
+  "totalSamples": 160,
+  "changes": [
+   {
+    "dt": 31,
+    "active": true,
+    "tag": "DIV",
+    "cls": "tiptap ProseMirror s4-editor-content Pro",
+    "hasFocus": true,
+    "editable": "true",
+    "mark": "S"
+   }
+  ],
+  "typingLanded": true,
+  "text": "焦点诊断 S 基线句。 追加。续写"
+ },
+ "writing": {
+  "totalSamples": 161,
+  "changes": [
+   {
+    "dt": 31,
+    "active": true,
+    "tag": "DIV",
+    "cls": "tiptap ProseMirror s4-editor-content Pro",
+    "hasFocus": true,
+    "editable": "true",
+    "mark": "W"
+   }
+  ],
+  "typingLanded": true,
+  "text": "焦点诊断 W 基线句。 追加。续写"
+ }
+}

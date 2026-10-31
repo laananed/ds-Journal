@@ -1,0 +1,2288 @@
+{
+  "at": "2026-10-31T12:39:45.494Z",
+  "results": [
+    {
+      "scenario": "I1 Set 组合保持 1.6s",
+      "checks": [
+        {
+          "name": "打开页面不产生额外写请求",
+          "ok": true,
+          "detail": {
+            "id": 1,
+            "revision": 1,
+            "title": null,
+            "text": "I1 已保存句。",
+            "goals": []
+          }
+        },
+        {
+          "name": "组合期零写请求",
+          "ok": true,
+          "detail": []
+        },
+        {
+          "name": "组合期编辑器仍可编辑且焦点未丢",
+          "ok": true,
+          "detail": {
+            "editable": "true",
+            "focused": true,
+            "mark": "A",
+            "writes": [],
+            "status": "未提交到服务器 本地草稿已保存（仅本机浏览器） 还有改动未提交"
+          }
+        },
+        {
+          "name": "组合期节点未被替换",
+          "ok": true,
+          "detail": "A"
+        },
+        {
+          "name": "采样无重建且零失焦",
+          "ok": true,
+          "detail": {
+            "count": 64,
+            "marks": [
+              "A"
+            ],
+            "rebuilt": false,
+            "editableValues": [
+              "true"
+            ],
+            "lostFocusSamples": 0
+          }
+        },
+        {
+          "name": "上屏后只提交已确认文本",
+          "ok": true,
+          "detail": [
+            {
+              "dt": 2599,
+              "method": "PATCH",
+              "path": "/api/journals/1",
+              "text": "I1 已保存句。你好",
+              "expectedRevision": 1,
+              "result": 200
+            }
+          ]
+        },
+        {
+          "name": "服务器文档正确且版本 +1",
+          "ok": true,
+          "detail": {
+            "id": 1,
+            "revision": 2,
+            "title": null,
+            "text": "I1 已保存句。你好",
+            "goals": []
+          }
+        },
+        {
+          "name": "刷新后一致且无拼音残留",
+          "ok": true,
+          "detail": {
+            "editor": "I1 已保存句。你好",
+            "journal": {
+              "id": 1,
+              "revision": 2,
+              "title": null,
+              "text": "I1 已保存句。你好",
+              "goals": []
+            }
+          }
+        }
+      ],
+      "baseline": {
+        "id": 1,
+        "revision": 1,
+        "title": null,
+        "text": "I1 已保存句。",
+        "goals": []
+      },
+      "during": {
+        "editable": "true",
+        "focused": true,
+        "mark": "A",
+        "writes": [],
+        "status": "未提交到服务器 本地草稿已保存（仅本机浏览器） 还有改动未提交"
+      },
+      "sampling": {
+        "count": 64,
+        "marks": [
+          "A"
+        ],
+        "rebuilt": false,
+        "editableValues": [
+          "true"
+        ],
+        "lostFocusSamples": 0
+      },
+      "after": {
+        "editor": "I1 已保存句。你好",
+        "writes": [
+          {
+            "dt": 2599,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I1 已保存句。你好",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I1 已保存句。你好",
+          "goals": []
+        },
+        "status": "服务器已保存"
+      },
+      "reopened": {
+        "editor": "I1 已保存句。你好",
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I1 已保存句。你好",
+          "goals": []
+        }
+      }
+    },
+    {
+      "scenario": "I2 End 组合保持 1.6s",
+      "checks": [
+        {
+          "name": "组合期零写请求",
+          "ok": true,
+          "detail": []
+        },
+        {
+          "name": "组合期可编辑且焦点未丢",
+          "ok": true,
+          "detail": {
+            "editable": "true",
+            "focused": true,
+            "mark": "B",
+            "writes": []
+          }
+        },
+        {
+          "name": "采样无重建且零失焦",
+          "ok": true,
+          "detail": {
+            "count": 64,
+            "marks": [
+              "B"
+            ],
+            "rebuilt": false,
+            "editableValues": [
+              "true"
+            ],
+            "lostFocusSamples": 0
+          }
+        },
+        {
+          "name": "上屏后仅一次 PATCH 且文本正确",
+          "ok": true,
+          "detail": [
+            {
+              "dt": 2534,
+              "method": "PATCH",
+              "path": "/api/journals/1",
+              "text": "I2 已保存句。你好",
+              "expectedRevision": 1,
+              "result": 200
+            }
+          ]
+        },
+        {
+          "name": "刷新后一致",
+          "ok": true,
+          "detail": {
+            "editor": "I2 已保存句。你好",
+            "journal": {
+              "id": 1,
+              "revision": 2,
+              "title": null,
+              "text": "I2 已保存句。你好",
+              "goals": []
+            }
+          }
+        }
+      ],
+      "during": {
+        "editable": "true",
+        "focused": true,
+        "mark": "B",
+        "writes": []
+      },
+      "sampling": {
+        "count": 64,
+        "marks": [
+          "B"
+        ],
+        "rebuilt": false,
+        "editableValues": [
+          "true"
+        ],
+        "lostFocusSamples": 0
+      },
+      "after": {
+        "editor": "I2 已保存句。你好",
+        "writes": [
+          {
+            "dt": 2534,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I2 已保存句。你好",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I2 已保存句。你好",
+          "goals": []
+        }
+      },
+      "reopened": {
+        "editor": "I2 已保存句。你好",
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I2 已保存句。你好",
+          "goals": []
+        }
+      }
+    },
+    {
+      "scenario": "I3 Set 清单组合不转目标",
+      "checks": [
+        {
+          "name": "组合期零写请求（含转目标）",
+          "ok": true,
+          "detail": []
+        },
+        {
+          "name": "组合期服务器无 goalItem",
+          "ok": true,
+          "detail": []
+        },
+        {
+          "name": "组合期节点未被替换",
+          "ok": true,
+          "detail": {
+            "writes": [],
+            "journal": {
+              "id": 1,
+              "revision": 1,
+              "title": null,
+              "text": "",
+              "goals": []
+            },
+            "mark": "G",
+            "editable": "true"
+          }
+        },
+        {
+          "name": "上屏后目标文本为「买牛奶」",
+          "ok": true,
+          "detail": [
+            {
+              "text": "买牛奶",
+              "checked": false
+            }
+          ]
+        },
+        {
+          "name": "无拼音进入正文或目标",
+          "ok": true,
+          "detail": {
+            "id": 1,
+            "revision": 3,
+            "title": null,
+            "text": "",
+            "goals": [
+              {
+                "text": "买牛奶",
+                "checked": false
+              }
+            ]
+          }
+        },
+        {
+          "name": "刷新后目标仍为 1 个",
+          "ok": true,
+          "detail": {
+            "journal": {
+              "id": 1,
+              "revision": 3,
+              "title": null,
+              "text": "",
+              "goals": [
+                {
+                  "text": "买牛奶",
+                  "checked": false
+                }
+              ]
+            },
+            "panel": "今天的目标 买牛奶 加入结束今天"
+          }
+        }
+      ],
+      "during": {
+        "writes": [],
+        "journal": {
+          "id": 1,
+          "revision": 1,
+          "title": null,
+          "text": "",
+          "goals": []
+        },
+        "mark": "G",
+        "editable": "true"
+      },
+      "after": {
+        "writes": [
+          {
+            "dt": 3001,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "买牛奶",
+            "expectedRevision": 1,
+            "result": 200
+          },
+          {
+            "dt": 3007,
+            "method": "POST",
+            "path": "/api/rituals/1/goals",
+            "text": null,
+            "expectedRevision": 2,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "title": null,
+          "text": "",
+          "goals": [
+            {
+              "text": "买牛奶",
+              "checked": false
+            }
+          ]
+        },
+        "panel": "今天的目标 买牛奶 加入结束今天",
+        "editor": "目标\n系统内容 · 由服务维护\n买牛奶"
+      },
+      "reopened": {
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "title": null,
+          "text": "",
+          "goals": [
+            {
+              "text": "买牛奶",
+              "checked": false
+            }
+          ]
+        },
+        "panel": "今天的目标 买牛奶 加入结束今天"
+      }
+    },
+    {
+      "scenario": "I4 Set 组合后取消",
+      "checks": [
+        {
+          "name": "组合期与取消后均零写请求",
+          "ok": true,
+          "detail": {
+            "duringWrites": [],
+            "after": []
+          }
+        },
+        {
+          "name": "取消后正文回到原文",
+          "ok": true,
+          "detail": {
+            "editor": "I4 已保存句。",
+            "writes": [],
+            "journal": {
+              "id": 1,
+              "revision": 1,
+              "title": null,
+              "text": "I4 已保存句。",
+              "goals": []
+            }
+          }
+        },
+        {
+          "name": "刷新后无残留",
+          "ok": true,
+          "detail": {
+            "editor": "I4 已保存句。",
+            "journal": {
+              "id": 1,
+              "revision": 1,
+              "title": null,
+              "text": "I4 已保存句。",
+              "goals": []
+            }
+          }
+        }
+      ],
+      "duringWrites": [],
+      "after": {
+        "editor": "I4 已保存句。",
+        "writes": [],
+        "journal": {
+          "id": 1,
+          "revision": 1,
+          "title": null,
+          "text": "I4 已保存句。",
+          "goals": []
+        }
+      },
+      "reopened": {
+        "editor": "I4 已保存句。",
+        "journal": {
+          "id": 1,
+          "revision": 1,
+          "title": null,
+          "text": "I4 已保存句。",
+          "goals": []
+        }
+      }
+    },
+    {
+      "scenario": "I5 Set 组合窗口内上屏",
+      "checks": [
+        {
+          "name": "仅一次保存且内容正确",
+          "ok": true,
+          "detail": [
+            {
+              "dt": 1235,
+              "method": "PATCH",
+              "path": "/api/journals/1",
+              "text": "I5 已保存句。快",
+              "expectedRevision": 1,
+              "result": 200
+            }
+          ]
+        },
+        {
+          "name": "服务器文本正确",
+          "ok": true,
+          "detail": {
+            "id": 1,
+            "revision": 2,
+            "title": null,
+            "text": "I5 已保存句。快",
+            "goals": []
+          }
+        },
+        {
+          "name": "版本只 +1",
+          "ok": true,
+          "detail": 2
+        }
+      ],
+      "after": {
+        "editor": "I5 已保存句。快",
+        "writes": [
+          {
+            "dt": 1235,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I5 已保存句。快",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I5 已保存句。快",
+          "goals": []
+        }
+      }
+    },
+    {
+      "scenario": "I6 标题组合 1.5s",
+      "checks": [
+        {
+          "name": "组合期标题未落库",
+          "ok": true,
+          "detail": {
+            "writes": [],
+            "journal": {
+              "id": 1,
+              "revision": 1,
+              "title": null,
+              "text": "I6 正文。",
+              "goals": []
+            },
+            "value": "标ti"
+          }
+        },
+        {
+          "name": "上屏后标题为「标题目」",
+          "ok": true,
+          "detail": "标题目"
+        },
+        {
+          "name": "正文未被标题输入污染",
+          "ok": true,
+          "detail": "I6 正文。"
+        }
+      ],
+      "during": {
+        "writes": [],
+        "journal": {
+          "id": 1,
+          "revision": 1,
+          "title": null,
+          "text": "I6 正文。",
+          "goals": []
+        },
+        "value": "标ti"
+      },
+      "after": {
+        "writes": [
+          {
+            "dt": 2567,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": null,
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": "标题目",
+          "text": "I6 正文。",
+          "goals": []
+        }
+      }
+    },
+    {
+      "scenario": "I7 组合中失焦到标题框",
+      "checks": [
+        {
+          "name": "失焦时浏览器派发 compositionend",
+          "ok": true,
+          "detail": [
+            "2ms compositionstart",
+            "3ms compositionupdate:\"shiqu\"",
+            "3ms beforeinput:\"shiqu\"",
+            "4ms input:\"shiqu\"",
+            "426ms compositionend:\"shiqu\""
+          ]
+        },
+        {
+          "name": "失焦提交的文本与页面一致（浏览器行为，非应用打断）",
+          "ok": true,
+          "detail": {
+            "server": "I7 已保存句。shiqu",
+            "editor": "I7 已保存句。shiqu"
+          }
+        },
+        {
+          "name": "之后仍可保存（ime 标记未卡死）",
+          "ok": true,
+          "detail": {
+            "writes": [
+              {
+                "dt": 1344,
+                "method": "PATCH",
+                "path": "/api/journals/1",
+                "text": "I7 已保存句。shiqu",
+                "expectedRevision": 1,
+                "result": 200
+              },
+              {
+                "dt": 2508,
+                "method": "PATCH",
+                "path": "/api/journals/1",
+                "text": "I7 已保存句。shiqu 继续写。",
+                "expectedRevision": 2,
+                "result": 200
+              }
+            ],
+            "journal": {
+              "id": 1,
+              "revision": 3,
+              "title": null,
+              "text": "I7 已保存句。shiqu 继续写。",
+              "goals": []
+            },
+            "editor": "I7 已保存句。shiqu 继续写。"
+          }
+        }
+      ],
+      "mid": {
+        "events": [
+          "2ms compositionstart",
+          "3ms compositionupdate:\"shiqu\"",
+          "3ms beforeinput:\"shiqu\"",
+          "4ms input:\"shiqu\"",
+          "426ms compositionend:\"shiqu\""
+        ],
+        "writes": [
+          {
+            "dt": 1344,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I7 已保存句。shiqu",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I7 已保存句。shiqu",
+          "goals": []
+        },
+        "editor": "I7 已保存句。shiqu"
+      },
+      "after": {
+        "writes": [
+          {
+            "dt": 1344,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I7 已保存句。shiqu",
+            "expectedRevision": 1,
+            "result": 200
+          },
+          {
+            "dt": 2508,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I7 已保存句。shiqu 继续写。",
+            "expectedRevision": 2,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "title": null,
+          "text": "I7 已保存句。shiqu 继续写。",
+          "goals": []
+        },
+        "editor": "I7 已保存句。shiqu 继续写。"
+      }
+    },
+    {
+      "scenario": "I8 Set 上屏后 503 重试",
+      "checks": [
+        {
+          "name": "组合期零请求",
+          "ok": true,
+          "detail": []
+        },
+        {
+          "name": "失败后输入完整保留",
+          "ok": true,
+          "detail": "I8 已保存句。失败"
+        },
+        {
+          "name": "失败后服务器未变",
+          "ok": true,
+          "detail": {
+            "id": 1,
+            "revision": 1,
+            "title": null,
+            "text": "I8 已保存句。",
+            "goals": []
+          }
+        },
+        {
+          "name": "状态行说明保存失败且本地草稿已保存",
+          "ok": true,
+          "detail": "保存失败 本地草稿已保存（仅本机浏览器） 还有改动未提交"
+        },
+        {
+          "name": "重试成功后内容落库且版本 2",
+          "ok": true,
+          "detail": {
+            "id": 1,
+            "revision": 2,
+            "title": null,
+            "text": "I8 已保存句。失败",
+            "goals": []
+          }
+        }
+      ],
+      "duringWrites": [],
+      "failed": {
+        "editor": "I8 已保存句。失败",
+        "writes": [
+          {
+            "dt": 2136,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I8 已保存句。失败",
+            "expectedRevision": 1,
+            "result": 503
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 1,
+          "title": null,
+          "text": "I8 已保存句。",
+          "goals": []
+        },
+        "alert": "injected failure 重试保存 读取服务器最新版本",
+        "status": "保存失败 本地草稿已保存（仅本机浏览器） 还有改动未提交",
+        "focused": true
+      },
+      "retried": {
+        "editor": "I8 已保存句。失败",
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I8 已保存句。失败",
+          "goals": []
+        },
+        "writes": [
+          {
+            "dt": 2136,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I8 已保存句。失败",
+            "expectedRevision": 1,
+            "result": 503
+          },
+          {
+            "dt": 3699,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I8 已保存句。失败",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "I9 Set 真实 409 冲突恢复",
+      "checks": [
+        {
+          "name": "外部版本确实推进到 2",
+          "ok": true,
+          "detail": 200
+        },
+        {
+          "name": "冲突前服务器为新版本",
+          "ok": true,
+          "detail": {
+            "id": 1,
+            "revision": 2,
+            "title": null,
+            "text": "I9 外部新版本。",
+            "goals": []
+          }
+        },
+        {
+          "name": "本地输入未被覆盖",
+          "ok": true,
+          "detail": "I9 服务端原文。 本地新增。"
+        },
+        {
+          "name": "冲突提示可见",
+          "ok": true,
+          "detail": {
+            "alert": "服务器上这份文件已被更新（版本冲突），本次保存没有写入。本地草稿没有被覆盖，请选择采用服务器版本，或保留本地草稿后基于最新版本重新提交。 读取服务器最新版本",
+            "status": "版本冲突 本地草稿已保存（仅本机浏览器） 还有改动未提交"
+          }
+        },
+        {
+          "name": "服务器快照可读",
+          "ok": true,
+          "detail": "服务器现在是 revision 2；本地草稿仍在。 选择一方不会被再次自动合并。 采用服务器版本 保留本地草稿并基于最新重写"
+        },
+        {
+          "name": "恢复后本地文本落库且无重复",
+          "ok": true,
+          "detail": {
+            "id": 1,
+            "revision": 3,
+            "title": null,
+            "text": "I9 服务端原文。 本地新增。",
+            "goals": []
+          }
+        },
+        {
+          "name": "刷新后一致",
+          "ok": true,
+          "detail": {
+            "editor": "I9 服务端原文。 本地新增。",
+            "journal": {
+              "id": 1,
+              "revision": 3,
+              "title": null,
+              "text": "I9 服务端原文。 本地新增。",
+              "goals": []
+            }
+          }
+        }
+      ],
+      "conflicted": {
+        "editor": "I9 服务端原文。 本地新增。",
+        "writes": [
+          {
+            "dt": 911,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I9 服务端原文。 本地新增。",
+            "expectedRevision": 1,
+            "result": 409
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I9 外部新版本。",
+          "goals": []
+        },
+        "alert": "服务器上这份文件已被更新（版本冲突），本次保存没有写入。本地草稿没有被覆盖，请选择采用服务器版本，或保留本地草稿后基于最新版本重新提交。 读取服务器最新版本",
+        "status": "版本冲突 本地草稿已保存（仅本机浏览器） 还有改动未提交"
+      },
+      "snapshot": {
+        "text": "服务器现在是 revision 2；本地草稿仍在。 选择一方不会被再次自动合并。 采用服务器版本 保留本地草稿并基于最新重写"
+      },
+      "resolved": {
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "title": null,
+          "text": "I9 服务端原文。 本地新增。",
+          "goals": []
+        },
+        "writes": [
+          {
+            "dt": 911,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I9 服务端原文。 本地新增。",
+            "expectedRevision": 1,
+            "result": 409
+          },
+          {
+            "dt": 4892,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I9 服务端原文。 本地新增。",
+            "expectedRevision": 2,
+            "result": 200
+          }
+        ],
+        "editor": "I9 服务端原文。 本地新增。"
+      },
+      "reopened": {
+        "editor": "I9 服务端原文。 本地新增。",
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "title": null,
+          "text": "I9 服务端原文。 本地新增。",
+          "goals": []
+        }
+      }
+    },
+    {
+      "scenario": "I10 目标转换失败后手动重试",
+      "checks": [
+        {
+          "name": "转换失败时未产生 goalItem",
+          "ok": true,
+          "detail": []
+        },
+        {
+          "name": "清单文本完整保留",
+          "ok": true,
+          "detail": "买咖啡"
+        },
+        {
+          "name": "失败提示可见",
+          "ok": true,
+          "detail": "请求失败（HTTP 500）"
+        },
+        {
+          "name": "提供手动重试入口",
+          "ok": true,
+          "detail": "今天的目标 买咖啡 转为目标 保存后，正文中的纯文字清单会自动成为目标；含格式或嵌套的条目需先调整。 请求失败（HTTP 500）"
+        },
+        {
+          "name": "重试后恰好 1 个目标且文本正确",
+          "ok": true,
+          "detail": [
+            {
+              "text": "买咖啡",
+              "checked": false
+            }
+          ]
+        },
+        {
+          "name": "刷新后无重复目标",
+          "ok": true,
+          "detail": [
+            {
+              "text": "买咖啡",
+              "checked": false
+            }
+          ]
+        }
+      ],
+      "failed": {
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "买咖啡",
+          "goals": []
+        },
+        "goalsPanel": "今天的目标 买咖啡 转为目标 保存后，正文中的纯文字清单会自动成为目标；含格式或嵌套的条目需先调整。 请求失败（HTTP 500）",
+        "alert": "请求失败（HTTP 500）",
+        "editor": "Task item checkbox for 买咖啡\n\n买咖啡"
+      },
+      "retried": {
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "title": null,
+          "text": "",
+          "goals": [
+            {
+              "text": "买咖啡",
+              "checked": false
+            }
+          ]
+        },
+        "panel": "今天的目标 买咖啡 加入结束今天"
+      },
+      "reopened": {
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "title": null,
+          "text": "",
+          "goals": [
+            {
+              "text": "买咖啡",
+              "checked": false
+            }
+          ]
+        },
+        "panel": "今天的目标 买咖啡 加入结束今天"
+      }
+    },
+    {
+      "scenario": "I11 Set 普通保存焦点稳定",
+      "checks": [
+        {
+          "name": "输入落在末尾",
+          "ok": true,
+          "detail": {
+            "caret": {
+              "collapsed": true,
+              "textLength": 9
+            },
+            "typed": "I11 已保存句。 追加句。盲打续写"
+          }
+        },
+        {
+          "name": "保存期间无重建",
+          "ok": true,
+          "detail": {
+            "count": 137,
+            "marks": [
+              "C"
+            ],
+            "rebuilt": false,
+            "editableValues": [
+              "true"
+            ],
+            "lostFocusSamples": 0
+          }
+        },
+        {
+          "name": "保存期间 contenteditable 恒为 true",
+          "ok": true,
+          "detail": [
+            "true"
+          ]
+        },
+        {
+          "name": "保存期间零失焦采样",
+          "ok": true,
+          "detail": 0
+        },
+        {
+          "name": "保存后仍聚焦且可盲打续写",
+          "ok": true,
+          "detail": {
+            "afterSave": {
+              "focused": true,
+              "mark": "C",
+              "editable": "true",
+              "writes": [
+                {
+                  "dt": 917,
+                  "method": "PATCH",
+                  "path": "/api/journals/1",
+                  "text": "I11 已保存句。 追加句。",
+                  "expectedRevision": 1,
+                  "result": 200
+                }
+              ],
+              "status": "服务器已保存"
+            },
+            "typed": "I11 已保存句。 追加句。盲打续写"
+          }
+        },
+        {
+          "name": "两次保存都落库",
+          "ok": true,
+          "detail": {
+            "journal": {
+              "id": 1,
+              "revision": 3,
+              "title": null,
+              "text": "I11 已保存句。 追加句。盲打续写",
+              "goals": []
+            },
+            "writes": [
+              {
+                "dt": 917,
+                "method": "PATCH",
+                "path": "/api/journals/1",
+                "text": "I11 已保存句。 追加句。",
+                "expectedRevision": 1,
+                "result": 200
+              },
+              {
+                "dt": 3675,
+                "method": "PATCH",
+                "path": "/api/journals/1",
+                "text": "I11 已保存句。 追加句。盲打续写",
+                "expectedRevision": 2,
+                "result": 200
+              }
+            ],
+            "mark": "C"
+          }
+        }
+      ],
+      "caret": {
+        "collapsed": true,
+        "textLength": 9
+      },
+      "sampling": {
+        "count": 137,
+        "marks": [
+          "C"
+        ],
+        "rebuilt": false,
+        "editableValues": [
+          "true"
+        ],
+        "lostFocusSamples": 0
+      },
+      "afterSave": {
+        "focused": true,
+        "mark": "C",
+        "editable": "true",
+        "writes": [
+          {
+            "dt": 917,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I11 已保存句。 追加句。",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "status": "服务器已保存"
+      },
+      "typed": "I11 已保存句。 追加句。盲打续写",
+      "saved": {
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "title": null,
+          "text": "I11 已保存句。 追加句。盲打续写",
+          "goals": []
+        },
+        "writes": [
+          {
+            "dt": 917,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I11 已保存句。 追加句。",
+            "expectedRevision": 1,
+            "result": 200
+          },
+          {
+            "dt": 3675,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I11 已保存句。 追加句。盲打续写",
+            "expectedRevision": 2,
+            "result": 200
+          }
+        ],
+        "mark": "C"
+      }
+    },
+    {
+      "scenario": "I12 Writing 保存与立即保存",
+      "checks": [
+        {
+          "name": "自动保存期间无重建、零失焦",
+          "ok": true,
+          "detail": {
+            "count": 157,
+            "marks": [
+              "D"
+            ],
+            "rebuilt": false,
+            "editableValues": [
+              "true"
+            ],
+            "lostFocusSamples": 0
+          }
+        },
+        {
+          "name": "保存后可继续输入",
+          "ok": true,
+          "detail": "I12 首段。续写"
+        },
+        {
+          "name": "立即保存不重建编辑器",
+          "ok": true,
+          "detail": {
+            "sampling2": {
+              "count": 119,
+              "marks": [
+                "D2"
+              ],
+              "rebuilt": false,
+              "editableValues": [
+                "false",
+                "true"
+              ],
+              "lostFocusSamples": 119
+            },
+            "mark": "D2"
+          }
+        },
+        {
+          "name": "内容落库",
+          "ok": true,
+          "detail": {
+            "id": 1,
+            "revision": 2,
+            "title": null,
+            "text": "I12 首段。续写",
+            "goals": []
+          }
+        }
+      ],
+      "sampling": {
+        "count": 157,
+        "marks": [
+          "D"
+        ],
+        "rebuilt": false,
+        "editableValues": [
+          "true"
+        ],
+        "lostFocusSamples": 0
+      },
+      "typedAfter": "I12 首段。续写",
+      "sampling2": {
+        "count": 119,
+        "marks": [
+          "D2"
+        ],
+        "rebuilt": false,
+        "editableValues": [
+          "false",
+          "true"
+        ],
+        "lostFocusSamples": 119
+      },
+      "after": {
+        "mark": "D2",
+        "editable": "true",
+        "writes": [
+          {
+            "dt": 16,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I12 首段。续写",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I12 首段。续写",
+          "goals": []
+        }
+      }
+    },
+    {
+      "scenario": "I13 Writing 组合对照",
+      "checks": [
+        {
+          "name": "组合期零请求",
+          "ok": true,
+          "detail": []
+        },
+        {
+          "name": "组合期不重建不丢焦点",
+          "ok": true,
+          "detail": {
+            "writes": [],
+            "mark": "E",
+            "focused": true,
+            "editable": "true"
+          }
+        },
+        {
+          "name": "上屏后正确保存",
+          "ok": true,
+          "detail": {
+            "writes": [
+              {
+                "dt": 2425,
+                "method": "PATCH",
+                "path": "/api/journals/1",
+                "text": "I13 已保存句。你好",
+                "expectedRevision": 1,
+                "result": 200
+              }
+            ],
+            "journal": {
+              "id": 1,
+              "revision": 2,
+              "title": null,
+              "text": "I13 已保存句。你好",
+              "goals": []
+            },
+            "mark": "E"
+          }
+        }
+      ],
+      "during": {
+        "writes": [],
+        "mark": "E",
+        "focused": true,
+        "editable": "true"
+      },
+      "after": {
+        "writes": [
+          {
+            "dt": 2425,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I13 已保存句。你好",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I13 已保存句。你好",
+          "goals": []
+        },
+        "mark": "E"
+      }
+    },
+    {
+      "scenario": "I14 在途继续输入",
+      "checks": [
+        {
+          "name": "第一次保存确实在途",
+          "ok": true,
+          "detail": [
+            {
+              "dt": 917,
+              "method": "PATCH",
+              "path": "/api/journals/1",
+              "text": "I14 第一段。在途一。",
+              "expectedRevision": 1,
+              "result": 200
+            }
+          ]
+        },
+        {
+          "name": "在途期间可继续输入且落在末尾",
+          "ok": true,
+          "detail": {
+            "editor": "I14 第一段。在途一。在途二。",
+            "editable": "true",
+            "focused": true,
+            "mark": "F"
+          }
+        },
+        {
+          "name": "在途期间节点未替换且保持焦点",
+          "ok": true,
+          "detail": {
+            "editor": "I14 第一段。在途一。在途二。",
+            "editable": "true",
+            "focused": true,
+            "mark": "F"
+          }
+        },
+        {
+          "name": "在途响应未把草稿标记为已保存",
+          "ok": true,
+          "detail": {
+            "status": "正在保存到服务器…… 本地草稿已保存（仅本机浏览器）",
+            "journal": {
+              "id": 1,
+              "revision": 2,
+              "title": null,
+              "text": "I14 第一段。在途一。",
+              "goals": []
+            }
+          }
+        },
+        {
+          "name": "无 409 且第二次请求版本正确",
+          "ok": true,
+          "detail": [
+            {
+              "dt": 917,
+              "method": "PATCH",
+              "path": "/api/journals/1",
+              "text": "I14 第一段。在途一。",
+              "expectedRevision": 1,
+              "result": 200
+            },
+            {
+              "dt": 4843,
+              "method": "PATCH",
+              "path": "/api/journals/1",
+              "text": "I14 第一段。在途一。在途二。",
+              "expectedRevision": 2,
+              "result": 200
+            }
+          ]
+        },
+        {
+          "name": "两段输入都落库且无重复",
+          "ok": true,
+          "detail": {
+            "id": 1,
+            "revision": 3,
+            "title": null,
+            "text": "I14 第一段。在途一。在途二。",
+            "goals": []
+          }
+        },
+        {
+          "name": "刷新后一致",
+          "ok": true,
+          "detail": {
+            "editor": "I14 第一段。在途一。在途二。",
+            "journal": {
+              "id": 1,
+              "revision": 3,
+              "title": null,
+              "text": "I14 第一段。在途一。在途二。",
+              "goals": []
+            }
+          }
+        }
+      ],
+      "during": {
+        "editor": "I14 第一段。在途一。在途二。",
+        "editable": "true",
+        "focused": true,
+        "mark": "F"
+      },
+      "midStatus": {
+        "status": "正在保存到服务器…… 本地草稿已保存（仅本机浏览器）",
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I14 第一段。在途一。",
+          "goals": []
+        }
+      },
+      "after": {
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "title": null,
+          "text": "I14 第一段。在途一。在途二。",
+          "goals": []
+        },
+        "writes": [
+          {
+            "dt": 917,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I14 第一段。在途一。",
+            "expectedRevision": 1,
+            "result": 200
+          },
+          {
+            "dt": 4843,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I14 第一段。在途一。在途二。",
+            "expectedRevision": 2,
+            "result": 200
+          }
+        ],
+        "editor": "I14 第一段。在途一。在途二。"
+      },
+      "reopened": {
+        "editor": "I14 第一段。在途一。在途二。",
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "title": null,
+          "text": "I14 第一段。在途一。在途二。",
+          "goals": []
+        }
+      }
+    },
+    {
+      "scenario": "I15 在途时开始组合",
+      "checks": [
+        {
+          "name": "组合期没有新的写请求",
+          "ok": true,
+          "detail": [
+            {
+              "dt": 923,
+              "method": "PATCH",
+              "path": "/api/journals/1",
+              "text": "I15 已保存句。先保存。",
+              "expectedRevision": 1,
+              "result": 200
+            }
+          ]
+        },
+        {
+          "name": "在途响应落地时未把拼音写进服务器",
+          "ok": true,
+          "detail": "I15 已保存句。先保存。"
+        },
+        {
+          "name": "settle 后草稿仍未标记已保存",
+          "ok": true,
+          "detail": "未提交到服务器 本地草稿已保存（仅本机浏览器） 还有改动未提交"
+        },
+        {
+          "name": "任何请求正文都不含未确认拼音",
+          "ok": true,
+          "detail": [
+            {
+              "dt": 923,
+              "method": "PATCH",
+              "path": "/api/journals/1",
+              "text": "I15 已保存句。先保存。",
+              "expectedRevision": 1,
+              "result": 200
+            },
+            {
+              "dt": 5588,
+              "method": "PATCH",
+              "path": "/api/journals/1",
+              "text": "I15 已保存句。先保存。你好",
+              "expectedRevision": 2,
+              "result": 200
+            }
+          ]
+        },
+        {
+          "name": "上屏后最终文本正确",
+          "ok": true,
+          "detail": {
+            "journal": {
+              "id": 1,
+              "revision": 3,
+              "title": null,
+              "text": "I15 已保存句。先保存。你好",
+              "goals": []
+            },
+            "writes": [
+              {
+                "dt": 923,
+                "method": "PATCH",
+                "path": "/api/journals/1",
+                "text": "I15 已保存句。先保存。",
+                "expectedRevision": 1,
+                "result": 200
+              },
+              {
+                "dt": 5588,
+                "method": "PATCH",
+                "path": "/api/journals/1",
+                "text": "I15 已保存句。先保存。你好",
+                "expectedRevision": 2,
+                "result": 200
+              }
+            ]
+          }
+        }
+      ],
+      "duringComposition": {
+        "writes": [
+          {
+            "dt": 923,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I15 已保存句。先保存。",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 1,
+          "title": null,
+          "text": "I15 已保存句。",
+          "goals": []
+        }
+      },
+      "afterSettle": {
+        "status": "未提交到服务器 本地草稿已保存（仅本机浏览器） 还有改动未提交",
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I15 已保存句。先保存。",
+          "goals": []
+        },
+        "editor": "I15 已保存句。先保存。nihao"
+      },
+      "after": {
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "title": null,
+          "text": "I15 已保存句。先保存。你好",
+          "goals": []
+        },
+        "writes": [
+          {
+            "dt": 923,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I15 已保存句。先保存。",
+            "expectedRevision": 1,
+            "result": 200
+          },
+          {
+            "dt": 5588,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I15 已保存句。先保存。你好",
+            "expectedRevision": 2,
+            "result": 200
+          }
+        ]
+      },
+      "reopened": {
+        "editor": "I15 已保存句。先保存。你好"
+      }
+    },
+    {
+      "scenario": "I16 目标勾选与脏草稿并发",
+      "checks": [
+        {
+          "name": "命令前先落库脏草稿",
+          "ok": true,
+          "detail": "补充说明"
+        },
+        {
+          "name": "命令期间编辑器被锁（contenteditable=false）",
+          "ok": true,
+          "detail": [
+            "false"
+          ]
+        },
+        {
+          "name": "保存先于目标命令",
+          "ok": true,
+          "detail": [
+            {
+              "dt": 18,
+              "method": "PATCH",
+              "path": "/api/journals/1",
+              "text": "补充说明",
+              "expectedRevision": 3,
+              "result": 200
+            },
+            {
+              "dt": 30,
+              "method": "PATCH",
+              "path": "/api/ritual-goals/1/goal-id-e56218d678c63",
+              "text": null,
+              "expectedRevision": null,
+              "result": 200
+            }
+          ]
+        },
+        {
+          "name": "目标命令实际发出",
+          "ok": true,
+          "detail": [
+            {
+              "dt": 18,
+              "method": "PATCH",
+              "path": "/api/journals/1",
+              "text": "补充说明",
+              "expectedRevision": 3,
+              "result": 200
+            },
+            {
+              "dt": 30,
+              "method": "PATCH",
+              "path": "/api/ritual-goals/1/goal-id-e56218d678c63",
+              "text": null,
+              "expectedRevision": null,
+              "result": 200
+            }
+          ]
+        },
+        {
+          "name": "勾选状态已提交",
+          "ok": true,
+          "detail": [
+            {
+              "text": "写周报",
+              "checked": true
+            }
+          ]
+        },
+        {
+          "name": "目标仍是 1 个（无重复）",
+          "ok": true,
+          "detail": [
+            {
+              "text": "写周报",
+              "checked": true
+            }
+          ]
+        },
+        {
+          "name": "刷新后文本与勾选一致",
+          "ok": true,
+          "detail": {
+            "journal": {
+              "id": 1,
+              "revision": 5,
+              "title": null,
+              "text": "补充说明",
+              "goals": [
+                {
+                  "text": "写周报",
+                  "checked": true
+                }
+              ]
+            },
+            "panel": "今天的目标 写周报 加入结束今天"
+          }
+        }
+      ],
+      "created": {
+        "id": 1,
+        "revision": 3,
+        "title": null,
+        "text": "",
+        "goals": [
+          {
+            "text": "写周报",
+            "checked": false
+          }
+        ]
+      },
+      "curve": [
+        "false"
+      ],
+      "after": {
+        "journal": {
+          "id": 1,
+          "revision": 5,
+          "title": null,
+          "text": "补充说明",
+          "goals": [
+            {
+              "text": "写周报",
+              "checked": true
+            }
+          ]
+        },
+        "writes": [
+          {
+            "dt": 18,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "补充说明",
+            "expectedRevision": 3,
+            "result": 200
+          },
+          {
+            "dt": 30,
+            "method": "PATCH",
+            "path": "/api/ritual-goals/1/goal-id-e56218d678c63",
+            "text": null,
+            "expectedRevision": null,
+            "result": 200
+          }
+        ],
+        "editor": "目标\n系统内容 · 由服务维护\n写周报\n\n补充说明"
+      },
+      "reopened": {
+        "journal": {
+          "id": 1,
+          "revision": 5,
+          "title": null,
+          "text": "补充说明",
+          "goals": [
+            {
+              "text": "写周报",
+              "checked": true
+            }
+          ]
+        },
+        "panel": "今天的目标 写周报 加入结束今天"
+      }
+    },
+    {
+      "scenario": "I17 模板保存期间锁定",
+      "checks": [
+        {
+          "name": "模板修改后出现保存按钮",
+          "ok": true,
+          "detail": true
+        },
+        {
+          "name": "模板保存期间编辑器锁定",
+          "ok": true,
+          "detail": "false"
+        },
+        {
+          "name": "锁定期节点未替换",
+          "ok": true,
+          "detail": {
+            "during": {
+              "editable": "false",
+              "mark": "H"
+            },
+            "after": {
+              "editable": "true",
+              "mark": "H",
+              "journal": {
+                "id": 1,
+                "revision": 2,
+                "title": null,
+                "text": "I17 正文。已保存追加。",
+                "goals": []
+              },
+              "notice": "模板已保存。已插入正文的问题不会因为模板变化而改变。",
+              "writes": [
+                {
+                  "dt": 2692,
+                  "method": "PATCH",
+                  "path": "/api/ritual-templates/set",
+                  "text": null,
+                  "expectedRevision": 2,
+                  "result": 200
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "解锁后恢复可编辑",
+          "ok": true,
+          "detail": "true"
+        },
+        {
+          "name": "正文未丢失",
+          "ok": true,
+          "detail": "I17 正文。已保存追加。"
+        },
+        {
+          "name": "模板已更新",
+          "ok": true,
+          "detail": "今天最重要的一件事改是什么？（改）"
+        },
+        {
+          "name": "模板保存未触发正文写请求",
+          "ok": true,
+          "detail": [
+            {
+              "dt": 2692,
+              "method": "PATCH",
+              "path": "/api/ritual-templates/set",
+              "text": null,
+              "expectedRevision": 2,
+              "result": 200
+            }
+          ]
+        }
+      ],
+      "during": {
+        "editable": "false",
+        "mark": "H"
+      },
+      "after": {
+        "editable": "true",
+        "mark": "H",
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I17 正文。已保存追加。",
+          "goals": []
+        },
+        "notice": "模板已保存。已插入正文的问题不会因为模板变化而改变。",
+        "writes": [
+          {
+            "dt": 2692,
+            "method": "PATCH",
+            "path": "/api/ritual-templates/set",
+            "text": null,
+            "expectedRevision": 2,
+            "result": 200
+          }
+        ]
+      },
+      "reopened": {
+        "editor": "I17 正文。已保存追加。",
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I17 正文。已保存追加。",
+          "goals": []
+        },
+        "template": "今天最重要的一件事改是什么？（改）"
+      }
+    },
+    {
+      "scenario": "I18 组合中真实切页",
+      "checks": [
+        {
+          "name": "切页真实顺序为 blur→compositionend→click",
+          "ok": true,
+          "detail": [
+            "1ms compositionstart",
+            "2ms compositionupdate:\"qiehuan\"",
+            "2ms beforeinput:\"qiehuan\"",
+            "2ms input:\"qiehuan\"",
+            "422ms compositionend:\"qiehuan\""
+          ]
+        },
+        {
+          "name": "未出现「未保存」拦停对话框",
+          "ok": true,
+          "detail": {
+            "open": false,
+            "title": "当前内容尚未保存，确定离开？"
+          }
+        },
+        {
+          "name": "已离开页面",
+          "ok": true,
+          "detail": true
+        },
+        {
+          "name": "预编辑串由浏览器在失焦时提交（可观测，非应用打断）",
+          "ok": true,
+          "detail": "I18 已保存句。qiehuan"
+        },
+        {
+          "name": "回切后组合标记已清、可继续保存",
+          "ok": true,
+          "detail": {
+            "writes": [
+              {
+                "dt": 426,
+                "method": "PATCH",
+                "path": "/api/journals/1",
+                "text": "I18 已保存句。qiehuan",
+                "expectedRevision": 1,
+                "result": 200
+              },
+              {
+                "dt": 5244,
+                "method": "PATCH",
+                "path": "/api/journals/1",
+                "text": "I18 已保存句。qiehuan回来后。",
+                "expectedRevision": 2,
+                "result": 200
+              }
+            ],
+            "journal": {
+              "id": 1,
+              "revision": 3,
+              "title": null,
+              "text": "I18 已保存句。qiehuan回来后。",
+              "goals": []
+            },
+            "editor": "I18 已保存句。qiehuan回来后。"
+          }
+        }
+      ],
+      "before": {
+        "editor": "I18 已保存句。qiehuan",
+        "focused": true,
+        "navDisabled": false
+      },
+      "afterNav": {
+        "leftPage": true,
+        "dialog": {
+          "open": false,
+          "title": "当前内容尚未保存，确定离开？"
+        },
+        "events": [
+          "1ms compositionstart",
+          "2ms compositionupdate:\"qiehuan\"",
+          "2ms beforeinput:\"qiehuan\"",
+          "2ms input:\"qiehuan\"",
+          "422ms compositionend:\"qiehuan\""
+        ],
+        "writes": [
+          {
+            "dt": 426,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I18 已保存句。qiehuan",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I18 已保存句。qiehuan",
+          "goals": []
+        }
+      },
+      "back": {
+        "editor": "I18 已保存句。qiehuan"
+      },
+      "resumed": {
+        "writes": [
+          {
+            "dt": 426,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I18 已保存句。qiehuan",
+            "expectedRevision": 1,
+            "result": 200
+          },
+          {
+            "dt": 5244,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I18 已保存句。qiehuan回来后。",
+            "expectedRevision": 2,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "title": null,
+          "text": "I18 已保存句。qiehuan回来后。",
+          "goals": []
+        },
+        "editor": "I18 已保存句。qiehuan回来后。"
+      }
+    },
+    {
+      "scenario": "I19 Insight 编辑器回归",
+      "checks": [
+        {
+          "name": "洞察页可打开",
+          "ok": true,
+          "detail": {
+            "root": true,
+            "editors": 0,
+            "text": "新建 Insight Insight 列表 列表加载失败：获取 Insight 列表失败（HTTP 404） 重试"
+          }
+        },
+        {
+          "name": "编辑入口存在且可输入",
+          "ok": false,
+          "detail": {
+            "page": {
+              "root": true,
+              "editors": 0,
+              "text": "新建 Insight Insight 列表 列表加载失败：获取 Insight 列表失败（HTTP 404） 重试"
+            },
+            "typing": null
+          }
+        }
+      ],
+      "page": {
+        "root": true,
+        "editors": 0,
+        "text": "新建 Insight Insight 列表 列表加载失败：获取 Insight 列表失败（HTTP 404） 重试"
+      },
+      "typing": null
+    },
+    {
+      "scenario": "I20 对照视图右侧编辑器",
+      "checks": [
+        {
+          "name": "对照入口可用且右侧可编辑",
+          "ok": true,
+          "detail": {
+            "editors": 2,
+            "rightText": "I20 当前版本。"
+          }
+        },
+        {
+          "name": "对照中的输入已落库",
+          "ok": true,
+          "detail": "I20 当前版本。对照追加。"
+        },
+        {
+          "name": "对照右侧编辑器未被重建",
+          "ok": true,
+          "detail": [
+            "CMP"
+          ]
+        },
+        {
+          "name": "【残留】保存期间对照右侧是否被锁定/丢焦点",
+          "ok": false,
+          "detail": {
+            "editable": [
+              "true",
+              "false"
+            ],
+            "lostFocus": 176,
+            "count": 213
+          }
+        }
+      ],
+      "opened": {
+        "editors": 2,
+        "rightText": "I20 当前版本。"
+      },
+      "after": {
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I20 当前版本。对照追加。",
+          "goals": []
+        },
+        "writes": [
+          {
+            "dt": 929,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I20 当前版本。对照追加。",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ]
+      },
+      "marks": [
+        "CMP"
+      ],
+      "editableValues": [
+        "true",
+        "false"
+      ],
+      "lostFocusSamples": 176
+    },
+    {
+      "scenario": "I21 组合中程序化切页",
+      "checks": [
+        {
+          "name": "组合中离开会先拦停并说明",
+          "ok": true,
+          "detail": {
+            "open": true,
+            "title": "最新改动还没保存成功，确定离开？"
+          }
+        },
+        {
+          "name": "【残留】拦停弹窗打开后仍发生保存（弹窗抢焦点导致预编辑被提交）",
+          "ok": false,
+          "detail": [
+            {
+              "dt": 1357,
+              "method": "PATCH",
+              "path": "/api/journals/1",
+              "text": "I21 已保存句。chengxu",
+              "expectedRevision": 1,
+              "result": 200
+            }
+          ]
+        },
+        {
+          "name": "确认后可以离开",
+          "ok": true,
+          "detail": {
+            "leftPage": true,
+            "writes": [
+              {
+                "dt": 1357,
+                "method": "PATCH",
+                "path": "/api/journals/1",
+                "text": "I21 已保存句。chengxu",
+                "expectedRevision": 1,
+                "result": 200
+              }
+            ]
+          }
+        },
+        {
+          "name": "回切后组合标记已清、可继续保存",
+          "ok": true,
+          "detail": {
+            "journal": {
+              "id": 1,
+              "revision": 3,
+              "title": null,
+              "text": "I21 已保存句。chengxu回切。",
+              "goals": []
+            },
+            "writes": [
+              {
+                "dt": 1357,
+                "method": "PATCH",
+                "path": "/api/journals/1",
+                "text": "I21 已保存句。chengxu",
+                "expectedRevision": 1,
+                "result": 200
+              },
+              {
+                "dt": 6113,
+                "method": "PATCH",
+                "path": "/api/journals/1",
+                "text": "I21 已保存句。chengxu回切。",
+                "expectedRevision": 2,
+                "result": 200
+              }
+            ],
+            "editor": "I21 已保存句。chengxu回切。"
+          }
+        },
+        {
+          "name": "【残留】未确认拼音最终未被写入正文",
+          "ok": false,
+          "detail": "I21 已保存句。chengxu回切。"
+        }
+      ],
+      "mid": {
+        "dialog": {
+          "open": true,
+          "title": "最新改动还没保存成功，确定离开？"
+        },
+        "writes": [
+          {
+            "dt": 1357,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I21 已保存句。chengxu",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "title": null,
+          "text": "I21 已保存句。chengxu",
+          "goals": []
+        }
+      },
+      "left": {
+        "leftPage": true,
+        "writes": [
+          {
+            "dt": 1357,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I21 已保存句。chengxu",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ]
+      },
+      "resumed": {
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "title": null,
+          "text": "I21 已保存句。chengxu回切。",
+          "goals": []
+        },
+        "writes": [
+          {
+            "dt": 1357,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I21 已保存句。chengxu",
+            "expectedRevision": 1,
+            "result": 200
+          },
+          {
+            "dt": 6113,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "I21 已保存句。chengxu回切。",
+            "expectedRevision": 2,
+            "result": 200
+          }
+        ],
+        "editor": "I21 已保存句。chengxu回切。"
+      }
+    },
+    {
+      "scenario": "会话汇总",
+      "exceptions": []
+    }
+  ],
+  "shots": [
+    "iv-01-set-composition-held.png",
+    "iv-02-set-goal-during-composition.png",
+    "iv-03-set-goal-after-commit.png",
+    "iv-04-set-503.png",
+    "iv-05-set-409.png",
+    "iv-06-set-focus-after-save.png",
+    "iv-07-set-nav-during-composition.png"
+  ]
+}

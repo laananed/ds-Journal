@@ -1,0 +1,21 @@
+== src/utils/writingSession.test.ts exit=0
+writingSession: 138 项通过
+== src/state/editSessions.test.ts exit=0
+editSessions: 160 项通过
+== src/state/localJournalDrafts.test.ts exit=0
+localJournalDrafts: 49 项通过
+== src/utils/pendingCreateReplay.test.ts exit=0
+pendingCreateReplay: 59 项通过
+== src/utils/ritualView.test.ts exit=0
+ritualView: 132 项断言通过
+== src/utils/ritualControlled.test.ts exit=0
+ritualControlled: 17 项检查通过
+== src/components/writingDraftActions.test.ts exit=0
+writingDraftActions: 14 项通过
+== src/state/journalSession.test.ts exit=0
+journalSession: 19 项通过
+== src/editor/documentProjection.test.ts exit=0
+5 shared projection fixtures passed
+editor schema, guard signature and id rules passed
+== src/utils/dirtyState.test.ts exit=0
+dirtyState: 11 assertions passed

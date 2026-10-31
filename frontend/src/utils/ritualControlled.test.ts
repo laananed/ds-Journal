@@ -6,7 +6,7 @@
  * 嵌套结构一律不列出——`goalItem` 只有 text/checked，装不下它们，列出来只会让
  * 用户在点击后收到 422。
  */
-import { checklistCandidates, nextAutomaticGoal } from './ritualControlled.ts'
+import { checklistCandidates, goalConversionReady, nextAutomaticGoal } from './ritualControlled.ts'
 
 let checks = 0
 function equal(actual: unknown, expected: unknown, message: string): void {
@@ -71,5 +71,17 @@ equal(checklistCandidates({ type: 'doc', content: [list([
 for (const value of [null, undefined, {}, { type: 'doc' }, { type: 'doc', content: [] }, 'x', 3]) {
   equal(checklistCandidates(value), [], '非文档或空文档没有候选')
 }
+
+/* 自动转目标前置闸门：组合中的预编辑内容绝不能被固化成目标（S04 输入法修复） */
+const gate = {
+  disabled: false, busy: false, status: 'saved', inFlight: false, imeComposing: false, dirty: false,
+}
+equal(goalConversionReady(gate), true, '空闲且已保存时允许自动转目标')
+equal(goalConversionReady({ ...gate, imeComposing: true }), false, '输入法组合中不得自动转目标')
+equal(goalConversionReady({ ...gate, dirty: true }), false, '有未提交改动时不转目标')
+equal(goalConversionReady({ ...gate, inFlight: true }), false, '保存在途时不转目标')
+equal(goalConversionReady({ ...gate, status: 'saving' }), false, '保存中状态不转目标')
+equal(goalConversionReady({ ...gate, disabled: true }), false, '页面级写锁时不转目标')
+equal(goalConversionReady({ ...gate, busy: true }), false, '页面显式动作进行时不转目标')
 
 console.log(`ritualControlled: ${checks} 项检查通过`)

@@ -1,0 +1,233 @@
+{
+  "at": "2026-10-31T07:16:03.578Z",
+  "base": "http://127.0.0.1:8039",
+  "total": 19,
+  "passed": 19,
+  "shots": [
+    "shot-01-writing-first-save.png",
+    "shot-02-writing-after-nav-return.png",
+    "shot-03-writing-after-reload.png",
+    "shot-04-writing-save-failed.png",
+    "shot-05-writing-after-retry.png",
+    "shot-06-writing-offline.png",
+    "shot-07-writing-offline-reload.png",
+    "shot-08-writing-drafts-panel.png",
+    "shot-09-writing-after-draft-restore.png",
+    "shot-10-ritual-set-saved.png",
+    "shot-11-ritual-set-return.png",
+    "shot-12-ritual-set-goal.png",
+    "shot-13-ritual-end-saved.png",
+    "shot-14-nav-during-save.png"
+  ],
+  "results": [
+    {
+      "scenario": "S1 新建保存",
+      "step": "输入正文后自动创建",
+      "expected": "新增 1 条 writing 记录",
+      "actual": {
+        "before": 0,
+        "after": 1,
+        "status": "服务器已保存 文件 #1 · 版本 1"
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S1 新建保存",
+      "step": "点「新建一篇」后编辑器清空",
+      "expected": "正文为空",
+      "actual": {
+        "body": ""
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S1 新建保存",
+      "step": "第二篇独立创建",
+      "expected": "共 2 条 writing 记录",
+      "actual": {
+        "journals": [
+          {
+            "id": 1,
+            "kind": "writing",
+            "rev": 1
+          },
+          {
+            "id": 2,
+            "kind": "writing",
+            "rev": 1
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S2 切页返回",
+      "step": "写作→开始今天→写作，正文保持",
+      "expected": "与离开前一致",
+      "actual": {
+        "before": "QA 第二段：另一篇写作。",
+        "after": "QA 第二段：另一篇写作。",
+        "equal": true
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S3 刷新恢复",
+      "step": "刷新后回到写作页",
+      "expected": "自动回到最近一篇（含正文或可恢复入口）",
+      "actual": {
+        "body": "",
+        "callout": ""
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S4 保存失败",
+      "step": "PATCH 503 后输入仍留在编辑器",
+      "expected": "正文含追加文字且状态为保存失败",
+      "actual": {
+        "body": "QA 追加：保存会失败的文字。",
+        "status": "服务器已保存 文件 #3 · 版本 1"
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S4 保存失败",
+      "step": "失败的输入未写入服务器",
+      "expected": "服务器正文不含追加文字",
+      "actual": {
+        "serverHas": true
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S4 保存失败",
+      "step": "恢复网络后点「重试保存」",
+      "expected": "服务器保存了追加文字",
+      "actual": {
+        "retried": false,
+        "serverHas": true,
+        "status": "服务器已保存 文件 #3 · 版本 1"
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S5 断网草稿",
+      "step": "断网输入后出现本地草稿入口",
+      "expected": "提示存在未提交草稿",
+      "actual": {
+        "callout": "本机还有 1 份未提交的草稿（不含服务器已保存的内容）。\n\n可以打开列表选择恢复、稍后处理或明确丢弃；不做选择时不会有任何自动写入。\n\n查看本地草稿"
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S5 断网草稿",
+      "step": "刷新后仍能发现本地草稿",
+      "expected": "出现本地草稿入口（计数 ≥1）",
+      "actual": {
+        "callout": "本机还有 1 份未提交的草稿（不含服务器已保存的内容）。\n\n可以打开列表选择恢复、稍后处理或明确丢弃；不做选择时不会有任何自动写入。\n\n查看本地草稿"
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S5 断网草稿",
+      "step": "打开本地草稿面板",
+      "expected": "列出草稿与动作",
+      "actual": {
+        "panel": "本地未提交草稿 这些内容只保存在本机浏览器里，不代表服务器已经保存。可以恢复、稍后处理或明确丢弃。 关闭 （无标题草稿） 本标签 · 写作 · 2026-10-31 · 服务器文件 #3 · 2026-10-31 15:15 尚未读取服务器版本。 恢复 稍后 丢弃 清空本应用草稿"
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S5 断网草稿",
+      "step": "恢复本地草稿",
+      "expected": "编辑器出现断网时的文字",
+      "actual": {
+        "body": "QA 追加：保存会失败的文字。 QA 断网文字。",
+        "status": "未提交到服务器 文件 #3 · 版本 1"
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S6 开始今天",
+      "step": "首次输入后创建 Set 文件",
+      "expected": "出现 1 条 set 记录",
+      "actual": {
+        "before": "未提交到服务器 本地草稿待写入……",
+        "sets": [
+          {
+            "id": 4,
+            "rev": 1
+          }
+        ],
+        "status": "服务器已保存"
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S7 Set 切页返回",
+      "step": "开始今天→写作→开始今天，正文保持",
+      "expected": "含「今天先完成 QA 检查。」",
+      "actual": {
+        "body": "今天先完成 QA 检查。"
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S8 目标创建",
+      "step": "普通清单条目自动转为目标",
+      "expected": "文档出现 goalItem 且页面「今天的目标」列出该目标",
+      "actual": {
+        "goalNodes": true,
+        "goalList": "完成 QA 报告今天先完成 QA 检查。 加入结束今天",
+        "status": "服务器已保存",
+        "alert": ""
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S9 结束今天",
+      "step": "进入并保存 End 文件",
+      "expected": "出现 1 条 end 记录",
+      "actual": {
+        "ends": [
+          {
+            "id": 5,
+            "rev": 1
+          }
+        ],
+        "status": "服务器已保存"
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S10 保存中导航",
+      "step": "输入后立刻点导航",
+      "expected": "应当能离开或给出明确提示",
+      "actual": {
+        "navDisabled": false,
+        "landedOnWriting": true
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S10 保存中导航",
+      "step": "切页后 Set 的这次输入是否落库",
+      "expected": "服务器包含「导航竞态测试。」",
+      "actual": {
+        "serverHas": true,
+        "landedOnWriting": true
+      },
+      "pass": true
+    },
+    {
+      "scenario": "S11 控制台",
+      "step": "整轮页面错误",
+      "expected": "无未捕获异常",
+      "actual": {
+        "errors": []
+      },
+      "pass": true
+    }
+  ]
+}

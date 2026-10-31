@@ -1,0 +1,78 @@
+{
+  "withGoal": {
+    "journal": {
+      "id": 1,
+      "revision": 2,
+      "text": "",
+      "goals": [
+        "买牛奶"
+      ]
+    },
+    "panel": "今天的目标 买牛奶 加入结束今天"
+  },
+  "withNote": {
+    "journal": {
+      "id": 1,
+      "revision": 3,
+      "text": "备注段。",
+      "goals": [
+        "买牛奶"
+      ]
+    },
+    "editor": "目标\n系统内容 · 由服务维护\n买牛奶\n\n备注段。"
+  },
+  "polluted": {
+    "clicked": true,
+    "editor": "目标\n系统内容 · 由服务维护\n买牛奶\n\n备注段。nihao",
+    "events": [
+      {
+        "dt": 1,
+        "type": "compositionstart",
+        "data": ""
+      },
+      {
+        "dt": 1,
+        "type": "compositionupdate",
+        "data": "nihao"
+      },
+      {
+        "dt": 1,
+        "type": "beforeinput",
+        "data": "nihao"
+      },
+      {
+        "dt": 1,
+        "type": "input",
+        "data": "nihao"
+      }
+    ],
+    "writes": [
+      {
+        "dt": 910,
+        "method": "PATCH",
+        "text": "备注段。nihao"
+      }
+    ],
+    "journal": {
+      "id": 1,
+      "revision": 4,
+      "text": "备注段。nihao",
+      "goals": [
+        "买牛奶"
+      ]
+    },
+    "panel": "今天的目标 买牛奶 加入结束今天"
+  },
+  "reopened": {
+    "editor": "目标\n系统内容 · 由服务维护\n买牛奶\n\n备注段。nihao",
+    "panel": "今天的目标 买牛奶 加入结束今天",
+    "journal": {
+      "id": 1,
+      "revision": 4,
+      "text": "备注段。nihao",
+      "goals": [
+        "买牛奶"
+      ]
+    }
+  }
+}
