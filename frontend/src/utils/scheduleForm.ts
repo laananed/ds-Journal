@@ -281,7 +281,10 @@ export function describeScheduleFailure(error: unknown, action: ScheduleAction):
       kind: 'network',
       message: action === 'create'
         ? '网络中断，无法确认是否已保存；稍后重试会沿用同一个创建键，不会重复创建。'
-        : '网络中断，改动未确认；请稍后重新读取确认结果。',
+        : action === 'list'
+          // 列表读取本身不产生改动，「改动未确认」对读取失败是误导（交叉测试 D2）。
+          ? '网络中断，暂时无法读取日程列表。'
+          : '网络中断，改动未确认；请稍后重新读取确认结果。',
       needsReload: action !== 'create',
     }
   }
