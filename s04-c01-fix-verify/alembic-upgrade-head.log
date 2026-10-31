@@ -1,0 +1,16 @@
+$ C:\Programme\demo\SeekJournal-Work-02\backend\.venv\Scripts\python.exe -B -m alembic upgrade head
+exit=0
+--- stdout ---
+
+--- stderr ---
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 3a70890ddb10, create journals table
+INFO  [alembic.runtime.migration] Running upgrade 3a70890ddb10 -> 52c8e94a365c, create folders and add journals folder_id / deleted_at
+INFO  [alembic.runtime.migration] Running upgrade 52c8e94a365c -> a8d98342e603, create inboxes and insights
+INFO  [alembic.runtime.migration] Running upgrade a8d98342e603 -> 18ecf7e09da6, Add the one-Daily-per-business-date partial unique index.
+INFO  [alembic.runtime.migration] Running upgrade 18ecf7e09da6 -> 3aa16300a58a, stage3_writing_ai
+INFO  [alembic.runtime.migration] Running upgrade 3aa16300a58a -> 9e7a6c42d011, Add Stage 4 document and ritual foundations without converting old rows.
+INFO  [alembic.runtime.migration] Running upgrade 9e7a6c42d011 -> 4f8e1a3c9d02, Persist Ritual copy idempotency receipts.
+INFO  [alembic.runtime.migration] Running upgrade 4f8e1a3c9d02 -> c01a7e421b50, Create independent schedules.
+

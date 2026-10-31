@@ -1,0 +1,10 @@
+BUSINESS_TABLES 含 schedules? 0
+EXPECTED_TABLES 含 schedules? 0
+stage2 链尾断言:
+    assert chain == ['3a70890ddb10', '52c8e94a365c', 'a8d98342e603', '18ecf7e09da6', '3aa16300a58a', '9e7a6c42d011', '4f8e1a3c9d02'], f"Unexpected migration chain: {chain}"
+    assert chain[4:] == ['3aa16300a58a', '9e7a6c42d011', '4f8e1a3c9d02']
+stage2 metadata 断言依赖导入:
+33:from app.database import Base
+34:from app.folder.models import Folder
+35:from app.inbox.models import Inbox
+36:from app.insight.models import Insight

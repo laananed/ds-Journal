@@ -1,0 +1,16 @@
+{
+  "round": "C01 model/migration index fix — independent targeted retest",
+  "started_at": "2026-10-31T10:20:43+08:00",
+  "database": "seekjournal_test_03",
+  "database_verified_by": "current_database()",
+  "public_writes": "none (all DDL confined to c01fx_b22d5ccd)",
+  "created_objects": [
+    "schema c01fx_b22d5ccd"
+  ],
+  "services_started": [],
+  "finished_at": "2026-10-31T10:20:48+08:00",
+  "cleanup": {
+    "dropped_schema": "c01fx_b22d5ccd",
+    "public_unchanged": true
+  }
+}
