@@ -1,0 +1,197 @@
+{
+  "generatedAt": "2026-10-31T12:01:54.630Z",
+  "results": [
+    {
+      "id": "F1-NEW-RECOVER",
+      "name": "新建：输入后立即刷新 → 本机草稿可恢复并最终创建",
+      "status": "ok",
+      "data": {
+        "dialogs": [
+          "beforeunload"
+        ],
+        "bannerVisible": true,
+        "bannerText": "发现 1 份未提交的 Insight 草稿（只存在本机，恢复后仍需保存才会写入服务器）： | 标题-FIXNEW · 新建 · 2026-10-31 19:58 恢复丢弃",
+        "editorShowsMarker": true,
+        "POST": 1,
+        "createdOnServer": true,
+        "serverHasBody": true,
+        "draftKeysLeft": []
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "F2-EDIT-RECOVER",
+      "name": "已有记录：追加后立即刷新 → 恢复后保存到服务器",
+      "status": "ok",
+      "data": {
+        "dialogs": [
+          "beforeunload"
+        ],
+        "bannerVisible": true,
+        "editorShowsMarker": true,
+        "PATCH": 1,
+        "serverHasBody": true,
+        "draftKeysLeft": []
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "F3-CONFLICT-GUARD",
+      "name": "已有记录：本机草稿基于旧版本 → 冲突提示，不自动覆盖",
+      "status": "ok",
+      "data": {
+        "promptText": "发现本机未提交的草稿（保存于 2026-10-31 19:58），它基于 v1，服务器当前是 v2。恢复会以服务器当前版本为基线继续保存，可能覆盖较新的正文。 | 使用服务器版本 | 恢复我的草稿",
+        "mentionsVersions": true,
+        "patchedBeforeChoice": 0,
+        "serverUnchanged": true,
+        "draftKeysLeft": []
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "F4-CLOSE-RECOVER",
+      "name": "新建：输入后关闭页面 → 有提示，重开仍能恢复",
+      "status": "ok",
+      "data": {
+        "dialogsAfterClose": [
+          "beforeunload"
+        ],
+        "bannerVisible": true,
+        "bannerText": "发现 1 份未提交的 Insight 草稿（只存在本机，恢复后仍需保存才会写入服务器）： | 标题-FIXCLOSE · 新建 · 2026-10-31 19:59 恢复丢弃",
+        "editorShowsMarker": true,
+        "POSTbeforeRestore": 0
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "F12-BLANK-NAV",
+      "name": "空新建：返回列表/刷新都不弹假失败",
+      "status": "ok",
+      "data": {
+        "appDialog": false,
+        "panelClosed": true,
+        "dialogs": [],
+        "POST": 0,
+        "draftKeysLeft": [],
+        "serverCount": 1
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "F5-CANCEL-EMPTY",
+      "name": "取消新建：空内容直接关闭，无“保存失败”误报、无 POST",
+      "status": "ok",
+      "data": {
+        "dialogs": [],
+        "panelClosed": true,
+        "appLeaveDialog": false,
+        "inPanelConfirm": false,
+        "POST": 0,
+        "serverCount": 1
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "F6-CANCEL-CONTENT",
+      "name": "取消新建：有正文先确认，确认后不创建、不留草稿",
+      "status": "ok",
+      "data": {
+        "confirmVisible": true,
+        "confirmText": "放弃这条未保存的 Insight？放弃后输入不会保留，也不会创建记录。 | 继续编辑 | 放弃并关闭",
+        "postBeforeConfirm": 0,
+        "postWhileWaiting": 0,
+        "panelClosed": true,
+        "POST": 0,
+        "serverCount": 1,
+        "draftKeysLeft": []
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "F7-CANCEL-TITLE",
+      "name": "取消新建：仅标题 → 面板内确认，不是“保存失败”",
+      "status": "ok",
+      "data": {
+        "confirmText": "放弃这条未保存的 Insight？放弃后输入不会保留，也不会创建记录。 | 继续编辑 | 放弃并关闭",
+        "appDialogText": "",
+        "POST": 0,
+        "serverCount": 1,
+        "panelClosed": true
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "F8-SCHED-RELOAD",
+      "name": "日程编辑：改标题后刷新 → 浏览器离开提示",
+      "status": "ok",
+      "data": {
+        "dialogs": [
+          "beforeunload"
+        ],
+        "formReopened": false,
+        "PATCH": 0,
+        "serverTitles": [
+          "与导师讨论提纲",
+          "跑步"
+        ]
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "F9-SCHED-SAVED",
+      "name": "日程编辑：保存成功后刷新 → 不再提示、内容保留",
+      "status": "ok",
+      "data": {
+        "dialogs": [],
+        "PATCH": 1,
+        "serverTitles": [
+          "已保存FIXSAVE",
+          "跑步"
+        ],
+        "listTitles": [
+          "已保存FIXSAVE",
+          "跑步"
+        ]
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "F10-SCHED-CREATE-RELOAD",
+      "name": "日程新建：填表后刷新 → 浏览器离开提示",
+      "status": "ok",
+      "data": {
+        "dialogs": [
+          "beforeunload"
+        ],
+        "formReopened": false,
+        "POST": 0,
+        "serverCount": 2
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "F11-LISTFAIL-VISIBLE",
+      "name": "列表刷新失败：新条目可见、提示明确、重试可恢复",
+      "status": "ok",
+      "data": {
+        "serverCount": 3,
+        "listShowsCreated": true,
+        "listTitles": [
+          "与导师讨论提纲",
+          "跑步",
+          "刷新失败FIXF"
+        ],
+        "notice": "已创建「刷新失败FIXF」（不影响 Set 目标）。",
+        "bannerText": "日程列表刷新失败：internal error | 下面显示的是最近一次成功读取的列表，可能还没有刚创建或刚修改的日程；如果刚保存过，先点「重新读取」确认，避免重复创建；这里不会重复发送保存或删除。 | 重新读取",
+        "bannerMentionsReload": true,
+        "afterRetryTitles": [
+          "与导师讨论提纲",
+          "跑步",
+          "刷新失败FIXF"
+        ],
+        "afterRetryBannerGone": true
+      },
+      "pageErrors": []
+    }
+  ]
+}

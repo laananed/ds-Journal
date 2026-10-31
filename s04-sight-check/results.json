@@ -1,0 +1,91 @@
+{
+  "results": [
+    {
+      "id": "A1",
+      "name": "日程列表读取",
+      "status": "pass",
+      "detail": "渲染 2 条，打开页面零写请求"
+    },
+    {
+      "id": "A2",
+      "name": "日程新建",
+      "status": "pass",
+      "detail": "POST 201，client_create_id 存在，列表出现新条目（revision 1）"
+    },
+    {
+      "id": "A3",
+      "name": "日程编辑",
+      "status": "pass",
+      "detail": "PATCH 带 expected_revision=1，revision 升到 2"
+    },
+    {
+      "id": "A4",
+      "name": "日程完成/取消完成",
+      "status": "pass",
+      "detail": "完成/取消完成均通过 PATCH completed 生效"
+    },
+    {
+      "id": "A5",
+      "name": "日程删除（需确认）",
+      "status": "pass",
+      "detail": "DELETE 带 If-Match=\"4\"，列表本地移除且刷新后不重复发送"
+    },
+    {
+      "id": "A6",
+      "name": "日程创建网络中断：表单与输入是否保留",
+      "status": "pass",
+      "detail": "表单保留、输入保留；提示「网络中断，无法确认是否已保存；稍后重试会沿用同一个创建键，不会重复创建。」"
+    },
+    {
+      "id": "A7",
+      "name": "日程编辑 409 冲突：输入保留并可重试",
+      "status": "pass",
+      "detail": "冲突块显示最新版本（标题 别处的修改 时间 2026年11月1日 周日 14:00 状态 未完成），草稿保留，重试成功"
+    },
+    {
+      "id": "A8",
+      "name": "日程与 Set 目标互不干扰",
+      "status": "pass",
+      "detail": "全程 0 次 /api/rituals 写请求"
+    },
+    {
+      "id": "B1",
+      "name": "Insight 新建 → 自动保存 → 列表可见",
+      "status": "pass",
+      "detail": "POST /api/insights 1 次，状态「服务器已保存」"
+    },
+    {
+      "id": "B2",
+      "name": "Insight 返回列表再打开：内容保留",
+      "status": "pass",
+      "detail": "标题与正文均从服务器读回"
+    },
+    {
+      "id": "B3",
+      "name": "Insight 编辑后直接切模块（离开前 flush）",
+      "status": "pass",
+      "detail": "离开前产生 1 次 PATCH；服务器正文包含「追加一句」=true"
+    },
+    {
+      "id": "B4",
+      "name": "Insight 保存失败：提示与输入保留",
+      "status": "pass",
+      "detail": "状态条：保存失败 internal error 重试保存；输入保留、重试后保存成功"
+    },
+    {
+      "id": "C1",
+      "name": "全部搜索 → 打开目标",
+      "status": "pass",
+      "detail": "结果 [\"目标条目\",\"已有洞察\"]，点击后先 GET 目标再打开「目标条目」"
+    },
+    {
+      "id": "C2",
+      "name": "内部链接 [[标题]] 打开目标",
+      "status": "pass",
+      "detail": "装饰 1 个；解析 1 次（title=?title=%E7%9B%AE%E6%A0%87%E6%9D%A1%E7%9B%AE&page=1），目标读取 4 次"
+    }
+  ],
+  "requestCount": 41,
+  "scheduleReads": 3,
+  "consoleErrors": []
+}

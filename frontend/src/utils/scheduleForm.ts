@@ -56,6 +56,19 @@ export function emptyScheduleDraft(): ScheduleDraft {
 }
 
 /**
+ * 两个表单草稿是否完全一致（按输入框里的值比较，不做时间归一）。
+ *
+ * 只用于「是否有未提交改动」：编辑时与新基线比、新建时与空表单比。
+ * 它不判断时间是否合法——校验仍交给 `validateScheduleDraft`。
+ */
+export function scheduleDraftEquals(a: ScheduleDraft, b: ScheduleDraft): boolean {
+  return a.title === b.title
+    && a.startsAtInput === b.startsAtInput
+    && a.endsAtInput === b.endsAtInput
+    && a.completed === b.completed
+}
+
+/**
  * 生成一次新的幂等键。
  * **只有用户显式开始一次新建（或显式重置）时才调用**：网络失败重试必须沿用原键，
  * 否则同一日程可能在服务端落两条。

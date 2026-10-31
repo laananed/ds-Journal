@@ -36,6 +36,7 @@ import {
 } from '../state/insightSession'
 import {
   blankInsightDraft,
+  documentPlainText,
   insightDraftIssue,
   insightDraftSavable,
   insightToDraft,
@@ -43,6 +44,15 @@ import {
   legacyTextDocument,
   seedInsightDraft,
 } from '../utils/insightDraft'
+import {
+  insightDraftRecordKey,
+  insightRecoveryDecision,
+  readInsightDrafts,
+  removeInsightDraft,
+  writeInsightDraft,
+  type InsightDraftRecord,
+  type InsightDraftStorage,
+} from '../state/insightLocalDrafts'
 import type { InsightDraftSeed } from '../utils/insightAiDraft'
 import { formatServerTimestamp } from '../utils/journalDetail'
 import { nearestValidPage } from '../utils/pagination'
@@ -88,11 +98,50 @@ interface InsightPageProps {
 }
 
 type InsightPanelShape =
-  | { kind: 'create'; key: number; savedId?: number; seed?: InsightDraftSeed }
-  | { kind: 'detail'; key: number; id: number }
+  | { kind: 'create'; key: number; savedId?: number; seed?: InsightDraftSeed; recovered?: InsightDraftRecord }
+  | { kind: 'detail'; key: number; id: number; recovered?: InsightDraftRecord }
 
 /** 输入停稳多久后提交到服务器（与原页面级自动保存同一口径）。 */
 const SAVE_DEBOUNCE_MS = 800
+/** 本地恢复记录的写入间隔：比服务器保存更早，缩短刷新/关页的丢失窗口。 */
+const LOCAL_DRAFT_DEBOUNCE_MS = 250
+
+/** 浏览器本地存储可能因隐私模式/配额不可用；不可用时只是没有恢复线索，不影响编辑。 */
+function browserDraftStorage(): InsightDraftStorage | null {
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 是否算「用户写了东西」。
+ *
+ * 用它而不是 `insightHasUnsavedInput`：编辑器挂载时会给空段落补稳定 ID，
+ * 会话因此从一打开就是 `unsaved`——那是系统规范化，不是用户的输入。
+ * 取消新建、离开提示和本地草稿都只认真实内容；只选 Folder 不算，
+ * 因为空正文本来就不会提交。
+ */
+function draftHasUserInput(draft: DocumentDraft): boolean {
+  if (draft.title.trim() !== '') return true
+  return documentPlainText(draft.content_doc).trim() !== ''
+}
+
+function formatDraftTime(value: number): string {
+  const date = new Date(value)
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function recordToDraft(record: InsightDraftRecord): DocumentDraft {
+  return {
+    title: record.title,
+    content_doc: record.content_doc as ContentDocument,
+    date: '',
+    folder_id: record.folder_id,
+  }
+}
 
 interface InsightPanelProps {
   panel: InsightPanelShape
@@ -113,9 +162,18 @@ function InsightPanel({
   const insightId = panel.kind === 'detail' ? panel.id : null
   // T10：来自 AI 草稿的首次创建；种子只用于初始化编辑内容与创建键。
   const seed = panel.kind === 'create' ? panel.seed : undefined
+  // 本地恢复的记录：新建时直接进入编辑器；已有记录先询问，不自动覆盖。
+  const recovered = panel.recovered ?? null
+  const recoveryApplied = useRef(false)
+  const storage = useMemo(() => browserDraftStorage(), [])
 
   // 稳定草稿身份：面板首次渲染时确定，之后不随渲染/输入变化（新建后不重建编辑器）。
-  const [draftId] = useState(() => (seed ? `seed-${seed.createKey}` : newKey()))
+  // 恢复新建草稿时沿用记录里的身份，后续写入仍落在同一个恢复记录上。
+  const [draftId] = useState(() => (
+    recovered !== null && recovered.file_id === null
+      ? recovered.draft_id
+      : (seed ? `seed-${seed.createKey}` : newKey())
+  ))
   /** 请求键：新建草稿键或 `insight:<id>`，只用于「打开会话」这一步。 */
   const requestedSessionId = insightId !== null ? insightSessionId(insightId) : insightDraftSessionId(draftId)
   /**
@@ -140,6 +198,10 @@ function InsightPanel({
   const [writeError, setWriteError] = useState('')
   const [notice, setNotice] = useState('')
   const [converting, setConverting] = useState(false)
+  /** 取消新建时确认「放弃未保存输入」；不确认就留在编辑器里。 */
+  const [discardConfirm, setDiscardConfirm] = useState(false)
+  /** 已有记录发现本地草稿：先让用户选择，恢复本身不写服务器。 */
+  const [recoveryPrompt, setRecoveryPrompt] = useState<{ record: InsightDraftRecord; conflict: boolean } | null>(null)
   /** 最近一次服务器响应：只用于同步详情与列表，不冒充「已保存」状态。 */
   const [lastSaved, setLastSaved] = useState<Insight | null>(null)
 
@@ -156,8 +218,8 @@ function InsightPanel({
   const actions = useEditSessionActions(sessionId)
 
   const fallbackDraft = useMemo<DocumentDraft>(
-    () => (seed ? seedInsightDraft(seed) : blankInsightDraft()),
-    [seed],
+    () => (recovered !== null ? recordToDraft(recovered) : seed ? seedInsightDraft(seed) : blankInsightDraft()),
+    [recovered, seed],
   )
   const draft = session?.draft ?? fallbackDraft
   const saveStatus = session === null ? 'saved' : displayStatus(session)
@@ -170,16 +232,23 @@ function InsightPanel({
   // 创建面板只登记会话，不发任何请求；首次有效保存才创建文件。
   useEffect(() => {
     if (panel.kind !== 'create') return
-    editSessionStore.openSession({
+    // 恢复的草稿先以空基线登记，再作为「用户输入」写回：
+    // 这样它仍是未提交状态，会自动保存，也不会被当成「已同步」。
+    const opened = editSessionStore.openSession({
       sessionId: requestedSessionId,
       type: 'insight',
       tabId: INSIGHT_SESSION_TAB,
-      draft: seed ? seedInsightDraft(seed) : blankInsightDraft(),
+      draft: recovered !== null ? blankInsightDraft() : fallbackDraft,
       createKey: seed?.createKey,
       transport,
       isSavable: insightDraftSavable,
     })
-  }, [panel.kind, seed, requestedSessionId, transport])
+    if (recovered !== null && !recoveryApplied.current) {
+      recoveryApplied.current = true
+      editSessionStore.changeSession(opened.sessionId, fallbackDraft, 'user_input')
+      setNotice('已恢复上次未提交的草稿；继续编辑，稍后会自动保存。')
+    }
+  }, [panel.kind, recovered, fallbackDraft, seed, requestedSessionId, transport])
 
   // 已有 Insight：真实读取详情后再登记会话（legacy 用等价转换文档作基线）。
   // 初值已是 `loading`；重读入口在事件处理里显式改状态，避免在 effect 内同步 setState。
@@ -200,6 +269,17 @@ function InsightPanel({
         transport,
         isSavable: insightDraftSavable,
       })
+      // 本地草稿只拿来「询问」，不自动覆盖：版本一致才提示可直接恢复，
+      // 版本不同进入冲突说明，由用户选择恢复哪一份；
+      // 从列表入口进来时带着记录，直接点开记录时则按文件查一次。
+      const candidate = recovered ?? readInsightDrafts(storage).find((item) => item.file_id === data.id) ?? null
+      if (candidate !== null && candidate.file_id === data.id && !recoveryApplied.current) {
+        recoveryApplied.current = true
+        setRecoveryPrompt({
+          record: candidate,
+          conflict: insightRecoveryDecision(candidate, data.revision) === 'conflict',
+        })
+      }
       setStatus('ready')
     }).catch((error: unknown) => {
       if (controller.signal.aborted) return
@@ -209,14 +289,18 @@ function InsightPanel({
       setStatus('error')
     })
     return () => controller.abort()
-  }, [insightId, reloadToken, requestedSessionId, transport])
+  }, [insightId, recovered, reloadToken, requestedSessionId, storage, transport])
 
   // ---- 保存 -----------------------------------------------------------
 
   const guardedSave = useCallback(async (): Promise<FlushResult> => {
-    // 没有未提交输入（刚打开就走 / 内容已同步 / 空草稿）不拦住导航，
-    // 避免把「空白草稿」误报成「最新改动还没保存成功」。
-    if (!insightHasUnsavedInput(editSessionStore.getSession(sessionId))) return 'clean'
+    const current = editSessionStore.getSession(sessionId)
+    // 新建面板一挂载，编辑器会给空段落补稳定 ID，会话因此被判成 unsaved——
+    // 这是系统规范化，不是用户输入。空草稿不能让导航弹出「保存失败」。
+    if (current !== null && current.fileId === null && current.firstRequest === null
+      && current.inFlight === null && !draftHasUserInput(current.draft)) return 'clean'
+    // 没有未提交输入（刚打开就走 / 内容已同步 / 空草稿）不拦住导航。
+    if (!insightHasUnsavedInput(current)) return 'clean'
     // 空白/超长不提交，由界面说明原因；不制造空记录。
     if (issue !== '') return 'blocked'
     const result = await actions.save()
@@ -233,12 +317,87 @@ function InsightPanel({
   }, [guardedSave, onFlushReady])
 
   // 只有真实用户输入才调度自动保存；载入/系统回填不触发提交。
+  // 正在确认「放弃新建」时不再计时：否则用户还没点确认，记录就已经被建出来了。
   useEffect(() => {
+    if (discardConfirm) return
     if (session === null || session.userInputSeq === 0) return
     if (session.status === 'conflict' || session.status === 'failed' || session.status === 'missing') return
     const timer = setTimeout(() => { void saveRef.current() }, SAVE_DEBOUNCE_MS)
     return () => clearTimeout(timer)
-  }, [session])
+  }, [discardConfirm, session])
+
+  // ---- 本地草稿（恢复线索，不等于「已保存」） -------------------------
+
+  const localDraftKey = useCallback(() => {
+    const current = editSessionStore.getSession(sessionId)
+    return insightDraftRecordKey(current?.fileId ?? insightId, draftId)
+  }, [draftId, insightId, sessionId])
+
+  const writeLocalDraft = useCallback(() => {
+    if (storage === null) return
+    // 恢复提示还没被处理时先不动旧记录：用户还没决定用哪份，不能被新输入覆盖。
+    // 一旦进入编辑，说明用户已经在服务器版本上继续写，此时以当前输入为准。
+    if (recoveryPrompt !== null && mode === 'view') return
+    const current = editSessionStore.getSession(sessionId)
+    if (current === null || !draftHasUserInput(current.draft)) return
+    if (current.status === 'saved' && current.inputSeq === current.ackedSeq) return
+    writeInsightDraft(storage, {
+      v: 1,
+      record_key: localDraftKey(),
+      draft_id: draftId,
+      file_id: current.fileId ?? insightId,
+      base_revision: current.revision,
+      title: current.draft.title,
+      content_doc: current.draft.content_doc,
+      folder_id: current.draft.folder_id,
+      saved_at: Date.now(),
+    })
+  }, [draftId, insightId, localDraftKey, mode, recoveryPrompt, sessionId, storage])
+
+  // 输入停稳就写本机：比 800ms 的服务器保存更早，刷新/关页时才有东西可恢复。
+  useEffect(() => {
+    if (session === null || !draftHasUserInput(session.draft)) return
+    if (session.status === 'saved' && session.inputSeq === session.ackedSeq) return
+    const timer = setTimeout(writeLocalDraft, LOCAL_DRAFT_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [session, writeLocalDraft])
+
+  // 关页 / 切到后台：同步补写一次（localStorage 同步，来得及）。
+  useEffect(() => {
+    function flush(): void { writeLocalDraft() }
+    function onVisibility(): void { if (document.visibilityState === 'hidden') flush() }
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [writeLocalDraft])
+
+  // 刷新 / 关闭：有未提交输入时让浏览器明确询问，同时把草稿留在本机。
+  useEffect(() => {
+    function onBeforeUnload(event: BeforeUnloadEvent): void {
+      const current = editSessionStore.getSession(sessionId)
+      if (current === null || !draftHasUserInput(current.draft)) return
+      if (current.status === 'saved' && current.inputSeq === current.ackedSeq) return
+      writeLocalDraft()
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [sessionId, writeLocalDraft])
+
+  // 服务器确认且没有更新输入：删除恢复线索。旧响应不能删掉更新的草稿。
+  useEffect(() => {
+    if (session === null || storage === null) return
+    // 用户还没决定是否恢复旧草稿时，不要顺带把它删掉（进入编辑后以当前输入为准）。
+    if (recoveryPrompt !== null && mode === 'view') return
+    if (session.status !== 'saved' || session.inputSeq !== session.ackedSeq) return
+    if (session.inputSeq === 0) return
+    removeInsightDraft(storage, localDraftKey())
+    removeInsightDraft(storage, insightDraftRecordKey(null, draftId))
+  }, [session, localDraftKey, draftId, mode, recoveryPrompt, storage])
 
   // 面板卸载：尽力提交一次（会话是应用级的，请求不会因卸载被取消）；
   // 从未输入、也没有服务器身份的空草稿会话直接关闭，避免残留空会话。
@@ -300,6 +459,47 @@ function InsightPanel({
   }
   function changeContent(document: ContentDocument) {
     actions.change({ ...draft, content_doc: document })
+  }
+
+  /**
+   * 「取消新建」：只丢弃，不创建。
+   *
+   * 空内容直接关闭（新建面板打开时被编辑器补 ID 的 unsaved 不算输入）；
+   * 有内容则先给出明确选择，确认后才丢弃。丢弃前关闭会话并清掉本机草稿，
+   * 导航前的 flush 因此拿不到会话，不会再偷偷 POST 一条记录。
+   */
+  function requestDiscard(): void {
+    const current = editSessionStore.getSession(sessionId)
+    if (current === null || !draftHasUserInput(current.draft)) {
+      discardAndClose()
+      return
+    }
+    setDiscardConfirm(true)
+  }
+  function discardAndClose(): void {
+    if (storage !== null) {
+      removeInsightDraft(storage, localDraftKey())
+      removeInsightDraft(storage, insightDraftRecordKey(null, draftId))
+    }
+    editSessionStore.closeSession(sessionId)
+    setDiscardConfirm(false)
+    setRecoveryPrompt(null)
+    onClose()
+  }
+
+  /** 恢复已有记录的本地草稿：应用为未提交输入，仍走既有写队列与 CAS。 */
+  function restoreRecovery(): void {
+    if (recoveryPrompt === null) return
+    actions.change(recordToDraft(recoveryPrompt.record))
+    setRecoveryPrompt(null)
+    setMode('edit')
+    setNotice('已恢复上次未提交的草稿；保存后会提交到服务器。')
+  }
+  function dropRecovery(): void {
+    if (recoveryPrompt === null) return
+    if (storage !== null) removeInsightDraft(storage, recoveryPrompt.record.record_key)
+    setRecoveryPrompt(null)
+    setNotice('已丢弃本机草稿，继续使用服务器版本。')
   }
 
   /**
@@ -437,6 +637,24 @@ function InsightPanel({
         <button type="button" onClick={onClose} disabled={busy}>返回列表</button>
       </div>
 
+      {recoveryPrompt !== null && status === 'ready' && mode === 'view' && (
+        <div className="detail-confirm" role="alert">
+          <p>
+            {recoveryPrompt.conflict
+              ? `发现本机未提交的草稿（保存于 ${formatDraftTime(recoveryPrompt.record.saved_at)}），它基于 v${recoveryPrompt.record.base_revision ?? '未知'}，服务器当前是 v${file?.revision ?? '未知'}。恢复会以服务器当前版本为基线继续保存，可能覆盖较新的正文。`
+              : `发现上次未提交的草稿（保存于 ${formatDraftTime(recoveryPrompt.record.saved_at)}）。恢复后仍需保存才会写入服务器。`}
+          </p>
+          <div className="detail-confirm-actions">
+            <button type="button" onClick={dropRecovery}>
+              {recoveryPrompt.conflict ? '使用服务器版本' : '丢弃本机草稿'}
+            </button>
+            <button type="button" onClick={restoreRecovery}>
+              {recoveryPrompt.conflict ? '恢复我的草稿' : '恢复草稿'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {mode === 'edit' && status === 'ready' && (
         <>
           <p className="detail-hint">
@@ -487,10 +705,19 @@ function InsightPanel({
             )}
             <div className="editor-actions">
               <button type="submit" disabled={busy || issue !== ''}>立即保存</button>
-              <button type="button" onClick={() => (isCreate ? onClose() : exitEditing())} disabled={busy}>
+              <button type="button" onClick={() => (isCreate ? requestDiscard() : exitEditing())} disabled={busy}>
                 {isCreate ? (seed ? '放弃这份草稿' : '取消新建') : '返回查看'}
               </button>
             </div>
+            {discardConfirm && (
+              <div className="detail-confirm" role="alertdialog" aria-label="放弃未保存的 Insight">
+                <p>放弃这条未保存的 Insight？放弃后输入不会保留，也不会创建记录。</p>
+                <div className="detail-confirm-actions">
+                  <button type="button" onClick={() => setDiscardConfirm(false)} autoFocus>继续编辑</button>
+                  <button type="button" className="detail-danger" onClick={discardAndClose}>放弃并关闭</button>
+                </div>
+              </div>
+            )}
           </form>
           {notice && <p className="detail-success" role="status">{notice}</p>}
           {writeError && <p className="detail-error" role="alert">{writeError}</p>}
@@ -598,6 +825,14 @@ function InsightPage({
   const [notice, setNotice] = useState('')
   const [actionError, setActionError] = useState('')
 
+  // 本机未提交草稿：列表页给出恢复入口，否则刷新后新建草稿无处可找。
+  // 只在进入列表或丢弃时重读，不在渲染期做 I/O，也不靠 effect 追状态。
+  const draftStorage = useMemo(() => browserDraftStorage(), [])
+  const [localDrafts, setLocalDrafts] = useState<InsightDraftRecord[]>(() => readInsightDrafts(draftStorage))
+  const refreshLocalDrafts = useCallback(() => {
+    setLocalDrafts(readInsightDrafts(draftStorage))
+  }, [draftStorage])
+
   const [busy, setBusy] = useState(false)
 
   function updateBusy(value: boolean) {
@@ -664,6 +899,8 @@ function InsightPage({
     setNotice('')
     setActionError('')
     setPanel({ kind: 'list' })
+    // 回到列表时重读本机草稿：刚保存的会被清掉，未保存的仍可恢复。
+    refreshLocalDrafts()
   }
   function openInsight(id: number) {
     onNavigate(() => {
@@ -680,6 +917,22 @@ function InsightPage({
       setActionError('')
       setPanel({ kind: 'create', key: nextKey() })
     })
+  }
+  /** 列表里的恢复入口：新建草稿直接进编辑器；已有记录先按版本判定再询问。 */
+  function restoreLocalDraft(record: InsightDraftRecord): void {
+    onDirtyChange(false)
+    setNotice('')
+    setActionError('')
+    if (record.file_id === null) {
+      setPanel({ kind: 'create', key: nextKey(), recovered: record })
+      return
+    }
+    setPanel({ kind: 'detail', id: record.file_id, key: nextKey(), recovered: record })
+  }
+  function discardLocalDraft(record: InsightDraftRecord): void {
+    removeInsightDraft(draftStorage, record.record_key)
+    refreshLocalDrafts()
+    setNotice('已丢弃本机草稿。')
   }
   /** T10：用 AI 草稿进入既有 Insight 编辑器；查看草稿本身零写入。 */
   function addDraftInsight(draftSeed: InsightDraftSeed) {
@@ -723,6 +976,23 @@ function InsightPage({
 
       {notice && <p className="detail-success" role="status">{notice}</p>}
       {actionError && <p className="detail-error" role="alert">{actionError}</p>}
+
+      {/* 本机未提交草稿的恢复入口：只在本机，恢复前不会写入服务器。 */}
+      {panel.kind === 'list' && localDrafts.length > 0 && (
+        <section className="detail-hint" aria-label="未提交的 Insight 草稿">
+          <p>发现 {localDrafts.length} 份未提交的 Insight 草稿（只存在本机，恢复后仍需保存才会写入服务器）：</p>
+          <ul>
+            {localDrafts.map((record) => (
+              <li key={record.record_key}>
+                {record.title.trim() === '' ? '未命名 Insight' : record.title}
+                {` · ${record.file_id === null ? '新建' : '已有记录'} · ${formatDraftTime(record.saved_at)} `}
+                <button type="button" onClick={() => restoreLocalDraft(record)}>恢复</button>
+                <button type="button" onClick={() => discardLocalDraft(record)}>丢弃</button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* 父级（复盘预览 / App）已提供草稿时才展示；列表态才展示，避免与编辑器抢注意力。 */}
       {panel.kind === 'list' && drafts.length > 0 && (

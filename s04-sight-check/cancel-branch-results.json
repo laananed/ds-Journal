@@ -1,0 +1,39 @@
+[
+  {
+    "label": "空取消K0",
+    "dialogOpen": true,
+    "dialogText": "最新改动还没保存成功，确定离开？ | 自动保存失败或出现版本冲突，最新输入还没有提交到后端。确认离开会丢弃这些未保存的改动。 | 继续编辑 | 确认离开",
+    "postsBeforeConfirm": 0,
+    "panelClosed": true,
+    "serverCount": 1,
+    "serverTitles": [
+      "已有洞察"
+    ],
+    "bodyHasTitle": false
+  },
+  {
+    "label": "仅标题K1",
+    "dialogOpen": true,
+    "dialogText": "最新改动还没保存成功，确定离开？ | 自动保存失败或出现版本冲突，最新输入还没有提交到后端。确认离开会丢弃这些未保存的改动。 | 继续编辑 | 确认离开",
+    "postsBeforeConfirm": 0,
+    "panelClosed": true,
+    "serverCount": 1,
+    "serverTitles": [
+      "已有洞察"
+    ],
+    "bodyHasTitle": false
+  },
+  {
+    "label": "正文无标题K2",
+    "dialogOpen": false,
+    "dialogText": "",
+    "postsBeforeConfirm": 1,
+    "panelClosed": true,
+    "serverCount": 2,
+    "serverTitles": [
+      "未命名 Insight",
+      "已有洞察"
+    ],
+    "bodyHasTitle": true
+  }
+]
