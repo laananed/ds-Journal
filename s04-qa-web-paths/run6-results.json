@@ -1,0 +1,121 @@
+{
+  "at": "2026-10-31T07:21:51.462Z",
+  "results": [
+    {
+      "scenario": "IME Writing",
+      "step": "组合中输入 nihao（未上屏）时是否已发保存",
+      "expected": "服务器不应出现未上屏拼音",
+      "actual": {
+        "serverHasPinyin": false,
+        "body": "写作前缀。nihao",
+        "status": "未提交到服务器 文件 #1 · 版本 1 本地草稿已保存（仅本机浏览器）"
+      }
+    },
+    {
+      "scenario": "IME Writing",
+      "step": "上屏后提交",
+      "expected": "服务器含「你好」且不含 nihao",
+      "actual": {
+        "hasCommitted": true,
+        "hasPinyin": false
+      }
+    },
+    {
+      "scenario": "IME Set",
+      "step": "组合中未上屏时是否已发保存",
+      "expected": "服务器不应出现未上屏拼音",
+      "actual": {
+        "serverHasPinyin": true,
+        "status": "服务器已保存"
+      }
+    },
+    {
+      "scenario": "IME Set",
+      "step": "上屏后提交",
+      "expected": "服务器含「你好」",
+      "actual": {
+        "hasCommitted": false,
+        "status": "服务器已保存"
+      }
+    },
+    {
+      "scenario": "Set 草稿恢复",
+      "step": "断网追加后状态",
+      "expected": "保存失败且有本地草稿入口",
+      "actual": {
+        "status": "保存失败 本地草稿已保存（仅本机浏览器） 还有改动未提交",
+        "callout": "本机还有 1 份未提交的草稿（只保存在这台浏览器，不代表服务器已保存）。\n\n可以打开列表选择恢复、稍后处理或明确丢弃；不"
+      }
+    },
+    {
+      "scenario": "Set 草稿恢复",
+      "step": "刷新后本机草稿入口",
+      "expected": "出现入口",
+      "actual": {
+        "callout": "本机还有 1 份未提交的草稿（只保存在这台浏览器，不代表服务器已保存）。\n\n可以打开列表选择恢复、稍后处理或明确丢弃；不做选择时不会有任何自"
+      }
+    },
+    {
+      "scenario": "Set 草稿恢复",
+      "step": "面板内容与动作",
+      "expected": "提示可恢复编辑",
+      "actual": {
+        "panel": "本地未提交草稿 这些内容只保存在本机浏览器里，不代表服务器已经保存。可以恢复、稍后处理或明确丢弃。 关闭 （无标题草稿） 本标签 · 开始今天 · 2026-10-31 · 服务器文件 #2 · 2026-10-31 15:21 可以恢复编辑 版本一致，可以恢复编辑；保存时仍按版本比对。 恢复 稍后 丢弃 清空本应用草稿"
+      }
+    },
+    {
+      "scenario": "Set 草稿恢复",
+      "step": "点「恢复」",
+      "expected": "编辑器出现断网追加的文字",
+      "actual": {
+        "body": "开始今天前缀。nihao S1 断网追加。",
+        "status": "服务器已保存",
+        "notice": "已把本机内容放回编辑器，基于服务器当前版本；保存时仍按版本比对。"
+      }
+    },
+    {
+      "scenario": "Set 未落库草稿",
+      "step": "刷新后入口",
+      "expected": "出现入口",
+      "actual": {
+        "callout": "本机还有 1 份未提交的草稿（只保存在这台浏览器，不代表服务器已保存）。\n\n可以打开列表选择恢复、稍后处理或明确丢弃；不"
+      }
+    },
+    {
+      "scenario": "Set 未落库草稿",
+      "step": "面板动作",
+      "expected": "应提供「恢复原请求」",
+      "actual": {
+        "panel": "本地未提交草稿 这些内容只保存在本机浏览器里，不代表服务器已经保存。可以恢复、稍后处理或明确丢弃。 关闭 （无标题草稿） 本标签 · 开始今天 · 2026-10-31 · 创建未确认 · 2026-10-31 15:21 创建结果未确认（可恢复原请求） 创建请求已发出但结果未确认。「恢复原请求」会用原创建键与当时的原内容重放，服务器不会因此多出一条记录；「另存为新草稿」则会用新的创建键再建一篇独立记录。 恢复原请求 另存为新草稿 稍后 丢弃 清空本应用草稿"
+      }
+    },
+    {
+      "scenario": "Set 未落库草稿",
+      "step": "恢复原请求",
+      "expected": "只创建 1 条 set 且含文字",
+      "actual": {
+        "count": 1,
+        "contents": [
+          "set:S2 断网新 Set。"
+        ],
+        "status": "服务器已保存",
+        "body": "S2 断网新 Set。"
+      }
+    },
+    {
+      "scenario": "F 控制台",
+      "step": "整轮未捕获异常",
+      "expected": "无",
+      "actual": {
+        "errors": []
+      }
+    }
+  ],
+  "shots": [
+    "r6-01-ime-writing.png",
+    "r6-02-ime-set.png",
+    "r6-03-set-recovery-callout.png",
+    "r6-04-set-recovered.png",
+    "r6-05-set-fresh-replayed.png"
+  ]
+}

@@ -1,0 +1,138 @@
+[
+  {
+    "label": "开始今天 初次保存后",
+    "body": "前缀。",
+    "status": "服务器已保存",
+    "servers": [
+      {
+        "kind": "set",
+        "id": 1,
+        "rev": 1,
+        "content": "前缀。"
+      }
+    ],
+    "html": "<p data-id=\"962b31fb-51be-46c3-ad04-ff8be6a8419c\">前缀。</p>"
+  },
+  {
+    "label": "开始今天 组合中（未上屏 nihao）",
+    "body": "前缀。nihao",
+    "status": "服务器已保存",
+    "servers": [
+      {
+        "kind": "set",
+        "id": 1,
+        "rev": 2,
+        "content": "前缀。nihao"
+      }
+    ],
+    "html": "<p data-id=\"962b31fb-51be-46c3-ad04-ff8be6a8419c\">前缀。nihao</p>"
+  },
+  {
+    "label": "开始今天 上屏后 1.5s",
+    "body": "前缀。nihao",
+    "status": "服务器已保存",
+    "servers": [
+      {
+        "kind": "set",
+        "id": 1,
+        "rev": 2,
+        "content": "前缀。nihao"
+      }
+    ],
+    "html": "<p data-id=\"962b31fb-51be-46c3-ad04-ff8be6a8419c\">前缀。nihao</p>"
+  },
+  {
+    "label": "开始今天 上屏后 4.5s",
+    "body": "前缀。nihao",
+    "status": "服务器已保存",
+    "servers": [
+      {
+        "kind": "set",
+        "id": 1,
+        "rev": 2,
+        "content": "前缀。nihao"
+      }
+    ],
+    "html": "<p data-id=\"962b31fb-51be-46c3-ad04-ff8be6a8419c\">前缀。nihao</p>"
+  },
+  {
+    "label": "结束今天 初次保存后",
+    "body": "前缀。",
+    "status": "服务器已保存",
+    "servers": [
+      {
+        "kind": "set",
+        "id": 1,
+        "rev": 2,
+        "content": "前缀。nihao"
+      },
+      {
+        "kind": "end",
+        "id": 2,
+        "rev": 1,
+        "content": "前缀。"
+      }
+    ],
+    "html": "<p data-id=\"c03fd3d0-8ec3-4ce9-999d-0be661a55b2e\">前缀。</p>"
+  },
+  {
+    "label": "结束今天 组合中（未上屏 nihao）",
+    "body": "前缀。nihao",
+    "status": "服务器已保存",
+    "servers": [
+      {
+        "kind": "set",
+        "id": 1,
+        "rev": 2,
+        "content": "前缀。nihao"
+      },
+      {
+        "kind": "end",
+        "id": 2,
+        "rev": 2,
+        "content": "前缀。nihao"
+      }
+    ],
+    "html": "<p data-id=\"c03fd3d0-8ec3-4ce9-999d-0be661a55b2e\">前缀。nihao</p>"
+  },
+  {
+    "label": "结束今天 上屏后 1.5s",
+    "body": "前缀。nihao",
+    "status": "服务器已保存",
+    "servers": [
+      {
+        "kind": "set",
+        "id": 1,
+        "rev": 2,
+        "content": "前缀。nihao"
+      },
+      {
+        "kind": "end",
+        "id": 2,
+        "rev": 2,
+        "content": "前缀。nihao"
+      }
+    ],
+    "html": "<p data-id=\"c03fd3d0-8ec3-4ce9-999d-0be661a55b2e\">前缀。nihao</p>"
+  },
+  {
+    "label": "结束今天 上屏后 4.5s",
+    "body": "前缀。nihao",
+    "status": "服务器已保存",
+    "servers": [
+      {
+        "kind": "set",
+        "id": 1,
+        "rev": 2,
+        "content": "前缀。nihao"
+      },
+      {
+        "kind": "end",
+        "id": 2,
+        "rev": 2,
+        "content": "前缀。nihao"
+      }
+    ],
+    "html": "<p data-id=\"c03fd3d0-8ec3-4ce9-999d-0be661a55b2e\">前缀。nihao</p>"
+  }
+]

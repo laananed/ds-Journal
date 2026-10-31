@@ -1,0 +1,140 @@
+{
+  "at": "2026-10-31T07:19:03.011Z",
+  "results": [
+    {
+      "scenario": "C1 慢保存导航",
+      "step": "保存进行中点「概览」",
+      "expected": "记录导航按钮状态与是否立即离开",
+      "actual": {
+        "buttons": [
+          {
+            "text": "概览",
+            "disabled": false
+          },
+          {
+            "text": "写作",
+            "disabled": false
+          },
+          {
+            "text": "开始今天",
+            "disabled": false
+          },
+          {
+            "text": "结束今天",
+            "disabled": false
+          },
+          {
+            "text": "日程",
+            "disabled": false
+          },
+          {
+            "text": "所有日记",
+            "disabled": false
+          },
+          {
+            "text": "收件箱",
+            "disabled": false
+          },
+          {
+            "text": "复盘",
+            "disabled": false
+          },
+          {
+            "text": "洞察",
+            "disabled": false
+          },
+          {
+            "text": "全部搜索",
+            "disabled": false
+          },
+          {
+            "text": "回收箱",
+            "disabled": false
+          },
+          {
+            "text": "文件夹",
+            "disabled": false
+          },
+          {
+            "text": "设置",
+            "disabled": false
+          },
+          {
+            "text": "上一页",
+            "disabled": true
+          },
+          {
+            "text": "下一页",
+            "disabled": true
+          }
+        ],
+        "clicked": {
+          "found": true,
+          "disabled": false
+        },
+        "leftWritingImmediately": false
+      }
+    },
+    {
+      "scenario": "C1 慢保存导航",
+      "step": "等待保存完成后页面去向",
+      "expected": "自动完成延迟导航且内容已落库",
+      "actual": {
+        "leftAfterSave": true,
+        "serverHasC1": true
+      }
+    },
+    {
+      "scenario": "C2 失败后离开",
+      "step": "保存失败时点导航",
+      "expected": "弹出未保存离开确认",
+      "actual": {
+        "statusBefore": "保存失败 injected failure 本地草稿已保存（仅本机浏览器） 重试保存",
+        "dialog": "最新改动还没保存成功，确定离开？ 自动保存失败或出现版本冲突，最新输入还没有提交到后端。确认离开会丢弃这些未保存的改动。 继续编辑 确认离开"
+      }
+    },
+    {
+      "scenario": "C2 失败后离开",
+      "step": "选择「继续编辑」",
+      "expected": "留在页面且文字仍在",
+      "actual": {
+        "onWriting": true,
+        "body": "C0 慢保存第一段。 C1 慢保存。 C2 失败后离开。"
+      }
+    },
+    {
+      "scenario": "C2 失败后离开",
+      "step": "确认离开后草稿是否保留",
+      "expected": "本机草稿入口应可见（切回写作时）",
+      "actual": {
+        "left": true,
+        "callout": ""
+      }
+    },
+    {
+      "scenario": "C2 失败后离开",
+      "step": "离开后返回写作页",
+      "expected": "能看到未提交草稿入口",
+      "actual": {
+        "callout": "本机还有 1 份未提交的草稿（不含服务器已保存的内容）。\n\n可以打开列表选择恢复、稍后处理或明确丢弃；不做选择时不会有任何自动写入。\n\n查看本地草稿"
+      }
+    },
+    {
+      "scenario": "RUNNER",
+      "step": "执行中断",
+      "expected": "全流程完成",
+      "actual": {
+        "error": "Error: 找不到可点击按钮：写作\n    at Session.clickText (file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-web-paths/cdp.mjs:128:25)\n    at async goWriting (file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-web-paths/run3.mjs:54:3)\n    at async main (file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-web-paths/run3.mjs:157:5)",
+        "buttons": []
+      }
+    }
+  ],
+  "shots": [
+    "r3-01-nav-slow-save-click.png",
+    "r3-02-nav-slow-save-after.png",
+    "r3-03-leave-dialog.png",
+    "r3-04-leave-cancelled.png",
+    "r3-05-after-leave-recovers.png",
+    "r3-06-runner-failure.png"
+  ]
+}

@@ -1,0 +1,171 @@
+{
+  "at": "2026-10-31T07:20:15.376Z",
+  "results": [
+    {
+      "scenario": "D 未落库草稿",
+      "step": "断网时新建草稿（从未落库）",
+      "expected": "状态保存失败且出现本地草稿入口",
+      "actual": {
+        "status": "保存失败 Failed to fetch 本地草稿已保存（仅本机浏览器） 重试保存",
+        "callout": "本机还有 1 份未提交的草稿（不含服务器已保存的内容）。\n\n可以打开列表选择恢复、稍后处理或明确丢弃；不做选择时不会有任"
+      }
+    },
+    {
+      "scenario": "D 未落库草稿",
+      "step": "刷新后发现草稿",
+      "expected": "出现未提交草稿入口",
+      "actual": {
+        "callout": "本机还有 1 份未提交的草稿（不含服务器已保存的内容）。\n\n可以打开列表选择恢复、稍后处理或明确丢弃；不做选择时不会有任"
+      }
+    },
+    {
+      "scenario": "D 未落库草稿",
+      "step": "面板给出的动作",
+      "expected": "应提示「创建结果未确认」并可恢复原请求",
+      "actual": {
+        "panel": "本地未提交草稿 这些内容只保存在本机浏览器里，不代表服务器已经保存。可以恢复、稍后处理或明确丢弃。 关闭 （无标题草稿） 本标签 · 写作 · 2026-10-31 · 创建未确认 · 2026-10-31 15:19 创建结果未确认（可恢复原请求） 创建请求已发出但结果未确认。「恢复原请求」会用原创建键与当时的原内容重放，服务器不会因此多出一条记录；「另存为新草稿」则会用新的创建键再建一篇独立记录。 恢复原请求 另存为新草稿 稍后 丢弃 清空本应用草稿"
+      }
+    },
+    {
+      "scenario": "D 未落库草稿",
+      "step": "点「恢复原请求」",
+      "expected": "只创建 1 条含 D1 的记录",
+      "actual": {
+        "count": 1,
+        "contents": [
+          "D1 断网新草稿。"
+        ],
+        "status": "服务器已保存 文件 #1 · 版本 1",
+        "body": "D1 断网新草稿。"
+      }
+    },
+    {
+      "scenario": "G 立刻切页",
+      "step": "输入后 200ms 点「概览」",
+      "expected": "先保存再离开，服务器含 G1",
+      "actual": {
+        "left": true,
+        "serverHas": true,
+        "status": null
+      }
+    },
+    {
+      "scenario": "G 立刻切页",
+      "step": "返回写作页",
+      "expected": "正文仍在（含 G1）",
+      "actual": {
+        "body": "G1 立刻切页。"
+      }
+    },
+    {
+      "scenario": "H 多篇列表",
+      "step": "刷新后侧栏列出当天写作",
+      "expected": "列出 2 篇",
+      "actual": {
+        "list": "写作 #2 H2 第二篇。 版本 1 写作 #1 G1 立刻切页。 版本 1",
+        "editorBody": ""
+      }
+    },
+    {
+      "scenario": "H 多篇列表",
+      "step": "点侧栏第一篇打开",
+      "expected": "编辑器显示该篇正文",
+      "actual": {
+        "count": 2,
+        "body": "H2 第二篇。",
+        "status": "服务器已保存 文件 #2 · 版本 1"
+      }
+    },
+    {
+      "scenario": "E Set/End",
+      "step": "开始今天首次输入创建 Set",
+      "expected": "1 条 set 记录",
+      "actual": {
+        "sets": [
+          {
+            "id": 1,
+            "rev": 1
+          }
+        ],
+        "status": "服务器已保存"
+      }
+    },
+    {
+      "scenario": "E Set/End",
+      "step": "两条普通清单自动成为目标",
+      "expected": "文档 2 个 goalItem 且页面列出",
+      "actual": {
+        "goalCount": 2,
+        "goalList": "α 目标一 加入结束今天 β 目标二E1 今天先完成 QA。 加入结束今天",
+        "status": "服务器已保存",
+        "alert": ""
+      }
+    },
+    {
+      "scenario": "E Set/End",
+      "step": "勾选目标",
+      "expected": "服务器 checked=true",
+      "actual": {
+        "checked": [
+          true,
+          false
+        ],
+        "status": "服务器已保存",
+        "goalError": ""
+      }
+    },
+    {
+      "scenario": "E Set/End",
+      "step": "结束今天首次输入创建 End",
+      "expected": "1 条 end 记录",
+      "actual": {
+        "ends": [
+          {
+            "id": 2,
+            "rev": 1
+          }
+        ],
+        "status": "服务器已保存"
+      }
+    },
+    {
+      "scenario": "E Set/End",
+      "step": "把目标加入结束今天",
+      "expected": "生成关联并写回顾",
+      "actual": {
+        "clicked": true,
+        "links": 0,
+        "notice": "已把目标加入结束今天；之后两端修改文字或完成状态会同步，回答不会被改写。",
+        "error": ""
+      }
+    },
+    {
+      "scenario": "E Set/End",
+      "step": "结束今天查看目标回顾",
+      "expected": "回顾列表显示目标与快照",
+      "actual": {
+        "reviews": "α 目标一 快照：α 目标一 · 已完成 标记为未完成"
+      }
+    },
+    {
+      "scenario": "F 控制台",
+      "step": "整轮未捕获异常",
+      "expected": "无",
+      "actual": {
+        "errors": []
+      }
+    }
+  ],
+  "shots": [
+    "r4-01-fresh-offline.png",
+    "r4-02-fresh-draft-panel.png",
+    "r4-03-fresh-draft-replayed.png",
+    "r4-04-quick-nav.png",
+    "r4-05-writing-list-after-reload.png",
+    "r4-06-writing-open-item.png",
+    "r4-07-set-goals.png",
+    "r4-08-set-goal-checked.png",
+    "r4-09-set-goal-linked.png",
+    "r4-10-end-reviews.png"
+  ]
+}

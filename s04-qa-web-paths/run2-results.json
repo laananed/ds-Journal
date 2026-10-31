@@ -1,0 +1,116 @@
+{
+  "at": "2026-10-31T07:18:13.968Z",
+  "results": [
+    {
+      "scenario": "A 保存失败",
+      "step": "首次输入创建文件",
+      "expected": "1 条 writing 记录",
+      "actual": {
+        "journals": [
+          {
+            "id": 1,
+            "rev": 1
+          }
+        ],
+        "status": "服务器已保存 文件 #1 · 版本 1"
+      }
+    },
+    {
+      "scenario": "A 保存失败",
+      "step": "PATCH 503 后输入保留在编辑器",
+      "expected": "正文含 A2 且状态为保存失败",
+      "actual": {
+        "body": "A1 第一段。 A2 保存会失败的文字。",
+        "status": "保存失败 injected failure 本地草稿已保存（仅本机浏览器） 重试保存"
+      }
+    },
+    {
+      "scenario": "A 保存失败",
+      "step": "失败的输入没有写入服务器",
+      "expected": "服务器正文不含 A2",
+      "actual": {
+        "serverHas": false
+      }
+    },
+    {
+      "scenario": "A 保存失败",
+      "step": "恢复后点「重试保存」",
+      "expected": "服务器保存 A2",
+      "actual": {
+        "retryVisible": true,
+        "serverHas": true,
+        "status": "服务器已保存 文件 #1 · 版本 2"
+      }
+    },
+    {
+      "scenario": "B 版本冲突",
+      "step": "模拟其他客户端先改服务器",
+      "expected": "PATCH 200 且版本 +1",
+      "actual": {
+        "status": 200
+      }
+    },
+    {
+      "scenario": "B 版本冲突",
+      "step": "保存遇到 409 后本地输入保留",
+      "expected": "正文含 B1，状态显示版本冲突",
+      "actual": {
+        "body": "A1 第一段。 A2 保存会失败的文字。 B1 本地冲突文字。",
+        "status": "版本冲突 revision conflict 本地草稿已保存（仅本机浏览器） 对照服务器版本"
+      }
+    },
+    {
+      "scenario": "B 版本冲突",
+      "step": "打开两侧对照",
+      "expected": "同时显示本地与服务器内容",
+      "actual": {
+        "conflictText": "这篇写作的服务器版本已变化 服务器与本地都保存着不同内容。这里只做只读对照，不会自动合并；选好之后仍需你确认保存。 我的本地草稿（基于版本 2） 未提交的本地输入 · 标题「无」 A1 第一段。 A2 保存会失败的文字。 B1 本地冲突文字。 服务器当前版本（版本 3） 外部客户端的标题 · 版本 3 A1 第一段。 A2 保存会失败的文字。 保留我的草稿并提交 采用服务器版本 稍后处理（双方都保留）"
+      }
+    },
+    {
+      "scenario": "B 版本冲突",
+      "step": "选择「保留我的草稿并提交」",
+      "expected": "服务器保存本地内容（含 B1/A2）",
+      "actual": {
+        "serverHasB1": true,
+        "status": "服务器已保存 文件 #1 · 版本 4"
+      }
+    },
+    {
+      "scenario": "C 保存中导航",
+      "step": "保存进行中点击「写作」",
+      "expected": "记录按钮是否禁用与是否离开",
+      "actual": {
+        "navDisabledAtClick": false,
+        "stillOnWriting": true,
+        "visibleNotice": "已保留你的草稿并基于服务器当前版本，正在提交……"
+      }
+    },
+    {
+      "scenario": "C 保存中导航",
+      "step": "等待保存完成后再次导航",
+      "expected": "能离开且 C1 落库",
+      "actual": {
+        "body": "A1 第一段。 A2 保存会失败的文字。 B1 本地冲突文字。 C1 慢保存。",
+        "serverHasC1": true
+      }
+    },
+    {
+      "scenario": "RUNNER",
+      "step": "执行中断",
+      "expected": "全流程完成",
+      "actual": {
+        "error": "Error: 找不到可点击按钮：写作\n    at Session.clickText (file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-web-paths/cdp.mjs:128:25)\n    at async goWriting (file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-web-paths/run2.mjs:42:3)\n    at async main (file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-web-paths/run2.mjs:171:5)"
+      }
+    }
+  ],
+  "shots": [
+    "r2-01-patch-503.png",
+    "r2-02-after-retry.png",
+    "r2-03-conflict-status.png",
+    "r2-04-conflict-compare.png",
+    "r2-05-conflict-resolved.png",
+    "r2-06-nav-during-inflight.png",
+    "r2-07-runner-failure.png"
+  ]
+}

@@ -1,0 +1,657 @@
+{
+  "at": "2026-10-31T10:08:23.282Z",
+  "results": [
+    {
+      "scenario": "S1 Set 组合超过自动保存等待后正常上屏",
+      "base": {
+        "id": 1,
+        "kind": "set",
+        "revision": 1,
+        "text": "S1 基础句。",
+        "goals": []
+      },
+      "during": {
+        "editor": "S1 基础句。",
+        "writes": [],
+        "status": "服务器已保存"
+      },
+      "after": {
+        "editor": "S1 基础句。",
+        "writes": [],
+        "journal": {
+          "id": 1,
+          "kind": "set",
+          "revision": 1,
+          "text": "S1 基础句。",
+          "goals": []
+        },
+        "status": "服务器已保存"
+      },
+      "events": []
+    },
+    {
+      "scenario": "S2 Set 组合短于等待即上屏",
+      "base": {
+        "id": 1,
+        "kind": "set",
+        "revision": 1,
+        "text": "S2 基础句。",
+        "goals": []
+      },
+      "after": {
+        "editor": "S2 基础句。",
+        "writes": [],
+        "journal": {
+          "id": 1,
+          "kind": "set",
+          "revision": 1,
+          "text": "S2 基础句。",
+          "goals": []
+        },
+        "status": "服务器已保存"
+      },
+      "events": []
+    },
+    {
+      "scenario": "S3 Set 组合中取消选词",
+      "base": {
+        "id": 1,
+        "kind": "set",
+        "revision": 1,
+        "text": "S3 基础句。",
+        "goals": []
+      },
+      "mid": {
+        "editor": "S3 基础句。",
+        "writes": [],
+        "journal": {
+          "id": 1,
+          "kind": "set",
+          "revision": 1,
+          "text": "S3 基础句。",
+          "goals": []
+        }
+      },
+      "after": {
+        "editor": "S3 基础句。",
+        "writes": [],
+        "journal": {
+          "id": 1,
+          "kind": "set",
+          "revision": 1,
+          "text": "S3 基础句。",
+          "goals": []
+        }
+      },
+      "reopened": {
+        "editor": "S3 基础句。",
+        "journal": {
+          "id": 1,
+          "kind": "set",
+          "revision": 1,
+          "text": "S3 基础句。",
+          "goals": []
+        }
+      },
+      "events": []
+    },
+    {
+      "scenario": "S4 Set 组合中切页（自动保存尚未触发）",
+      "error": "Error: 等待超时：document.querySelector('.ritual-page') !== null\n    at Session.waitFor (file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-web-paths/cdp.mjs:113:49)\n    at async scenarios.S4 Set 组合中切页（自动保存尚未触发） (file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-web-paths/run10.mjs:215:3)\n    at async run (file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-web-paths/run10.mjs:445:20)\n    at async main (file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-web-paths/run10.mjs:458:7)"
+    },
+    {
+      "scenario": "S5 Set 组合中切页（自动保存已触发）",
+      "error": "Error: 等待超时：document.querySelector('.ritual-page') !== null\n    at Session.waitFor (file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-web-paths/cdp.mjs:113:49)\n    at async scenarios.S5 Set 组合中切页（自动保存已触发） (file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-web-paths/run10.mjs:238:3)\n    at async run (file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-web-paths/run10.mjs:445:20)\n    at async main (file:///C:/Programme/demo/SeekJournal-Work-01/s04-qa-web-paths/run10.mjs:458:7)"
+    },
+    {
+      "scenario": "S6 Set 组合中保存失败",
+      "base": {
+        "id": 1,
+        "kind": "set",
+        "revision": 1,
+        "text": "S6 基础句。",
+        "goals": []
+      },
+      "after": {
+        "editor": "S6 基础句。",
+        "writes": [],
+        "journal": {
+          "id": 1,
+          "kind": "set",
+          "revision": 1,
+          "text": "S6 基础句。",
+          "goals": []
+        },
+        "status": "服务器已保存",
+        "alert": ""
+      }
+    },
+    {
+      "scenario": "S7 Set 组合中自动转目标",
+      "mid": {
+        "editor": "目标\n系统内容 · 由服务维护\n买ni",
+        "writes": [
+          {
+            "dt": 914,
+            "method": "POST",
+            "path": "/api/journals",
+            "text": "买ni",
+            "expectedRevision": null,
+            "result": 200
+          },
+          {
+            "dt": 940,
+            "method": "POST",
+            "path": "/api/rituals/1/goals",
+            "text": null,
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "kind": "set",
+          "revision": 2,
+          "text": "",
+          "goals": [
+            {
+              "text": "买ni",
+              "checked": false
+            }
+          ]
+        },
+        "goalsPanel": "今天的目标 买ni 加入结束今天"
+      },
+      "after": {
+        "editor": "目标\n系统内容 · 由服务维护\n买ni",
+        "writes": [
+          {
+            "dt": 914,
+            "method": "POST",
+            "path": "/api/journals",
+            "text": "买ni",
+            "expectedRevision": null,
+            "result": 200
+          },
+          {
+            "dt": 940,
+            "method": "POST",
+            "path": "/api/rituals/1/goals",
+            "text": null,
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "kind": "set",
+          "revision": 2,
+          "text": "",
+          "goals": [
+            {
+              "text": "买ni",
+              "checked": false
+            }
+          ]
+        },
+        "goalsPanel": "今天的目标 买ni 加入结束今天",
+        "status": "服务器已保存"
+      }
+    },
+    {
+      "scenario": "S8 End 组合超过等待后取消",
+      "base": {
+        "id": 1,
+        "kind": "end",
+        "revision": 1,
+        "text": "S8 基础句。",
+        "goals": []
+      },
+      "mid": {
+        "editor": "S8 基础句。",
+        "writes": [],
+        "journal": {
+          "id": 1,
+          "kind": "end",
+          "revision": 1,
+          "text": "S8 基础句。",
+          "goals": []
+        }
+      },
+      "after": {
+        "editor": "S8 基础句。",
+        "writes": [],
+        "journal": {
+          "id": 1,
+          "kind": "end",
+          "revision": 1,
+          "text": "S8 基础句。",
+          "goals": []
+        }
+      },
+      "reopened": {
+        "editor": "S8 基础句。",
+        "journal": {
+          "id": 1,
+          "kind": "end",
+          "revision": 1,
+          "text": "S8 基础句。",
+          "goals": []
+        }
+      }
+    },
+    {
+      "scenario": "W1 Writing 组合超过等待后上屏（对照）",
+      "base": {
+        "id": 1,
+        "kind": "writing",
+        "revision": 1,
+        "text": "W1 基础句。",
+        "goals": []
+      },
+      "during": {
+        "editor": "W1 基础句。nihaoa",
+        "writes": [],
+        "status": "未提交到服务器 文件 #1 · 版本 1 本地草稿已保存（仅本机浏览器）"
+      },
+      "after": {
+        "editor": "W1 基础句。你好",
+        "writes": [
+          {
+            "dt": 2751,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "W1 基础句。你好",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "kind": "writing",
+          "revision": 2,
+          "text": "W1 基础句。你好",
+          "goals": []
+        },
+        "status": "服务器已保存 文件 #1 · 版本 2"
+      }
+    },
+    {
+      "scenario": "W2 Writing 组合中切页",
+      "base": {
+        "id": 1,
+        "kind": "writing",
+        "revision": 1,
+        "text": "W2 基础句。",
+        "goals": []
+      },
+      "beforeClick": {
+        "editor": "W2 基础句。qiehuan",
+        "nav": [
+          {
+            "label": "概览",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "写作",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "开始今天",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "结束今天",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "日程",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "所有日记",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "收件箱",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "复盘",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "洞察",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "全部搜索",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "回收箱",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "文件夹",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "设置",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "上一页",
+            "disabled": true,
+            "title": null
+          },
+          {
+            "label": "下一页",
+            "disabled": true,
+            "title": null
+          }
+        ]
+      },
+      "afterNav": {
+        "onDashboard": false,
+        "writes": [
+          {
+            "dt": 813,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "W2 基础句。qiehuan",
+            "expectedRevision": 1,
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "kind": "writing",
+          "revision": 2,
+          "text": "W2 基础句。qiehuan",
+          "goals": []
+        }
+      }
+    },
+    {
+      "scenario": "W3 Writing 保存中点导航",
+      "navBefore": [
+        {
+          "label": "概览",
+          "disabled": false,
+          "title": null
+        },
+        {
+          "label": "写作",
+          "disabled": false,
+          "title": null
+        },
+        {
+          "label": "开始今天",
+          "disabled": false,
+          "title": null
+        },
+        {
+          "label": "结束今天",
+          "disabled": false,
+          "title": null
+        },
+        {
+          "label": "日程",
+          "disabled": false,
+          "title": null
+        },
+        {
+          "label": "所有日记",
+          "disabled": false,
+          "title": null
+        },
+        {
+          "label": "收件箱",
+          "disabled": false,
+          "title": null
+        },
+        {
+          "label": "复盘",
+          "disabled": false,
+          "title": null
+        },
+        {
+          "label": "洞察",
+          "disabled": false,
+          "title": null
+        },
+        {
+          "label": "全部搜索",
+          "disabled": false,
+          "title": null
+        },
+        {
+          "label": "回收箱",
+          "disabled": false,
+          "title": null
+        },
+        {
+          "label": "文件夹",
+          "disabled": false,
+          "title": null
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": null
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": null
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": null
+        }
+      ],
+      "during": {
+        "changedWithin1500ms": false,
+        "msToChange": null,
+        "notice": "",
+        "writingStatus": ""
+      },
+      "after": {
+        "onDashboard": false,
+        "msToChange": 5550,
+        "journal": {
+          "id": 1,
+          "kind": "writing",
+          "revision": 2,
+          "text": "W3 慢保存句。 追加。",
+          "goals": []
+        }
+      }
+    },
+    {
+      "scenario": "S9 Set 保存中点导航",
+      "navBefore": [
+        {
+          "label": "概览",
+          "disabled": true,
+          "title": null
+        },
+        {
+          "label": "写作",
+          "disabled": true,
+          "title": null
+        },
+        {
+          "label": "开始今天",
+          "disabled": true,
+          "title": null
+        },
+        {
+          "label": "结束今天",
+          "disabled": true,
+          "title": null
+        },
+        {
+          "label": "日程",
+          "disabled": true,
+          "title": null
+        },
+        {
+          "label": "所有日记",
+          "disabled": true,
+          "title": null
+        },
+        {
+          "label": "收件箱",
+          "disabled": true,
+          "title": null
+        },
+        {
+          "label": "复盘",
+          "disabled": true,
+          "title": null
+        },
+        {
+          "label": "洞察",
+          "disabled": true,
+          "title": null
+        },
+        {
+          "label": "全部搜索",
+          "disabled": true,
+          "title": null
+        },
+        {
+          "label": "回收箱",
+          "disabled": true,
+          "title": null
+        },
+        {
+          "label": "文件夹",
+          "disabled": true,
+          "title": null
+        },
+        {
+          "label": "设置",
+          "disabled": true,
+          "title": null
+        }
+      ],
+      "during": {
+        "clicked": {
+          "found": true,
+          "disabled": true,
+          "title": null
+        },
+        "stillOnRitual": true,
+        "status": "正在保存到服务器…… 本地草稿已保存（仅本机浏览器）",
+        "hint": true
+      },
+      "after": {
+        "nav": [
+          {
+            "label": "概览",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "写作",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "开始今天",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "结束今天",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "日程",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "所有日记",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "收件箱",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "复盘",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "洞察",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "全部搜索",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "回收箱",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "文件夹",
+            "disabled": false,
+            "title": null
+          },
+          {
+            "label": "设置",
+            "disabled": false,
+            "title": null
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "kind": "set",
+          "revision": 2,
+          "text": " 追加。S9 慢保存句。",
+          "goals": []
+        },
+        "stillOnRitual": true
+      }
+    },
+    {
+      "scenario": "控制台",
+      "exceptions": []
+    }
+  ],
+  "shots": [
+    "r10-01-set-nav-during-composition.png",
+    "r10-02-failure.png",
+    "r10-03-failure.png",
+    "r10-04-set-fail-during-composition.png",
+    "r10-05-set-goal-during-composition.png",
+    "r10-06-writing-nav-during-save.png",
+    "r10-07-set-nav-disabled-during-save.png"
+  ]
+}

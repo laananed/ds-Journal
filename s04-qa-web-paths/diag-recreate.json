@@ -1,0 +1,112 @@
+{
+  "setPlainSave": {
+    "editorCount": 1,
+    "changes": [
+      {
+        "dt": 0,
+        "mark": "A",
+        "active": "editor",
+        "ce": "true",
+        "text": " 追加。E1 基础。"
+      },
+      {
+        "dt": 916,
+        "mark": "NONE",
+        "active": "BODY",
+        "ce": "false",
+        "text": " 追加。E1 基础。"
+      },
+      {
+        "dt": 930,
+        "mark": "NONE",
+        "active": "BODY",
+        "ce": "true",
+        "text": " 追加。E1 基础。"
+      }
+    ],
+    "mutations": 16,
+    "writes": [
+      {
+        "dt": 912,
+        "method": "PATCH",
+        "text": " 追加。E1 基础。"
+      }
+    ]
+  },
+  "setCompositionCrossSave": {
+    "changes": [
+      {
+        "dt": 0,
+        "mark": "A",
+        "active": "editor",
+        "ce": "true",
+        "text": "nihaoE2 基础。 追加。E1 基础。"
+      },
+      {
+        "dt": 915,
+        "mark": "NONE",
+        "active": "BODY",
+        "ce": "false",
+        "text": "nihaoE2 基础。 追加。E1 基础。"
+      },
+      {
+        "dt": 925,
+        "mark": "NONE",
+        "active": "BODY",
+        "ce": "true",
+        "text": "nihaoE2 基础。 追加。E1 基础。"
+      }
+    ],
+    "mutations": 16,
+    "events": [
+      {
+        "dt": 0,
+        "type": "compositionstart",
+        "data": "",
+        "inputType": null
+      },
+      {
+        "dt": 0,
+        "type": "compositionupdate",
+        "data": "nihao",
+        "inputType": null
+      },
+      {
+        "dt": 1,
+        "type": "beforeinput",
+        "data": "nihao",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "dt": 1,
+        "type": "input",
+        "data": "nihao",
+        "inputType": "insertCompositionText"
+      }
+    ],
+    "writes": [
+      {
+        "dt": 918,
+        "method": "PATCH",
+        "text": "nihaoE2 基础。 追加。E1 基础。"
+      }
+    ],
+    "editor": "nihaoE2 基础。 追加。E1 基础。"
+  },
+  "commitAfterInterrupt": {
+    "beforeCommit": "nihaoE2 基础。 追加。E1 基础。",
+    "editor": "你好nihaoE2 基础。 追加。E1 基础。",
+    "writes": [
+      {
+        "dt": 918,
+        "method": "PATCH",
+        "text": "nihaoE2 基础。 追加。E1 基础。"
+      },
+      {
+        "dt": 3300,
+        "method": "PATCH",
+        "text": "你好nihaoE2 基础。 追加。E1 基础。"
+      }
+    ]
+  }
+}

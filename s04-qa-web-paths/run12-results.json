@@ -1,0 +1,152 @@
+{
+  "at": "2026-10-31T10:14:31.633Z",
+  "results": [
+    {
+      "scenario": "T1 Set 组合中切页（0.3s 时）",
+      "base": {
+        "id": 1,
+        "revision": 1,
+        "text": "T1 已保存句。",
+        "goals": []
+      },
+      "before": {
+        "editor": "T1 已保存句。qiehuan",
+        "nav": [
+          {
+            "label": "概览",
+            "disabled": false
+          },
+          {
+            "label": "写作",
+            "disabled": false
+          },
+          {
+            "label": "开始今天",
+            "disabled": false
+          },
+          {
+            "label": "结束今天",
+            "disabled": false
+          }
+        ]
+      },
+      "afterNav": {
+        "onWriting": true,
+        "onRitual": false,
+        "writes": [
+          {
+            "dt": 323,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "T1 已保存句。qiehuan",
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "text": "T1 已保存句。qiehuan",
+          "goals": []
+        }
+      },
+      "reopened": {
+        "editor": "T1 已保存句。qiehuan",
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "text": "T1 已保存句。qiehuan",
+          "goals": []
+        }
+      }
+    },
+    {
+      "scenario": "T2 Set 组合中切页（保存已完成后）",
+      "before": {
+        "editor": "T2 已保存句。qiehuan",
+        "writes": [
+          {
+            "dt": 923,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "T2 已保存句。qiehuan",
+            "result": 200
+          }
+        ],
+        "focused": false
+      },
+      "afterNav": {
+        "onWriting": true,
+        "writes": [
+          {
+            "dt": 923,
+            "method": "PATCH",
+            "path": "/api/journals/1",
+            "text": "T2 已保存句。qiehuan",
+            "result": 200
+          }
+        ],
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "text": "T2 已保存句。qiehuan",
+          "goals": []
+        }
+      },
+      "reopened": {
+        "editor": "T2 已保存句。qiehuan"
+      }
+    },
+    {
+      "scenario": "T3 已保存目标 + 其它段落组合跨窗口",
+      "withGoal": {
+        "journal": {
+          "id": 1,
+          "revision": 2,
+          "text": "",
+          "goals": [
+            "买牛奶"
+          ]
+        },
+        "panel": "今天的目标 买牛奶 加入结束今天"
+      },
+      "withNote": {
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "text": "备注段。",
+          "goals": [
+            "买牛奶"
+          ]
+        },
+        "panel": "今天的目标 买牛奶 加入结束今天"
+      },
+      "polluted": {
+        "editor": "目标\n系统内容 · 由服务维护\n买牛奶\n\n备注段。",
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "text": "备注段。",
+          "goals": [
+            "买牛奶"
+          ]
+        },
+        "panel": "今天的目标 买牛奶 加入结束今天",
+        "writes": []
+      },
+      "reopened": {
+        "panel": "今天的目标 买牛奶 加入结束今天",
+        "journal": {
+          "id": 1,
+          "revision": 3,
+          "text": "备注段。",
+          "goals": [
+            "买牛奶"
+          ]
+        }
+      }
+    }
+  ],
+  "shots": [
+    "r12-01-set-nav-during-composition.png"
+  ]
+}

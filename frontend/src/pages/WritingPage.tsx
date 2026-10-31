@@ -376,6 +376,16 @@ function WritingPage({
   }, [mirrorLocalState, reloadDrafts])
 
   /**
+   * 组合期间卸载时浏览器不一定再发 `compositionend`；标记残留会让 `planWrite`
+   * 以 `ime` 永久拦下后续保存。清理必须排在「离开前补写」之前，先解锁再 flush。
+   */
+  useEffect(() => {
+    if (sessionId === null) return
+    const scoped = sessionId
+    return () => { store.setComposing(scoped, false) }
+  }, [sessionId, store])
+
+  /**
    * 离开页面（切页 / 换草稿 / 卸载）时：
    * 先尽力写一次本机草稿，再让应用级队列把未提交输入继续提交完。
    * 导航本身不等待网络——这与 T02「立即导航、保存继续」的语义一致。
@@ -1018,7 +1028,10 @@ function WritingPage({
                   >
                     <RichTextEditor
                       doc={session.draft.content_doc as ContentDocument | null}
-                      readOnly={locked}
+                      // 视图只读只跟外部写锁；本页显式动作（立即保存/新建）走 `locked`，
+                      // 避免保存状态变化重建编辑器、丢掉光标与正在进行的组合。
+                      readOnly={disabled}
+                      locked={busy}
                       label="写作正文"
                       onUserChange={(document) => change({ ...session.draft, content_doc: document })}
                       onSelection={onEditorSelection}

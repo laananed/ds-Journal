@@ -98,7 +98,7 @@ import {
   type RitualCapture,
   type RitualFileRef,
 } from '../utils/ritualView'
-import { checklistCandidates, nextAutomaticGoal } from '../utils/ritualControlled'
+import { checklistCandidates, goalConversionReady, nextAutomaticGoal } from '../utils/ritualControlled'
 
 export interface RitualPageProps {
   /** 页面处理哪一种 Ritual；界面只显示「开始今天 / 结束今天」。 */
@@ -334,8 +334,15 @@ function RitualPage({
 
   const inputSeq = session?.inputSeq ?? 0
   const sessionStatus = session?.status ?? 'saved'
+  const imeComposing = session?.imeComposing ?? false
 
-  // 输入停稳后交给会话队列保存；失败/冲突/缺失时不再自动重试（API §10）。
+  /**
+   * 输入停稳后交给会话队列保存；失败/冲突/缺失时不再自动重试（API §10）。
+   *
+   * `imeComposing` 必须进依赖：组合中不排保存，上屏/取消后才重新排一次。
+   * 否则「先打字、马上起拼音、再取消」这条路径上的普通文字会一直排在队列外，
+   * 直到下一次按键或离开页面才落库。
+   */
   useEffect(() => {
     if (sessionId === null) return
     const current = editSessionStore.getSession(sessionId)
@@ -347,7 +354,18 @@ function RitualPage({
     if (current.isSavable !== null && !current.isSavable(current.draft)) return
     const timer = setTimeout(() => { void editSessionStore.saveToSequence(sessionId) }, 900)
     return () => clearTimeout(timer)
-  }, [sessionId, inputSeq, sessionStatus])
+  }, [sessionId, inputSeq, sessionStatus, imeComposing])
+
+  /**
+   * 组合期间离开页面（切页 / 卸载）时浏览器不一定再发 `compositionend`；
+   * 标记一旦残留，`planWrite` 会以 `ime` 永久拦下之后的所有保存。
+   * 这个清理必须排在下面的「离开前补写」之前，先解锁再 flush。
+   */
+  useEffect(() => {
+    if (sessionId === null) return
+    const scoped = sessionId
+    return () => { editSessionStore.setComposing(scoped, false) }
+  }, [sessionId])
 
   const flush = useCallback(async (): Promise<FlushResult> => {
     if (sessionId === null) return 'clean'
@@ -746,8 +764,23 @@ function RitualPage({
     setDraftNotice('已采用服务器版本；本机那份草稿仍保留在「本地未提交草稿」里，可以稍后对照或丢弃。')
   }
 
-  const busy = (session?.inFlight !== null && session?.inFlight !== undefined) || templateSaving || goalBusy !== '' || compareBusy
+  const autoSaving = session?.inFlight !== null && session?.inFlight !== undefined
+  const busy = autoSaving || templateSaving || goalBusy !== '' || compareBusy
   useEffect(() => { onBusyChange?.(busy) }, [busy, onBusyChange])
+
+  /**
+   * 编辑器锁定必须与「保存在途」解耦（S04 输入法缺陷修复）。
+   *
+   * 旧实现把 `disabled`（含本页 `inFlight`）直接当 `readOnly` 传给编辑器：
+   * 每次自动保存都会因 `readOnly` 翻转重建 TipTap 实例、替换 DOM 节点，
+   * 于是丢焦点、盲打落空、正在进行的输入法组合被静默打断（拼音当正文落库）。
+   *
+   * 现在只用**页面本地的显式动作**锁编辑器：模板保存、目标转换、版本对照这些
+   * 会把文档回填的操作。这里刻意不再看 `disabled`——它是 App 的回流状态，比
+   * 本页 `autoSaving` 晚一拍，曾在保存结束瞬间把编辑器短暂设为不可编辑并抢走焦点。
+   * 保存期间继续输入不丢字，队列会在下一轮提交。
+   */
+  const editorLocked = templateSaving || goalBusy !== '' || compareBusy
 
   /* ------------------------------------------------------- 编辑正文 */
 
@@ -777,6 +810,21 @@ function RitualPage({
   function handleTitleChange(value: string) {
     if (draft === null) return
     changeDraft({ ...draft, title: value })
+  }
+
+  /**
+   * 输入法组合接线（S04 输入法缺陷修复）。
+   *
+   * 只「读」`session.imeComposing` 而不置位等于没有守卫：`planWrite` 的 `ime`
+   * 拦截和自动转目标闸门都依赖这个标记真的被置起来。组合事件从 `.ritual-main`
+   * 冒泡上来，正文与标题共用同一份会话状态，所以在这里接一次就够。
+   */
+  function handleCompositionStart() {
+    if (sessionId !== null) editSessionStore.setComposing(sessionId, true)
+  }
+
+  function handleCompositionEnd() {
+    if (sessionId !== null) editSessionStore.setComposing(sessionId, false)
   }
 
   /* ----------------------------------------------------------- 模板 */
@@ -876,9 +924,14 @@ function RitualPage({
       autoFileId.current = session.fileId
       autoAttempted.current.clear()
     }
-    const ready = !disabled && !busy && session.status === 'saved'
-      && session.inFlight === null && !session.imeComposing
-      && !draftHasChanges(session.draft, session.baseline)
+    const ready = goalConversionReady({
+      disabled,
+      busy,
+      status: session.status,
+      inFlight: session.inFlight !== null,
+      imeComposing: session.imeComposing,
+      dirty: draftHasChanges(session.draft, session.baseline),
+    })
     const itemId = nextAutomaticGoal(document, kind, ready, autoAttempted.current)
     if (itemId === null) return
     autoAttempted.current.add(itemId)
@@ -1399,7 +1452,9 @@ function RitualPage({
             )}
           </aside>
 
-          <div className="ritual-main">
+          <div className="ritual-main"
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}>
             {notice !== '' && <p className="ritual-notice" role="status">{notice}</p>}
 
             {saveHint !== '' && (
@@ -1473,8 +1528,8 @@ function RitualPage({
                     onReload={() => void reloadCompare()}
                     right={(
                       <div className="ritual-editor ritual-editor--compare">
-                        <RichTextEditor doc={document} readOnly={disabled} label={`${KIND_LABEL[kind]} 正文`}
-                          onUserChange={handleBodyChange} />
+                        <RichTextEditor doc={document} locked={disabled || compareBusy}
+                          label={`${KIND_LABEL[kind]} 正文`} onUserChange={handleBodyChange} />
                       </div>
                     )}
                   />
@@ -1485,7 +1540,7 @@ function RitualPage({
                       : (
                         <RichTextEditor
                           doc={document}
-                          readOnly={disabled}
+                          locked={editorLocked}
                           label={`${KIND_LABEL[kind]} 正文`}
                           onUserChange={handleBodyChange}
                         />

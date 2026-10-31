@@ -68,6 +68,11 @@
   background: #fcfcff;
 }
 
+/* 暂态锁定（保存中/显式动作）：只给光标提示，不改底色，避免状态切换时闪一下。 */
+.s4-editor.is-locked .s4-editor-content {
+  cursor: progress;
+}
+
 .s4-editor-content p {
   margin: 0 0 8px;
 }

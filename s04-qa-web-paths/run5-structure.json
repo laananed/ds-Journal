@@ -1,0 +1,64 @@
+[
+  {
+    "label": "Ctrl+End 后 caret 是否在末尾（输入 AAA）",
+    "value": null
+  },
+  {
+    "label": "输入 AAA 后 innerText",
+    "value": "AAA"
+  },
+  {
+    "label": "Enter 后 HTML",
+    "value": "<p data-id=\"d3357c5b-3e37-4238-a865-7ee79bf51262\">AAA</p><p data-id=\"605b111b-2510-4f8d-a3ae-5abf1795a098\"><br class=\"ProseMirror-trailingBreak\"></p>"
+  },
+  {
+    "label": "点击「任务清单」后 HTML",
+    "value": "<p data-id=\"d3357c5b-3e37-4238-a865-7ee79bf51262\">AAA</p><ul data-id=\"aebd2900-a590-48b7-80b3-cd7b043ca7ec\" data-type=\"taskList\"><li data-checked=\"false\" data-id=\"b3f9714a-e1c9-4a9a-a129-f0743321bf31\"><label contenteditable=\"false\"><input aria-label=\"Task item checkbox for empty task item\" type=\"checkbox\"><span style=\"position: absolute; width: 1px; height: 1px; padding: 0px; margin: -1px; overflow: hidden; clip: rect(0px, 0px, 0px, 0px); white-space: nowrap; border: 0px;\">Task item checkbox for empty task item</span></label><div><p data-id=\"605b111b-2510-4f8d-a3ae-5abf1795a098\"><br class=\"ProseMirror-trailingBreak\"></p></div></li></ul>"
+  },
+  {
+    "label": "输入 BBB 后 HTML",
+    "value": "<p data-id=\"d3357c5b-3e37-4238-a865-7ee79bf51262\">AAA</p><ul data-id=\"aebd2900-a590-48b7-80b3-cd7b043ca7ec\" data-type=\"taskList\"><li data-checked=\"false\" data-id=\"b3f9714a-e1c9-4a9a-a129-f0743321bf31\"><label contenteditable=\"false\"><input aria-label=\"Task item checkbox for BBB\" type=\"checkbox\"><span style=\"position: absolute; width: 1px; height: 1px; padding: 0px; margin: -1px; overflow: hidden; clip: rect(0px, 0px, 0px, 0px); white-space: nowrap; border: 0px;\">Task item checkbox for BBB</span></label><div><p data-id=\"605b111b-2510-4f8d-a3ae-5abf1795a098\">BBB</p></div></li></ul>"
+  },
+  {
+    "label": "Enter + CCC 后 HTML",
+    "value": "<p data-id=\"d3357c5b-3e37-4238-a865-7ee79bf51262\">AAA</p><ul data-id=\"aebd2900-a590-48b7-80b3-cd7b043ca7ec\" data-type=\"taskList\"><li data-checked=\"false\" data-id=\"b3f9714a-e1c9-4a9a-a129-f0743321bf31\"><label contenteditable=\"false\"><input aria-label=\"Task item checkbox for BBB\" type=\"checkbox\"><span style=\"position: absolute; width: 1px; height: 1px; padding: 0px; margin: -1px; overflow: hidden; clip: rect(0px, 0px, 0px, 0px); white-space: nowrap; border: 0px;\">Task item checkbox for BBB</span></label><div><p data-id=\"605b111b-2510-4f8d-a3ae-5abf1795a098\">BBB</p></div></li><li data-checked=\"false\" data-id=\"66f60c2e-870f-40c2-b913-eb494136611e\"><label contenteditable=\"false\"><input aria-label=\"Task item checkbox for CCC\" type=\"checkbox\"><span style=\"position: absolute; width: 1px; height: 1px; padding: 0px; margin: -1px; overflow: hidden; clip: rect(0px, 0px, 0px, 0px); white-space: nowrap; border: 0px;\">Task item checkbox for CCC</span></label><div><p data-id=\"e2c52da6-b3c1-406b-8f7b-a1229d5a9da4\">CCC</p></div></li></ul>"
+  },
+  {
+    "label": "服务器 Set 文档",
+    "value": {
+      "type": "doc",
+      "content": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "d3357c5b-3e37-4238-a865-7ee79bf51262"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "AAA"
+            }
+          ]
+        },
+        {
+          "type": "goalItem",
+          "attrs": {
+            "id": "goal-3b185d109269b",
+            "goal_id": "goal-id-4d1b5b937395f",
+            "text": "BBB",
+            "checked": false
+          }
+        },
+        {
+          "type": "goalItem",
+          "attrs": {
+            "id": "goal-310c4c8e1ee23",
+            "goal_id": "goal-id-9caa5dc17ae9b",
+            "text": "CCC",
+            "checked": false
+          }
+        }
+      ]
+    }
+  }
+]
