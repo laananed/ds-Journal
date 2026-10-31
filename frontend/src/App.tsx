@@ -7,6 +7,9 @@ import { journalSearchConditions } from './utils/homeSearch'
 import AppShell from './components/AppShell'
 import DashboardPage from './pages/DashboardPage'
 import WritingPage from './pages/WritingPage'
+import RitualPage from './pages/RitualPage'
+import SchedulePage from './pages/SchedulePage'
+import { createHttpSchedulesClient } from './api/schedules'
 import { useTodayOverview } from './hooks/useTodayOverview'
 import JournalDetail from './components/JournalDetail'
 import JournalEditor from './components/JournalEditor'
@@ -28,6 +31,8 @@ import type { ReviewSource } from './utils/reviewSelection'
 import { nearestValidPage } from './utils/pagination'
 import type { InsightDraftSeed } from './utils/insightAiDraft'
 
+const schedulesClient = createHttpSchedulesClient()
+
 /**
  * Stage 4 / S04-T06：把 T05 的外壳（`AppShell`）、T05 的今日概览（`DashboardPage`
  * + `hooks/useTodayOverview`）与 T06 的写作页（`WritingPage` + `utils/writingSession`）
@@ -45,6 +50,9 @@ import type { InsightDraftSeed } from './utils/insightAiDraft'
 type Module =
   | 'dashboard'
   | 'writing'
+  | 'set'
+  | 'end'
+  | 'schedule'
   | 'journal'
   | 'inbox'
   | 'insight'
@@ -63,6 +71,9 @@ type Panel = { kind: 'list' } | { kind: 'create'; key: number } | { kind: 'detai
 const modules: { id: Module; label: string }[] = [
   { id: 'dashboard', label: '概览' },
   { id: 'writing', label: '写作' },
+  { id: 'set', label: '开始今天' },
+  { id: 'end', label: '结束今天' },
+  { id: 'schedule', label: '日程' },
   { id: 'journal', label: '所有日记' },
   { id: 'inbox', label: '收件箱' },
   { id: 'review', label: '复盘' },
@@ -208,13 +219,13 @@ function App() {
     if (pendingNavigation === null && dialog?.open) dialog.close()
   }, [pendingNavigation])
 
-  function setWriting(value: boolean) {
+  const setWriting = useCallback((value: boolean) => {
     busyRef.current = value
     setBusy(value)
-  }
-  function setDirty(value: boolean) {
+  }, [])
+  const setDirty = useCallback((value: boolean) => {
     dirtyRef.current = value
-  }
+  }, [])
   /**
    * 每个离开出口只提交动作；真正导航前在这里统一处理。
    *
@@ -334,10 +345,8 @@ function App() {
     })
   }
 
-  /** 尚未交付的 Ritual 编辑页（T10）只给说明，绝不用 Mock 冒充已接线。 */
-  function ritualNotWired(kind: 'set' | 'end'): void {
-    const label = kind === 'set' ? '开始今天' : '结束今天'
-    setNotice(`「${label}」的独立编辑页由 T10 交付，本轮未接入；这里不会创建任何记录。今天已有的${label}可以在「所有日记」里查看。`)
+  function openRitual(kind: 'set' | 'end'): void {
+    changeModule(kind)
   }
 
   function newJournal() {
@@ -483,8 +492,8 @@ function App() {
               disabled={uiLocked}
               onNewWriting={() => changeModule('writing')}
               onOpenWriting={openWriting}
-              onStartRitual={ritualNotWired}
-              onOpenRitual={(kind) => ritualNotWired(kind)}
+              onStartRitual={openRitual}
+              onOpenRitual={(kind) => openRitual(kind)}
             />
           )}
 
@@ -497,6 +506,16 @@ function App() {
               initialFile={writingOpen}
               onInitialFileConsumed={consumeWritingOpen}
             />
+          )}
+
+          {(module === 'set' || module === 'end') && (
+            <RitualPage key={module} kind={module} disabled={uiLocked}
+              onDirtyChange={setDirty} onBusyChange={setWriting} onFlushReady={registerFlush}
+              onOpenTrash={() => changeModule('trash')} />
+          )}
+          {module === 'schedule' && (
+            <SchedulePage client={schedulesClient} disabled={uiLocked}
+              onDirtyChange={setDirty} />
           )}
 
           {module === 'search' && (

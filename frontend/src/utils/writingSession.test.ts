@@ -31,6 +31,8 @@ import {
   duplicateOfServer,
   formatBusinessDateLabel,
   formatLocalStamp,
+  filterWritingSessions,
+  preferredWritingDraftId,
   hasUnsavedInput,
   idsWithLocalDrafts,
   isBusinessDate,
@@ -269,6 +271,15 @@ const store = createEditSessionStore()
 /* ------------------------------------------------ 5. 切页续写（返回同会话） */
 
 {
+  expectEqual(filterWritingSessions([
+    { sessionId: 'writing:draft:one', draftId: 'one' },
+    { sessionId: 'ritual:set:d2026-10-31', draftId: 'ritual:set:d2026-10-31' },
+    { sessionId: 'ritual:end:d2026-10-31', draftId: 'ritual:end:d2026-10-31' },
+  ]), [{ sessionId: 'writing:draft:one', draftId: 'one' }], '写作恢复不选择 Ritual 会话')
+  expectEqual(preferredWritingDraftId([
+    { draftId: 'blank', tabId: 'tab-a', type: 'journal', fileId: null, date: '2026-10-31', hasUnsavedInput: false, updatedAt: 30 },
+    { draftId: 'opened', tabId: 'tab-a', type: 'journal', fileId: 12, date: '2026-10-31', hasUnsavedInput: false, updatedAt: 10 },
+  ], 'tab-a', '2026-10-31', 'opened'), 'opened', '返回写作时保留用户刚才打开的文档')
   const resumable = pickResumableDraftId(
     [
       { draftId: 'a', tabId: 'tab-a', type: 'journal', fileId: null, date: '2026-10-29', hasUnsavedInput: false, updatedAt: 5 },

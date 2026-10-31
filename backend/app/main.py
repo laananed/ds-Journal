@@ -12,6 +12,7 @@ from app.inbox import models as _inbox_models  # noqa: F401
 from app.insight import models as _insight_models  # noqa: F401
 from app.journal.router import router as journal_router
 from app.ritual.router import router as ritual_router
+from app.schedule.router import router as schedule_router
 from app.inbox.router import router as inbox_router
 from app.insight.router import router as insight_router
 from app.trash.router import router as trash_router
@@ -58,6 +59,7 @@ app.add_middleware(
 
 app.include_router(journal_router)
 app.include_router(ritual_router)
+app.include_router(schedule_router)
 app.include_router(inbox_router)
 app.include_router(insight_router)
 app.include_router(folder_router)

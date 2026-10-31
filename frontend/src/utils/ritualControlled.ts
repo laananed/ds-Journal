@@ -29,3 +29,9 @@ export function checklistCandidates(document: unknown): { id: string; text: stri
   }
   return result
 }
+
+/** 自动请求仅在文件已保存且队列空闲时执行；失败项交由用户决定是否重试。 */
+export function nextAutomaticGoal(document: unknown, kind: string, ready: boolean, attempted: ReadonlySet<string>): string | null {
+  if (kind !== 'set' || !ready) return null
+  return checklistCandidates(document).find((item) => !attempted.has(item.id))?.id ?? null
+}

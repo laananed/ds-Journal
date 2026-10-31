@@ -144,6 +144,7 @@ export type SchedulePageProps = {
   suggest?: ScheduleSuggestionProvider
   /** 上层写入锁（例如编辑会话未保存）时禁用所有写操作。 */
   disabled?: boolean
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 function confidenceLabel(confidence: 'low' | 'medium' | 'high' | undefined): string {
@@ -153,7 +154,7 @@ function confidenceLabel(confidence: 'low' | 'medium' | 'high' | undefined): str
   return ''
 }
 
-function SchedulePage({ client, suggest, disabled = false }: SchedulePageProps) {
+function SchedulePage({ client, suggest, disabled = false, onDirtyChange }: SchedulePageProps) {
   const [listState, setListState] = useState<ListState>({ status: 'loading' })
   const [page, setPage] = useState(1)
   const [reloadToken, setReloadToken] = useState(0)
@@ -177,6 +178,10 @@ function SchedulePage({ client, suggest, disabled = false }: SchedulePageProps) 
   }, [listState])
 
   const [editor, setEditor] = useState<EditorState | null>(null)
+  useEffect(() => {
+    onDirtyChange?.(editor !== null)
+    return () => onDirtyChange?.(false)
+  }, [editor, onDirtyChange])
   const [errors, setErrors] = useState<ScheduleDraftErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)

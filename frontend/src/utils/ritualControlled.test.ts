@@ -6,7 +6,7 @@
  * 嵌套结构一律不列出——`goalItem` 只有 text/checked，装不下它们，列出来只会让
  * 用户在点击后收到 422。
  */
-import { checklistCandidates } from './ritualControlled.ts'
+import { checklistCandidates, nextAutomaticGoal } from './ritualControlled.ts'
 
 let checks = 0
 function equal(actual: unknown, expected: unknown, message: string): void {
@@ -30,6 +30,10 @@ const doc = { type: 'doc', content: [list([
   item('four', [text('第一行'), { type: 'hardBreak' }, text('第二行')]),
   item('five', [text('   ')]),
 ])] }
+equal(nextAutomaticGoal(doc, 'set', true, new Set()), 'one', '已保存的 Set 清单自动选择第一个安全条目')
+equal(nextAutomaticGoal(doc, 'end', true, new Set()), null, 'End 的清单不自动成为目标')
+equal(nextAutomaticGoal(doc, 'set', false, new Set()), null, '未保存或冲突时不发自动请求')
+equal(nextAutomaticGoal(doc, 'set', true, new Set(['one'])), 'four', '尝试过的条目不自动重复')
 equal(checklistCandidates(doc), [
   { id: 'one', text: '可转换' },
   { id: 'four', text: '第一行\n第二行' },

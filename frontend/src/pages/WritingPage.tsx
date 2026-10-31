@@ -61,6 +61,7 @@ import { replayPendingCreate } from '../utils/pendingCreateReplay'
 import {
   conflictHeadings,
   duplicateOfServer,
+  filterWritingSessions,
   formatBusinessDateLabel,
   hasUnsavedInput,
   idsWithLocalDrafts,
@@ -69,7 +70,7 @@ import {
   needsLocalDraft,
   newDraftId,
   newWritingDraft,
-  pickResumableDraftId,
+  preferredWritingDraftId,
   planCandidate,
   userTextOf,
   writingDateFromBusinessDay,
@@ -101,6 +102,7 @@ export interface WritingPageProps {
 
 /** 当前正在编辑的草稿身份（切页返回时按它取回同一个会话）。 */
 type ActiveDraft = { draftId: string; tabId: string; startedAt: string }
+const lastWritingDraftByTab = new Map<string, string>()
 
 /** 服务器版本冲突：来自当前会话保存，或来自本地草稿恢复。 */
 type ConflictState =
@@ -172,6 +174,9 @@ function WritingPage({
 
   const sessionId = active === null ? null : writingSessionId(active.draftId)
   const session = useEditSession(sessionId, store)
+  useEffect(() => {
+    if (active !== null) lastWritingDraftByTab.set(active.tabId, active.draftId)
+  }, [active])
 
   /* ------------------------------------------------------ AI 设置（T09） */
   /**
@@ -236,7 +241,7 @@ function WritingPage({
     return () => controller.abort()
   }, [dayToken])
 
-  const resumableSessions = useCallback((): ResumableSession[] => store.listSessions().map((item) => ({
+  const resumableSessions = useCallback((): ResumableSession[] => filterWritingSessions(store.listSessions()).map((item) => ({
     draftId: item.draftId,
     tabId: item.tabId,
     type: item.type,
@@ -249,7 +254,7 @@ function WritingPage({
   /** 首次进入：恢复本标签同一草稿；只有「新建一篇」才换身份。 */
   useEffect(() => {
     if (dayStatus !== 'success' || active !== null) return
-    const resumed = pickResumableDraftId(resumableSessions(), tabId, businessDate)
+    const resumed = preferredWritingDraftId(resumableSessions(), tabId, businessDate, lastWritingDraftByTab.get(tabId))
     setActive({
       draftId: resumed ?? newDraftId(newLocalId),
       tabId,

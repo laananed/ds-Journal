@@ -94,6 +94,11 @@ export function writingSessionId(draftId: string): string {
   return `writing:draft:${draftId}`
 }
 
+/** Set/End 也属于 journal，但不能作为普通写作会话恢复。 */
+export function filterWritingSessions<T extends { sessionId: string }>(sessions: readonly T[]): T[] {
+  return sessions.filter((item) => item.sessionId.startsWith('writing:draft:'))
+}
+
 /**
  * 可恢复的候选会话（应用内「返回同会话」的依据）。
  *
@@ -131,6 +136,11 @@ export function pickResumableDraftId(
     if (best === null || session.updatedAt >= best.updatedAt) best = session
   }
   return best === null ? null : best.draftId
+}
+
+export function preferredWritingDraftId(sessions: readonly ResumableSession[], tabId: string, businessDate: string, preferred: string | undefined): string | null {
+  if (preferred !== undefined && sessions.some((item) => item.type === 'journal' && item.tabId === tabId && item.draftId === preferred)) return preferred
+  return pickResumableDraftId(sessions, tabId, businessDate)
 }
 
 /** 明确「新建一篇」：总是产生新的草稿身份，绝不复用旧键。 */

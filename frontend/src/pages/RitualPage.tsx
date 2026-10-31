@@ -98,7 +98,7 @@ import {
   type RitualCapture,
   type RitualFileRef,
 } from '../utils/ritualView'
-import { checklistCandidates } from '../utils/ritualControlled'
+import { checklistCandidates, nextAutomaticGoal } from '../utils/ritualControlled'
 
 export interface RitualPageProps {
   /** 页面处理哪一种 Ritual；界面只显示「开始今天 / 结束今天」。 */
@@ -783,7 +783,7 @@ function RitualPage({
 
   const currentTemplate = templates[kind] ?? EMPTY_TEMPLATE
 
-  async function refreshRitualMetadata(): Promise<boolean> {
+  const refreshRitualMetadata = useCallback(async (): Promise<boolean> => {
     try {
       const latest = await getRituals(effectiveDate)
       setRituals({ set: latest.set, end: latest.end })
@@ -791,7 +791,7 @@ function RitualPage({
     } catch {
       return false
     }
-  }
+  }, [effectiveDate])
 
   async function saveTemplate(questions: RitualQuestion[]) {
     setTemplateSaving(true)
@@ -846,7 +846,7 @@ function RitualPage({
     } finally { setGoalBusy('') }
   }
 
-  async function convertGoal(itemId: string) {
+  const convertGoal = useCallback(async (itemId: string) => {
     if (sessionId === null) return
     setGoalBusy(itemId)
     setGoalError('')
@@ -865,7 +865,25 @@ function RitualPage({
     } catch (error: unknown) {
       setGoalError(errorStatus(error) === 409 ? '文件版本已变化，请重新读取并确认目标状态。' : errorText(error, '转换失败，请先检查服务器内容再重试。'))
     } finally { setGoalBusy('') }
-  }
+  }, [sessionId, refreshRitualMetadata])
+
+  // 已保存的 Set 清单自动走受控命令；同一候选失败后不自动重试。
+  const autoAttempted = useRef(new Set<string>())
+  const autoFileId = useRef<number | null>(null)
+  useEffect(() => {
+    if (session?.fileId == null) return
+    if (autoFileId.current !== session.fileId) {
+      autoFileId.current = session.fileId
+      autoAttempted.current.clear()
+    }
+    const ready = !disabled && !busy && session.status === 'saved'
+      && session.inFlight === null && !session.imeComposing
+      && !draftHasChanges(session.draft, session.baseline)
+    const itemId = nextAutomaticGoal(document, kind, ready, autoAttempted.current)
+    if (itemId === null) return
+    autoAttempted.current.add(itemId)
+    void convertGoal(itemId)
+  }, [kind, document, session, disabled, busy, convertGoal])
 
   /* ------------------------------------------------------- 保存状态 */
 
@@ -1293,7 +1311,7 @@ function RitualPage({
               ))}
               {kind === 'set' && goals.length === 0 && (
                 <p className="ritual-hint">
-                  还没有目标。可将正文中的纯文字清单条目转为目标；含格式或嵌套的条目需先调整。
+                  保存后，正文中的纯文字清单会自动成为目标；含格式或嵌套的条目需先调整。
                 </p>
               )}
               {kind === 'set' && goals.length > 0 && (
