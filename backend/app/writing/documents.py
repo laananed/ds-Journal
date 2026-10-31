@@ -15,7 +15,7 @@ class DocumentError(ValueError):
     pass
 
 
-SPECIAL = {'aiReply', 'aiSummary', 'aiPlaceholder', 'ritualQuestion', 'goalItem', 'goalReview', 'legacyText'}
+SPECIAL = {'aiReply', 'aiSummary', 'aiPlaceholder', 'ritualQuestion', 'goalItem', 'goalReview', 'legacyText', 'legacyBlocks'}
 BLOCKS = {'paragraph', 'heading', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'blockquote', 'horizontalRule'}
 CHILDREN = {
     'doc': BLOCKS | SPECIAL, 'paragraph': {'text', 'hardBreak'}, 'heading': {'text', 'hardBreak'},
@@ -23,13 +23,13 @@ CHILDREN = {
     'listItem': BLOCKS, 'taskItem': BLOCKS, 'blockquote': BLOCKS, 'codeBlock': {'text'},
     'aiReply': {'paragraph'}, 'aiSummary': {'paragraph'}, 'goalReview': {'paragraph'},
 }
-ATOMIC = {'text', 'hardBreak', 'horizontalRule', 'aiPlaceholder', 'ritualQuestion', 'goalItem', 'legacyText'}
+ATOMIC = {'text', 'hardBreak', 'horizontalRule', 'aiPlaceholder', 'ritualQuestion', 'goalItem', 'legacyText', 'legacyBlocks'}
 ATTRS = {'heading': {'level'}, 'orderedList': {'start'}, 'taskItem': {'checked'}, 'codeBlock': {'language'},
          'aiReply': {'id', 'request_id'}, 'aiSummary': {'id', 'request_id'}, 'aiPlaceholder': {'id', 'request_id'},
          'ritualQuestion': {'id', 'template_question_id', 'question_snapshot'},
          'goalItem': {'id', 'goal_id', 'text', 'checked'},
          'goalReview': {'id', 'link_id', 'goal_snapshot', 'checked_snapshot', 'review_title'},
-         'legacyText': {'id', 'raw_text', 'author'}}
+         'legacyText': {'id', 'raw_text', 'author'}, 'legacyBlocks': {'id', 'format_version', 'blocks'}}
 
 
 def _uuid(value):
@@ -85,6 +85,22 @@ def validate_document(document):
                 raise DocumentError('invalid text attribute')
         if kind == 'legacyText' and attrs['author'] not in ('user', 'ai'):
             raise DocumentError('invalid legacy author')
+        if kind == 'legacyBlocks':
+            blocks = attrs['blocks']
+            if type(attrs['format_version']) is not int or attrs['format_version'] != 1 or not isinstance(blocks, list) or not blocks:
+                raise DocumentError('invalid legacy blocks')
+            for block in blocks:
+                if not isinstance(block, dict) or block.get('kind') not in ('user', 'ai_reply', 'ai_summary'):
+                    raise DocumentError('invalid legacy block')
+                keys = {'id', 'kind', 'text'} | ({'request_id'} if block['kind'] != 'user' else set())
+                if set(block) != keys or not isinstance(block['text'], str):
+                    raise DocumentError('invalid legacy block fields')
+                bid = _uuid(block['id'])
+                if bid in seen:
+                    raise DocumentError('duplicate node id')
+                seen.add(bid)
+                if block['kind'] != 'user':
+                    _uuid(block['request_id'])
         if kind == 'text':
             if not isinstance(node.get('text'), str) or not node['text']:
                 raise DocumentError('invalid text')
@@ -135,6 +151,10 @@ def _plain(node, user_only):
     if kind == 'text': return node['text']
     if kind == 'hardBreak': return '\n'
     if kind == 'legacyText': return node['attrs']['raw_text'] if not user_only or node['attrs']['author'] == 'user' else None
+    if kind == 'legacyBlocks':
+        from app.writing.service import project_blocks
+        blocks = node['attrs']['blocks']
+        return ''.join(b['text'] for b in blocks if b['kind'] == 'user') if user_only else project_blocks(blocks)
     if user_only and kind in {'aiReply', 'aiSummary', 'aiPlaceholder', 'ritualQuestion', 'horizontalRule'}: return None
     if kind == 'goalItem': return node['attrs']['text']
     if kind == 'ritualQuestion': return node['attrs']['question_snapshot']
@@ -288,6 +308,9 @@ def _markdown(node):
         return value
     if kind == 'hardBreak': return '\n'
     if kind == 'legacyText': return node['attrs']['raw_text']
+    if kind == 'legacyBlocks':
+        from app.writing.service import project_blocks
+        return project_blocks(node['attrs']['blocks'])
     if kind == 'horizontalRule': return '---'
     if kind == 'goalItem': return ('- [x] ' if node['attrs']['checked'] else '- [ ] ') + escape(node['attrs']['text'], quote=False)
     if kind == 'ritualQuestion': return escape(node['attrs']['question_snapshot'], quote=False)
@@ -360,7 +383,14 @@ def validate_author_changes(old, new):
         if previous['type'] != current['type']:
             raise DocumentError('protected node type changed')
         kind = previous['type']
-        if kind in {'aiSummary', 'goalReview'}:
+        if kind == 'legacyBlocks':
+            old_attrs, new_attrs = previous['attrs'], current['attrs']
+            if old_attrs['id'] != new_attrs['id'] or old_attrs['format_version'] != new_attrs['format_version'] or len(old_attrs['blocks']) != len(new_attrs['blocks']):
+                raise DocumentError('protected legacy structure changed')
+            for a, b in zip(old_attrs['blocks'], new_attrs['blocks']):
+                if any(a.get(k) != b.get(k) for k in ('id', 'kind', 'request_id')) or (a['kind'] == 'ai_reply' and a['text'] != b['text']):
+                    raise DocumentError('protected legacy source changed')
+        elif kind in {'aiSummary', 'goalReview'}:
             if previous['attrs'] != current['attrs']:
                 raise DocumentError('protected source changed')
         elif kind == 'legacyText' and previous['attrs']['author'] == 'user':
