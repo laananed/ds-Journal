@@ -1,0 +1,106 @@
+{
+  "schema": "c01fx_b22d5ccd",
+  "public_before": {
+    "database": "seekjournal_test_03",
+    "schema": "public",
+    "revision": [
+      "4f8e1a3c9d02"
+    ],
+    "tables": [
+      "ai_checkpoints",
+      "ai_comments",
+      "ai_requests",
+      "ai_settings",
+      "ai_usage",
+      "alembic_version",
+      "folders",
+      "inboxes",
+      "insights",
+      "journals",
+      "ritual_copies",
+      "ritual_goal_links",
+      "ritual_templates"
+    ],
+    "schemas": [
+      "public"
+    ],
+    "ai_usage_rows": 1,
+    "ai_usage_digest": "aa4c952ba927a7e1d57a83896e76037e",
+    "journals_rows": 0,
+    "journals_digest": "empty",
+    "insights_rows": 0,
+    "insights_digest": "empty",
+    "ritual_copies_rows": 0,
+    "ritual_copies_digest": "empty",
+    "schedules_rows": null,
+    "schedules_digest": null
+  },
+  "other_connections_at_start": 0,
+  "schema_created": true,
+  "child_schema_probe_stdout": "('seekjournal_test_03', 'c01fx_b22d5ccd')",
+  "child_schema_probe_ok": true,
+  "upgrade_exit": 0,
+  "upgrade_stdout": "",
+  "private_current_schema": "c01fx_b22d5ccd",
+  "private_revision": [
+    "c01a7e421b50"
+  ],
+  "private_schedules_indexes": [
+    {
+      "name": "ix_schedules_starts_at_id",
+      "def": "CREATE INDEX ix_schedules_starts_at_id ON c01fx_b22d5ccd.schedules USING btree (starts_at, id)"
+    },
+    {
+      "name": "schedules_client_create_id_key",
+      "def": "CREATE UNIQUE INDEX schedules_client_create_id_key ON c01fx_b22d5ccd.schedules USING btree (client_create_id)"
+    },
+    {
+      "name": "schedules_pkey",
+      "def": "CREATE UNIQUE INDEX schedules_pkey ON c01fx_b22d5ccd.schedules USING btree (id)"
+    }
+  ],
+  "public_got_schedules_table": false,
+  "alembic_check_exit": 0,
+  "alembic_check_stdout": "No new upgrade operations detected.\n",
+  "alembic_check_stderr": "INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.\nINFO  [alembic.runtime.migration] Will assume transactional DDL.\nINFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.schemas\nINFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.tables\nINFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.types\nINFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.constraints\nINFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.defaults\nINFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.comments\nINFO  [alembic.ddl.postgresql] Detected sequence named 'folders_id_seq' as owned by integer column 'folders(id)', assuming SERIAL and omitting\nINFO  [alembic.ddl.postgresql] Detected sequence named 'insights_id_seq' as owned by integer column 'insights(id)', assuming SERIAL and omitting\nINFO  [alembic.ddl.postgresql] Detected sequence named 'schedules_id_seq' as owned by integer column 'schedules(id)', assuming SERIAL and omitting\nINFO  [alembic.ddl.postgresql] Detected sequence named 'inboxes_id_seq' as owned by integer column 'inboxes(id)', assuming SERIAL and omitting\nINFO  [alembic.ddl.postgresql] Detected sequence named 'journals_id_seq' as owned by integer column 'journals(id)', assuming SERIAL and omitting\n",
+  "alembic_check_mentions_ix_schedules": false,
+  "alembic_current_exit": 0,
+  "alembic_current_stdout": "c01a7e421b50 (head)",
+  "schema_dropped": true,
+  "public_after": {
+    "database": "seekjournal_test_03",
+    "schema": "public",
+    "revision": [
+      "4f8e1a3c9d02"
+    ],
+    "tables": [
+      "ai_checkpoints",
+      "ai_comments",
+      "ai_requests",
+      "ai_settings",
+      "ai_usage",
+      "alembic_version",
+      "folders",
+      "inboxes",
+      "insights",
+      "journals",
+      "ritual_copies",
+      "ritual_goal_links",
+      "ritual_templates"
+    ],
+    "schemas": [
+      "public"
+    ],
+    "ai_usage_rows": 1,
+    "ai_usage_digest": "aa4c952ba927a7e1d57a83896e76037e",
+    "journals_rows": 0,
+    "journals_digest": "empty",
+    "insights_rows": 0,
+    "insights_digest": "empty",
+    "ritual_copies_rows": 0,
+    "ritual_copies_digest": "empty",
+    "schedules_rows": null,
+    "schedules_digest": null
+  },
+  "public_unchanged": true
+}

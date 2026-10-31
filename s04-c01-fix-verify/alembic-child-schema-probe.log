@@ -1,0 +1,10 @@
+$ C:\Programme\demo\SeekJournal-Work-02\backend\.venv\Scripts\python.exe -B -c from app.database import engine
+from sqlalchemy import text
+with engine.connect() as c:
+    print(c.execute(text('select current_database(), current_schema()')).one())
+exit=0
+--- stdout ---
+('seekjournal_test_03', 'c01fx_b22d5ccd')
+
+--- stderr ---
+

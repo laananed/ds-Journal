@@ -21,6 +21,11 @@
  * 分页收敛（D2）：读取返回空页且不在第一页时，回退到有效的前一页再读，
  * 不把「本页被删空」显示成「完全没有日程」。
  *
+ * 刷新失败（交叉测试 D2 缺陷）：已有列表时的后台刷新失败，
+ * **保留**最近一次成功读取的列表并显示横幅 + 重试入口，
+ * 不把错误态盖在列表上让已有日程消失；删除被服务端确认后先本地移除该条，
+ * 刷新失败也不会重复发送删除。
+ *
  * 情绪没有对应接口字段（§13 未定义），所以**只展示、不提交**；
  * 不为了「看起来完整」给日程编一个情绪字段。
  *
@@ -76,6 +81,18 @@ type ListState =
   | { status: 'loading' }
   | { status: 'error'; failure: ScheduleFailure }
   | { status: 'ready'; page: ScheduleListPage }
+
+/**
+ * 后台刷新失败时的横幅文案（列表已成功读过至少一次）。
+ *
+ * 交叉测试 D2 缺陷：删除成功后刷新列表失败，把整个 `listState` 换成 error，
+ * 已有日程全部消失、只剩一条读取失败——用户会以为数据丢了。
+ * 修复姿态：**保留最近一次成功读取的列表**（标记为可能过期），
+ * 用独立横幅说明失败并给出重试入口；列表内容不被错误态覆盖。
+ */
+const REFRESH_FAILED_HINT =
+  '下面显示的是最近一次成功读取的列表，可能不是最新内容；' +
+  '刚才的删除或保存是否成功，以操作提示为准，这里不会重复发送删除或保存。'
 
 /**
  * 编辑时的版本冲突（CAS 409）。
@@ -141,7 +158,23 @@ function SchedulePage({ client, suggest, disabled = false }: SchedulePageProps) 
   const [page, setPage] = useState(1)
   const [reloadToken, setReloadToken] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
+  /** 非 null 表示「后台刷新失败但已有列表仍显示中」；列表内容未被错误态覆盖。 */
+  const [listRefreshError, setListRefreshError] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
+
+  /**
+   * 列表状态的最新快照。
+   *
+   * 列表 effect 的失败回调是异步触发的，需要知道「此刻是否已有可见条目」
+   * 来决定走错误态还是保留列表 + 横幅。用 ref 快照而不是把 `listState`
+   * 加进依赖——后者会让每次本地替换条目都中断读取、多发请求。
+   */
+  const listStateRef = useRef(listState)
+  useEffect(() => {
+    // 声明在列表 effect 之前：同一提交里先更新快照，列表 effect 的异步
+    // 失败回调之后触发时读到的是当次提交的最新列表状态。
+    listStateRef.current = listState
+  }, [listState])
 
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [errors, setErrors] = useState<ScheduleDraftErrors>({})
@@ -170,6 +203,7 @@ function SchedulePage({ client, suggest, disabled = false }: SchedulePageProps) 
     client.list(page, controller.signal).then(
       (result) => {
         if (cancelled) return
+        setListRefreshError(null)
         // D2：本页可能因为「删掉了末页最后一条」而变空。此时回退一页重读，
         // 而不是把空页渲染成「还没有日程」——后者会让用户以为数据全丢了。
         const fallbackPage = pageAfterEmptyRead(result)
@@ -187,8 +221,16 @@ function SchedulePage({ client, suggest, disabled = false }: SchedulePageProps) 
       (error: unknown) => {
         if (cancelled) return
         if (error instanceof DOMException && error.name === 'AbortError') return
-        setListState({ status: 'error', failure: describeScheduleFailure(error, 'list') })
+        const failure = describeScheduleFailure(error, 'list')
         setRefreshing(false)
+        if (listStateRef.current.status === 'ready' && listStateRef.current.page.items.length > 0) {
+          // 已经有可见条目（保存/删除后的后台刷新）：刷新失败**不能**把列表换成
+          // 错误态——那会让用户刚确认过的操作看起来像把数据弄丢了。
+          // 保留现有列表（可能过期），用横幅说明失败并给出重试入口。
+          setListRefreshError(failure.message)
+          return
+        }
+        setListState({ status: 'error', failure })
       },
     )
     return () => {
@@ -220,6 +262,26 @@ function SchedulePage({ client, suggest, disabled = false }: SchedulePageProps) 
           items: current.page.items.map((item) => (
             scheduleKey(item.id) === scheduleKey(updated.id) ? updated : item
           )),
+        },
+      }
+    })
+  }
+
+  /**
+   * 删除已被服务端确认（204）后，把这条从本地列表移除。
+   *
+   * 这不是「本地猜测拼状态」：204 是服务端给出的事实，与删除失败时
+   * 「不改列表内容」不矛盾。先移除再刷新，用户在刷新期间也不会看到
+   * 一条刚被自己删掉的日程还挂在列表里。
+   */
+  function removeItemLocally(id: ScheduleId): void {
+    setListState((current) => {
+      if (current.status !== 'ready') return current
+      return {
+        status: 'ready',
+        page: {
+          ...current.page,
+          items: current.page.items.filter((item) => scheduleKey(item.id) !== scheduleKey(id)),
         },
       }
     })
@@ -487,7 +549,10 @@ function SchedulePage({ client, suggest, disabled = false }: SchedulePageProps) 
     try {
       await client.remove(schedule.id, schedule.revision)
       setConfirmDeleteKey(null)
-      // 删除成功后刷新当前页；若本页被删空，读取阶段会回退到有效的前一页（D2）。
+      // 删除已被服务端确认：先从本地列表移除（刷新期间不再显示已删条目），
+      // 再刷新当前页取回正确分页；若本页被删空，读取阶段会回退到有效的前一页（D2）。
+      // 之后即使刷新失败，也只是横幅提示 + 保留剩余条目，不会重发删除。
+      removeItemLocally(schedule.id)
       reload()
       setNotice({ tone: 'success', text: '已删除这条日程（未改动 Set 目标）。' })
     } catch (error) {
@@ -606,6 +671,14 @@ function SchedulePage({ client, suggest, disabled = false }: SchedulePageProps) 
 
       {listState.status === 'loading' && (
         <p className="sched-state" role="status">正在读取日程……</p>
+      )}
+
+      {listState.status === 'ready' && listRefreshError !== null && (
+        <div className="sched-state sched-state--error" role="alert">
+          <p className="sched-error-text">{listRefreshError}</p>
+          <p className="sched-hint">{REFRESH_FAILED_HINT}</p>
+          <button type="button" className="sched-button" onClick={reload}>重新读取</button>
+        </div>
       )}
 
       {listState.status === 'error' && (

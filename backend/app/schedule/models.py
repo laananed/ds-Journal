@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Integer, Text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Index, Integer, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
@@ -13,7 +13,11 @@ def utcnow():
 
 class Schedule(Base):
     __tablename__ = 'schedules'
-    __table_args__ = (CheckConstraint('ends_at IS NULL OR ends_at > starts_at', name='ck_schedule_time_order'),)
+    __table_args__ = (
+        CheckConstraint('ends_at IS NULL OR ends_at > starts_at', name='ck_schedule_time_order'),
+        # 列表分页固定按 (starts_at, id) 排序，索引列顺序必须与迁移 c01a7e421b50 一致。
+        Index('ix_schedules_starts_at_id', 'starts_at', 'id'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)

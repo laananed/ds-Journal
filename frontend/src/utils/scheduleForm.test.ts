@@ -329,6 +329,13 @@ expectTrue(networkOnCreate.message.includes('不会重复创建'), '创建网络
 const networkOnToggle = describeScheduleFailure(new Error('网络断了'), 'toggle')
 expectEqual(networkOnToggle.needsReload, true, '其它操作网络失败需要重读')
 
+// 交叉测试 D2 缺陷：列表读取失败曾显示「改动未确认」，让用户误以为操作没成功。
+const networkOnList = describeScheduleFailure(new Error('网络断了'), 'list')
+expectEqual(networkOnList.kind, 'network', '列表网络失败归类')
+expectEqual(networkOnList.needsReload, true, '列表网络失败需要重试读取')
+expectTrue(networkOnList.message.includes('读取'), '列表网络失败说明是读取问题')
+expectEqual(networkOnList.message.includes('改动未确认'), false, '读取失败不误导为改动未确认')
+
 const unknownStatus = describeScheduleFailure({ status: 500, message: '' }, 'list')
 expectEqual(unknownStatus.kind, 'unknown', '其它状态码归类')
 expectTrue(unknownStatus.message.includes('500'), '未知状态码回显状态数字')

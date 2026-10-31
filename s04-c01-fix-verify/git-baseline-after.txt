@@ -1,0 +1,36 @@
+== branch ==
+wb/c01-test
+== head ==
+4d9960c9286b134e6367f3411e5c719d2bbc7ffb
+== head tree ==
+c68248ab6d2821f5886d93aa0584be71b35dc28b
+== status ==
+?? s04-c01-fix-verify/alembic-check.log
+?? s04-c01-fix-verify/alembic-child-schema-probe.log
+?? s04-c01-fix-verify/alembic-current.log
+?? s04-c01-fix-verify/alembic-upgrade-head.log
+?? s04-c01-fix-verify/alembic-verify-results.json
+?? s04-c01-fix-verify/alembic_private_schema_check.py
+?? s04-c01-fix-verify/db-baseline-after.json
+?? s04-c01-fix-verify/db-baseline-before.json
+?? s04-c01-fix-verify/git-baseline-after.txt
+?? s04-c01-fix-verify/git-baseline-before.txt
+?? s04-c01-fix-verify/guard-gap.txt
+?? s04-c01-fix-verify/manifest.json
+?? s04-c01-fix-verify/metadata-probe.json
+?? s04-c01-fix-verify/models-before-fix-d939ee5.py
+?? s04-c01-fix-verify/probe_metadata.py
+?? s04-c01-fix-verify/probe_readonly.py
+?? s04-c01-fix-verify/pytest-c01-api.log
+?? s04-c01-fix-verify/pytest-s4db-migration.log
+?? s04-c01-fix-verify/pytest-stage2-migrations.log
+?? s04-c01-fix-verify/pytest-stage3-migrations.log
+?? s04-c01-fix-verify/pytest-unit-contract.log
+== hashes ==
+4c8cd38720c72c9ef944a185c6c630da0581a104e3607953e2874137bf9fb2a9 *backend/app/schedule/models.py
+34f654d4fc2ac0d503dfa6ecfdb9ac64eec47a94f0a8034e87442a85dbe8b03c *backend/tests/unit/test_c01_schedule_contract.py
+e42382c91253a5967cc9996d026bfc29ae76624e288cf9cb3883a5b89f5395f5 *backend/alembic/versions/c01a7e421b50_create_schedules.py
+5e9e7b6f3b6c8719cbfdfe49c4e232ae85fb04e2fba56f8d46bdf5c87b0457ce *backend/tests/test_stage2_migrations.py
+f960af8156e78722b9750b3b1472995af236e9138b0c620c0be57258f0898ad5 *backend/tests/conftest.py
+552673e744fa8ce33c5edaf73587677b8ce018e1e31173422efbe086507b1f6e *backend/scripts/prepare_test_db.py
+== pycache ==

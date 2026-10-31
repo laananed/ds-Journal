@@ -1,0 +1,70 @@
+FF.......F.                                                              [100%]
+================================== FAILURES ===================================
+____________ test_revision_chain_is_single_head_and_unchanged_base ____________
+
+migration_check = MigrationCheck(dbname='seekjournal_test_03', schema='s2t04_migcheck_54420_baae000f', engine=Engine(postgresql+psycopg:...neInfo(key='Etc/UTC')), 'updated_at': datetime.datetime(2026, 10, 2, 2, 0, tzinfo=zoneinfo.ZoneInfo(key='Etc/UTC'))}]})
+
+    def test_revision_chain_is_single_head_and_unchanged_base(migration_check):
+        """一条线性链、只有一个 head，且起点仍是 Stage 1 的初始 revision。"""
+        chain = migration_check.chain
+    
+        assert chain[0] == STAGE1_REVISION, "初始迁移不能改，链的起点必须仍是 Stage 1 revision"
+>       assert chain == ['3a70890ddb10', '52c8e94a365c', 'a8d98342e603', '18ecf7e09da6', '3aa16300a58a', '9e7a6c42d011', '4f8e1a3c9d02'], f"Unexpected migration chain: {chain}"
+E       AssertionError: Unexpected migration chain: ['3a70890ddb10', '52c8e94a365c', 'a8d98342e603', '18ecf7e09da6', '3aa16300a58a', '9e7a6c42d011', '4f8e1a3c9d02', 'c01a7e421b50']
+E       assert ['3a70890ddb1...c42d011', ...] == ['3a70890ddb1...c42d011', ...]
+E         
+E         Left contains one more item: 'c01a7e421b50'
+E         Use -v to get more diff
+
+tests\test_stage2_migrations.py:364: AssertionError
+---------------------------- Captured stdout setup ----------------------------
+[migration_check] db=seekjournal_test_03 schema=s2t04_migcheck_54420_baae000f chain=['3a70890ddb10', '52c8e94a365c', 'a8d98342e603', '18ecf7e09da6', '3aa16300a58a', '9e7a6c42d011', '4f8e1a3c9d02', 'c01a7e421b50'] legacy_rows=8
+[migration_check] revision=52c8e94a365c preserved=True rows=8
+[migration_check] revision=a8d98342e603 preserved=True rows=8
+[migration_check] revision=18ecf7e09da6 preserved=True rows=8
+[migration_check] revision=3aa16300a58a preserved=True rows=8
+[migration_check] revision=9e7a6c42d011 preserved=True rows=8
+[migration_check] revision=4f8e1a3c9d02 preserved=True rows=8
+[migration_check] revision=c01a7e421b50 preserved=True rows=8
+_______________________ test_only_expected_tables_exist _______________________
+
+migration_check = MigrationCheck(dbname='seekjournal_test_03', schema='s2t04_migcheck_54420_baae000f', engine=Engine(postgresql+psycopg:...neInfo(key='Etc/UTC')), 'updated_at': datetime.datetime(2026, 10, 2, 2, 0, tzinfo=zoneinfo.ZoneInfo(key='Etc/UTC'))}]})
+
+    def test_only_expected_tables_exist(migration_check):
+        """升级到当前 head 后，既有表和已确认的新增表均存在且没有意外表。"""
+        with migration_check.engine.connect() as connection:
+            tables = {
+                row[0]
+                for row in connection.execute(
+                    text(
+                        "SELECT tablename FROM pg_tables WHERE schemaname = :schema"
+                    ), {"schema": migration_check.schema}
+                )
+            }
+    
+>       assert tables - {"alembic_version"} == EXPECTED_TABLES, f"实际表：{sorted(tables)}"
+E       AssertionError: 实际表：['ai_checkpoints', 'ai_comments', 'ai_requests', 'ai_settings', 'ai_usage', 'alembic_version', 'folders', 'inboxes', 'insights', 'journals', 'ritual_copies', 'ritual_goal_links', 'ritual_templates', 'schedules']
+E       assert {'ai_checkpoi...folders', ...} == {'ai_checkpoi...folders', ...}
+E         
+E         Extra items in the left set:
+E         'schedules'
+E         Use -v to get more diff
+
+tests\test_stage2_migrations.py:379: AssertionError
+________ test_m3_extends_m2_and_original_migrations_are_byte_unchanged ________
+
+    def test_m3_extends_m2_and_original_migrations_are_byte_unchanged():
+        chain = _linear_revision_chain()
+        assert chain[:4] == ['3a70890ddb10', '52c8e94a365c', 'a8d98342e603', '18ecf7e09da6']
+>       assert chain[4:] == ['3aa16300a58a', '9e7a6c42d011', '4f8e1a3c9d02']
+E       AssertionError: assert ['3aa16300a58...c01a7e421b50'] == ['3aa16300a58...4f8e1a3c9d02']
+E         
+E         Left contains one more item: 'c01a7e421b50'
+E         Use -v to get more diff
+
+tests\test_stage2_migrations.py:605: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_stage2_migrations.py::test_revision_chain_is_single_head_and_unchanged_base
+FAILED tests/test_stage2_migrations.py::test_only_expected_tables_exist - Ass...
+FAILED tests/test_stage2_migrations.py::test_m3_extends_m2_and_original_migrations_are_byte_unchanged
+3 failed, 8 passed in 24.11s

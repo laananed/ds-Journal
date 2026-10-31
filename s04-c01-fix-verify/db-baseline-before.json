@@ -1,0 +1,169 @@
+{
+  "server_databases": [
+    "postgres",
+    "seekjournal",
+    "seekjournal_t03_ui_test",
+    "seekjournal_t08_ui_test",
+    "seekjournal_t10_ui_test",
+    "seekjournal_t11_ui_test",
+    "seekjournal_t12_ui_test",
+    "seekjournal_t13_ui_test",
+    "seekjournal_t14_ui_test",
+    "seekjournal_test",
+    "seekjournal_test_02",
+    "seekjournal_test_03",
+    "seekjournal_test_04"
+  ],
+  "server_version": "17.11 (Debian 17.11-1.pgdg13+2)",
+  "seekjournal_test": {
+    "exists": true,
+    "current_database": "seekjournal_test",
+    "current_schema": "public",
+    "current_user": "seekjournal",
+    "search_path": "\"$user\", public",
+    "other_connections": 0,
+    "schemas": [
+      "public"
+    ],
+    "public_tables": [
+      "ai_checkpoints",
+      "ai_comments",
+      "ai_requests",
+      "ai_settings",
+      "ai_usage",
+      "alembic_version",
+      "folders",
+      "inboxes",
+      "insights",
+      "journals",
+      "ritual_goal_links",
+      "ritual_templates"
+    ],
+    "alembic_version": [
+      "9e7a6c42d011"
+    ],
+    "rowcounts": {
+      "ai_usage": 0,
+      "journals": 0
+    },
+    "schedules_indexes": []
+  },
+  "seekjournal_test_02": {
+    "exists": true,
+    "current_database": "seekjournal_test_02",
+    "current_schema": "public",
+    "current_user": "seekjournal",
+    "search_path": "\"$user\", public",
+    "other_connections": 4,
+    "schemas": [
+      "public",
+      "s2t04_migcheck_s3_ebcd5c75264e4494954b5bf65abc314b"
+    ],
+    "public_tables": [
+      "ai_checkpoints",
+      "ai_comments",
+      "ai_requests",
+      "ai_settings",
+      "ai_usage",
+      "alembic_version",
+      "folders",
+      "inboxes",
+      "insights",
+      "journals",
+      "ritual_copies",
+      "ritual_goal_links",
+      "ritual_templates",
+      "schedules"
+    ],
+    "alembic_version": [
+      "c01a7e421b50"
+    ],
+    "rowcounts": {
+      "ai_usage": 0,
+      "journals": 0,
+      "schedules": 0
+    },
+    "schedules_indexes": [
+      {
+        "name": "ix_schedules_starts_at_id",
+        "def": "CREATE INDEX ix_schedules_starts_at_id ON public.schedules USING btree (starts_at, id)"
+      },
+      {
+        "name": "schedules_client_create_id_key",
+        "def": "CREATE UNIQUE INDEX schedules_client_create_id_key ON public.schedules USING btree (client_create_id)"
+      },
+      {
+        "name": "schedules_pkey",
+        "def": "CREATE UNIQUE INDEX schedules_pkey ON public.schedules USING btree (id)"
+      }
+    ]
+  },
+  "seekjournal_test_03": {
+    "exists": true,
+    "current_database": "seekjournal_test_03",
+    "current_schema": "public",
+    "current_user": "seekjournal",
+    "search_path": "\"$user\", public",
+    "other_connections": 0,
+    "schemas": [
+      "public"
+    ],
+    "public_tables": [
+      "ai_checkpoints",
+      "ai_comments",
+      "ai_requests",
+      "ai_settings",
+      "ai_usage",
+      "alembic_version",
+      "folders",
+      "inboxes",
+      "insights",
+      "journals",
+      "ritual_copies",
+      "ritual_goal_links",
+      "ritual_templates"
+    ],
+    "alembic_version": [
+      "4f8e1a3c9d02"
+    ],
+    "rowcounts": {
+      "ai_usage": 1,
+      "journals": 0
+    },
+    "schedules_indexes": []
+  },
+  "seekjournal_test_04": {
+    "exists": true,
+    "current_database": "seekjournal_test_04",
+    "current_schema": "public",
+    "current_user": "seekjournal",
+    "search_path": "\"$user\", public",
+    "other_connections": 0,
+    "schemas": [
+      "public"
+    ],
+    "public_tables": [
+      "ai_checkpoints",
+      "ai_comments",
+      "ai_requests",
+      "ai_settings",
+      "ai_usage",
+      "alembic_version",
+      "folders",
+      "inboxes",
+      "insights",
+      "journals",
+      "ritual_copies",
+      "ritual_goal_links",
+      "ritual_templates"
+    ],
+    "alembic_version": [
+      "4f8e1a3c9d02"
+    ],
+    "rowcounts": {
+      "ai_usage": 47,
+      "journals": 54
+    },
+    "schedules_indexes": []
+  }
+}

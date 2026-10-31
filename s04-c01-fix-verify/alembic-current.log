@@ -1,0 +1,9 @@
+$ C:\Programme\demo\SeekJournal-Work-02\backend\.venv\Scripts\python.exe -B -m alembic current
+exit=0
+--- stdout ---
+c01a7e421b50 (head)
+
+--- stderr ---
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+

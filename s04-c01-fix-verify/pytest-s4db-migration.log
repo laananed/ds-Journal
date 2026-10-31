@@ -1,0 +1,43 @@
+F                                                                        [100%]
+================================== FAILURES ===================================
+________ test_migration_preserves_old_data_and_refuses_lossy_downgrade ________
+
+stage3_schema = ('s2t04_migcheck_s3_0bc84169799b45e4923bac54a92b4515', Engine(postgresql+psycopg://seekjournal:***@127.0.0.1:5432/seekjournal_test_03?options=-csearch_path%3Ds2t04_migcheck_s3_0bc84169799b45e4923bac54a92b4515))
+
+    def test_migration_preserves_old_data_and_refuses_lossy_downgrade(stage3_schema):
+        import json
+        from test_stage2_migrations import _run_alembic
+        schema, engine = stage3_schema
+        _run_alembic(schema, 'upgrade', '3aa16300a58a')
+        blocks = [{'id':str(uuid4()), 'kind':'user', 'text':'原文😀 [[引用]]'},
+                  {'id':str(uuid4()), 'kind':'ai_reply', 'text':'AI', 'request_id':str(uuid4())}]
+        with engine.begin() as c:
+            ident = c.execute(text("insert into journals(content, journal_date, created_at, updated_at, content_blocks) values (:content, '2026-10-30', '2020-01-01Z', '2020-01-02Z', cast(:blocks as jsonb)) returning id"), {'content':'合成投影', 'blocks':json.dumps(blocks, ensure_ascii=False)}).scalar_one()
+            c.execute(text("insert into ai_checkpoints(file_type,file_id,consumed_user_text,updated_at) values ('journal',:id,:value,'2020-01-01Z')"), {'id':ident, 'value':'原文😀 [[引用]]'})
+        def old_snapshot():
+            with engine.connect() as c:
+                row = dict(c.execute(text('select * from journals where id=:id'), {'id':ident}).mappings().one())
+                checkpoint = tuple(c.execute(text('select * from ai_checkpoints where file_id=:id'), {'id':ident}).one())
+                seq = c.execute(text("select last_value from journals_id_seq")).scalar_one()
+                return row, checkpoint, seq
+        original, checkpoint, sequence = old_snapshot()
+        _run_alembic(schema, 'upgrade', 'head')
+        current, checkpoint_after, sequence_after = old_snapshot()
+        assert {key: current[key] for key in original} == original
+        assert current['content_doc'] is None and current['journal_kind'] == 'writing'
+        assert checkpoint_after == checkpoint and sequence_after == sequence
+        with engine.begin() as c:
+            c.execute(text("update journals set content_doc=cast(:doc as jsonb) where id=:id"), {'doc':json.dumps(document('synthetic')), 'id':ident})
+        with pytest.raises(AssertionError):
+            _run_alembic(schema, 'downgrade', '3aa16300a58a')
+        with engine.begin() as c:
+>           assert c.execute(text('select version_num from alembic_version')).scalar_one() == '4f8e1a3c9d02'
+E           AssertionError: assert 'c01a7e421b50' == '4f8e1a3c9d02'
+E             
+E             - 4f8e1a3c9d02
+E             + c01a7e421b50
+
+tests\test_s4_db.py:215: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_s4_db.py::test_migration_preserves_old_data_and_refuses_lossy_downgrade
+1 failed in 8.25s

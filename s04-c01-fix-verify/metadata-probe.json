@@ -1,0 +1,65 @@
+{
+  "table": "schedules",
+  "indexes": [
+    {
+      "name": "ix_schedules_starts_at_id",
+      "table": "schedules",
+      "columns": [
+        "starts_at",
+        "id"
+      ],
+      "unique": false,
+      "dialect_options": {}
+    }
+  ],
+  "unique_constraints": [
+    {
+      "name": null,
+      "columns": [
+        "client_create_id"
+      ]
+    }
+  ],
+  "check_constraints": [
+    {
+      "name": "ck_schedule_time_order",
+      "sqltext": "ends_at IS NULL OR ends_at > starts_at"
+    }
+  ],
+  "migration_create_index": [
+    {
+      "name": "ix_schedules_starts_at_id",
+      "table": "schedules",
+      "columns": [
+        "starts_at",
+        "id"
+      ],
+      "kwargs": {}
+    }
+  ],
+  "migration_revision": {
+    "revision": "c01a7e421b50",
+    "file": "c01a7e421b50_create_schedules.py"
+  },
+  "migration_uses_op_drop_index_in_downgrade": true,
+  "list_order_by_columns": [
+    "starts_at",
+    "id"
+  ],
+  "list_has_limit_21_offset": true,
+  "alembic_heads": [
+    "c01a7e421b50"
+  ],
+  "alembic_chain_from_head": [
+    "c01a7e421b50",
+    "4f8e1a3c9d02",
+    "9e7a6c42d011",
+    "3aa16300a58a",
+    "18ecf7e09da6",
+    "a8d98342e603",
+    "52c8e94a365c",
+    "3a70890ddb10"
+  ],
+  "alembic_chain_length": 8,
+  "alembic_revision_count": 8
+}
