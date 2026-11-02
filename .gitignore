@@ -4,6 +4,11 @@
 # WorkBuddy workspace
 /.workbuddy/
 
+# Local runtime logs and preserved integration worktrees
+/.local-run/
+/.main-integration/
+/.ui-integration/
+
 # Dependencies
 node_modules/
 

@@ -29,6 +29,10 @@ function SearchPage({ conditions, onConditionsChange, onNavigate, onOpenFile }: 
   const hasQuery = conditions.q.trim() !== ''
 
   useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [])
+
+  useEffect(() => {
     if (!conditions.q.trim()) return
     const controller = new AbortController()
     searchFiles(conditions, controller.signal).then((data) => {

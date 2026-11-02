@@ -2,9 +2,13 @@
 
 SeekJournal 是一个以个人认知成长为核心、生活与情感记录为辅的个人记录与复盘软件。
 
-**Stage 3 正在组合验收，2026-10-13 的 S3-T11 验收未通过。** 当前代码已有三类自动保存、版本/创建幂等、AI块与局部互动、复盘生成和一次保存。实际复盘草稿→Insight尚未接线，SettingsPage尚未挂载；真实DeepSeek/Brave链路与风格、必要独立风险复核及用户接受未验证，不能宣布Stage3完成。逐项证据与缺陷见 [本轮验收报告](docs/s3-acceptance.md)。
-本轮当前集成基线后端1185项回归、前端build/lint及18份纯逻辑测试通过；真实HTTP/DB/浏览器使用合成数据与上游Mock，未调用付费服务、未升级个人库、未修改产品代码或发布。阶段路线以 [stage3.md](docs/stage3.md) §1 为准；Stage2历史接受/复核状态继续见 [stage2-tasks.md](docs/stage2-tasks.md) §20。
-Stage3文档入口：[需求](docs/stage3.md)、[API](docs/stage3-api.md)、[架构](docs/stage3-architecture.md)、[Task与执行记录](docs/stage3-tasks.md)。以下运行章节含早期阶段快照（例如测试数量、数组列表和无搜索限制）；当前行为以对应阶段契约、实际代码和上述验收矩阵为准。
+当前为 **Stage 4**。Stage 3 / S03-T11 的用户接受记录见 [s3-acceptance.md](docs/s3-acceptance.md) §11；历史失败与测试记录保留，不代表当前版本重新测试的结果。Stage 4 尚未整体验收通过。
+
+**日常使用入口统一为 `C:\Programme\demo\SeekJournal` 的 `main`。** 双击根目录的 `启动 SeekJournal.bat`，访问 `http://127.0.0.1:5173/`。启动器显示分支、提交和目录，只允许从 main 启动；先启动现有 PostgreSQL 容器，再只读核对数据库连接及迁移版本，不创建或迁移数据库。后台日志位于 `.local-run/`。相同版本的已记录服务可复用，并显示是否跳过 AI 启动恢复；未知端口占用报错，不自动终止其他进程。
+
+`.main-integration` 保留为已交接的快照工作树，`.ui-integration` 及 Work-01/02/03 保留原分支、证据；这些目录不作为日常启动入口。新开发使用独立 `codex/` 分支和工作树，经验证再合入 main。自动检查可运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-seekjournal.ps1 -NoBrowser -SkipAiRecovery`；该选项跳过 AI 启动恢复，避免本轮检查自动写个人库，不执行真实模型调用。用户正常双击启动时保留原有 AI 恢复行为。
+
+Stage 4 权威入口：[需求](docs/stage4.md)、[API](docs/stage4-api.md)、[架构](docs/stage4-architecture.md)、[Task与执行记录](docs/stage4-tasks.md)。以下范围与手动运行章节含早期阶段快照；当前行为以对应阶段契约、实际代码和本轮验证记录为准。
 
 已跑通的开发链路：
 
