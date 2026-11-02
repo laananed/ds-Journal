@@ -1,0 +1,48 @@
+{
+  "generatedAt": "2026-10-31T12:30:27.399Z",
+  "base": "http://127.0.0.1:4194/",
+  "results": [
+    {
+      "id": "R14-SCHED-SAVED-NO-PROMPT",
+      "name": "已保存表单刷新：无提示、内容保留、不重复创建",
+      "status": "ok",
+      "data": {
+        "dialogsBefore": [],
+        "promptedOnReload": false,
+        "POST": 1,
+        "serverTitles": [
+          "与导师讨论提纲",
+          "跑步",
+          "已保存-R14"
+        ],
+        "listTitles": [
+          "与导师讨论提纲",
+          "跑步",
+          "已保存-R14"
+        ]
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R17-REG-SCHEDULE",
+      "name": "回归：编辑/完成/删除/409 冲突保留输入",
+      "status": "ok",
+      "data": {
+        "editedTitle": "编辑后-R17",
+        "completedBefore": true,
+        "completedAfter": false,
+        "patchCount": 3,
+        "deleteCount": 1,
+        "afterDelete": [
+          1
+        ],
+        "conflict": {
+          "formStill": true,
+          "inputValue": "冲突-R17",
+          "mentionsConflict": true
+        }
+      },
+      "pageErrors": []
+    }
+  ]
+}
