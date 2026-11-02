@@ -28,7 +28,7 @@ import { JournalApiError, getJournal, listJournals } from '../api/journals'
 import { getBusinessDay } from '../api/rituals'
 import FolderSelect from '../components/FolderSelect'
 import Pagination from '../components/Pagination'
-import WritingAiPanel from '../components/WritingAiPanel'
+import WritingAiPanel, { NO_SERVER_VERSION_NOTICE } from '../components/WritingAiPanel'
 import { DraftConflictView, LocalDraftPanel, type DraftAction, type DraftPanelItem } from '../components/WritingDraftRecovery'
 import RichTextEditor, { type EditorSelectionInfo } from '../editor/RichTextEditor'
 import { useEditSession, useJournalDraftMirror } from '../hooks/useEditSession'
@@ -193,6 +193,11 @@ function WritingPage({
   const sessionId = active === null ? null : writingSessionId(active.draftId)
   const session = useEditSession(sessionId, store)
   useEffect(() => {
+    if (session?.fileId != null) {
+      setNotice((current) => current === NO_SERVER_VERSION_NOTICE ? '' : current)
+    }
+  }, [session?.fileId])
+  useEffect(() => {
     if (active !== null) lastWritingDraftByTab.set(active.tabId, active.draftId)
   }, [active])
 
@@ -333,8 +338,10 @@ function WritingPage({
 
   /* ------------------------------------------------------------ 保存 */
   const inputSeq = session?.inputSeq ?? 0
+  // 组词可能持续超过防抖时间；结束后即使没有新输入事件，也要重新安排保存。
+  const imeComposing = session?.imeComposing ?? false
   useEffect(() => {
-    if (sessionId === null || inputSeq === 0) return
+    if (sessionId === null || inputSeq === 0 || imeComposing) return
     const timer = setTimeout(() => {
       const current = store.getSession(sessionId)
       if (current === null) return
@@ -342,7 +349,7 @@ function WritingPage({
       void store.saveToSequence(sessionId)
     }, 800)
     return () => clearTimeout(timer)
-  }, [inputSeq, sessionId, store])
+  }, [inputSeq, imeComposing, sessionId, store])
 
   /**
    * 真实输入（含中文 IME 上屏）才淡出辅助界面。

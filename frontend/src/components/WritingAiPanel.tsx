@@ -67,6 +67,8 @@ import { newRequestId } from '../utils/aiRequestState'
 import type { AIComment, AIRequestDetail, AIRequestStatus, AIWritingMutation, AINoopResponse } from '../types/ai'
 import type { Journal } from '../types/journal'
 
+export const NO_SERVER_VERSION_NOTICE = '这篇还没有服务器版本：先保存成功，AI 才能读取它。'
+
 export interface WritingAiPanelProps {
   /** 会话身份；为空表示还没有会话（不能调用 AI）。 */
   sessionId: string | null
@@ -162,6 +164,11 @@ function WritingAiPanel({
   const [questionError, setQuestionError] = useState('')
   const [presets, setPresets] = useState<MindPresetId[]>(settings?.mind_preset_ids ?? ['gentle_reflection'])
   const [notice, setNotice] = useState('')
+  useEffect(() => {
+    if (fileId !== null) {
+      setNotice((current) => current === NO_SERVER_VERSION_NOTICE ? '' : current)
+    }
+  }, [fileId])
   const [autoStatus, setAutoStatus] = useState('')
   const [tickToken, setTickToken] = useState(0)
   /**
@@ -358,7 +365,7 @@ function WritingAiPanel({
     dedupeTuple?: string | null
   }): Promise<void> => {
     if (sessionId === null || fileId === null) {
-      notify('这篇还没有服务器版本：先保存成功，AI 才能读取它。')
+      notify(NO_SERVER_VERSION_NOTICE)
       return
     }
     if (busyRef.current) return
