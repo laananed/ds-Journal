@@ -502,3 +502,253 @@
 .sj-shell[data-theme='dark'] .ritual-review-item {
   background: var(--sj-surface, #1c1e21);
 }
+
+/* ==========================================================================
+ * 第二轮 UI：沉浸式正文（计划 / 复盘）
+ *
+ * 与速记页同一套沉浸规则：正文是主体，问题模板 / 目标 / 同日旧版本是
+ * 「按需出现」的辅助界面；输入时淡出，指针移动或 Tab / Escape 重新显示。
+ * 状态行、保存失败与冲突提示永远不淡出。
+ * ========================================================================== */
+
+.sj-ritual {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------ 顶栏 */
+.sj-ritual__bar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 2px 12px;
+  background: var(--sj-bg, #ffffff);
+  transition: opacity 240ms ease, transform 240ms ease;
+}
+.sj-ritual.is-immersed .sj-ritual__bar {
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+}
+.sj-ritual__ident {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.sj-ritual__date {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--sj-text-soft, #9a94a4);
+  font-variant-numeric: tabular-nums;
+}
+.sj-ritual__kind {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--sj-text-muted, #6b6375);
+}
+.sj-ritual__tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.sj-ritual .sj-ritual__ghost {
+  border: 0;
+  background: transparent;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--sj-text-muted, #6b6375);
+  cursor: pointer;
+}
+.sj-ritual .sj-ritual__ghost:hover:not(:disabled) {
+  background: var(--sj-surface-muted, #f3f1f7);
+  color: var(--sj-text, #202124);
+}
+
+/* ------------------------------------------------------------ 栅格 */
+/*
+ * 舞台只有一列。
+ *
+ * 曾经是「268px 上下文 + 1fr 正文」的栅格，但外壳的正文列上限是 760px：
+ * 上下文一占位，正文只剩 460px；淡出时它虽然透明，位置仍然被占着，正文就
+ * 一直右偏、变窄。改成单列后正文恒为 700px 居中，显隐不再引起重排。
+ */
+.sj-ritual__stage {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+@media (max-width: 1000px) {
+  .sj-ritual__stage {
+    gap: 18px;
+  }
+}
+
+/* 上下文按需展开：出现在正文上方，与正文同宽，超出高度时自己滚动。 */
+.sj-ritual__context {
+  position: static;
+  width: 100%;
+  max-width: 700px;
+  max-height: min(46vh, 430px);
+  margin: 0 auto 18px;
+  overflow: auto;
+  gap: 16px;
+  padding: 4px 6px 18px 0;
+  border: 0;
+  border-bottom: 1px solid var(--sj-border, #e8e4ee);
+  border-radius: 0;
+  background: transparent;
+}
+/* 辅助界面里的卡片同样去框：只靠间距和字号分层 */
+.sj-ritual__context .ritual-questions,
+.sj-ritual__context .ritual-goals,
+.sj-ritual__context .ritual-restore {
+  padding: 0 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--sj-border, #efeaf3);
+  border-radius: 0;
+  background: transparent;
+}
+.sj-ritual__context > *:last-child {
+  border-bottom: 0;
+}
+
+/* ------------------------------------------------------------ 纸面 */
+/* 提醒条只谈「别的草稿」：卡片底与圆角在沉浸布局里太重，改成一条细竖线。 */
+.sj-ritual .ritual-recovery-callout {
+  max-width: 700px;
+  margin: 0 auto 12px;
+  padding: 2px 0 2px 14px;
+  border: 0;
+  border-left: 2px solid var(--sj-border-strong, #cfc9d6);
+  border-radius: 0;
+  background: transparent;
+}
+
+.sj-ritual__paper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 6px 0 120px;
+  min-width: 0;
+}
+.sj-ritual .sj-ritual__title {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 0;
+  padding: 2px 0 12px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  font: 400 27px/1.32 Georgia, 'Songti SC', serif;
+  letter-spacing: -0.01em;
+  color: var(--sj-text, #202124);
+}
+.sj-ritual .sj-ritual__title:focus,
+.sj-ritual .sj-ritual__title:focus-visible {
+  outline: none;
+  border-bottom-color: var(--sj-border, #e5e2ea);
+}
+.sj-ritual .sj-ritual__title::placeholder {
+  color: var(--sj-text-soft, #b3adbd);
+}
+
+.sj-ritual .s4-editor {
+  gap: 0;
+}
+.sj-ritual .s4-editor-content {
+  min-height: 48vh;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 17px;
+  line-height: 1.95;
+  color: var(--sj-text, #202124);
+}
+.sj-ritual .s4-editor-content:focus,
+.sj-ritual .s4-editor-content:focus-visible {
+  border: 0;
+  box-shadow: none;
+  /* AppShell 的全局 `:focus-visible` 会给正文画 3px 焦点环；纸面上有光标就够。 */
+  outline: none;
+}
+.sj-ritual .s4-editor-content p {
+  margin: 0 0 0.8em;
+}
+.sj-ritual .s4-toolbar {
+  padding: 0 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  transition: opacity 240ms ease;
+}
+.sj-ritual .s4-editor.is-immersed .s4-toolbar {
+  opacity: 0;
+  pointer-events: none;
+}
+.sj-ritual .s4-toolbar-button {
+  border-radius: 999px;
+}
+
+/* 状态行：永远可见 */
+.sj-ritual__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sj-border, #efeaf3);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--sj-text-soft, #9a94a4);
+}
+.sj-ritual__status.is-critical {
+  padding: 10px 12px;
+  border: 1px solid var(--sj-danger-border, #e3b7b7);
+  border-radius: 10px;
+  background: var(--sj-danger-bg, #fdf4f4);
+  color: var(--sj-danger, #8a2f2f);
+}
+.sj-ritual__quiet {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--sj-text-soft, #9a94a4);
+}
+
+/* 淡出时 Tab 进来就恢复 */
+.sj-ritual.is-immersed .sj-ritual__bar:focus-within,
+.sj-ritual.is-immersed .sj-ritual__context:focus-within {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+/* 实际编辑区（对比模式与单栏共用）：去掉外层卡片 */
+.sj-ritual .ritual-editor {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sj-ritual__bar,
+  .sj-ritual__context,
+  .sj-ritual .s4-toolbar {
+    transition: none;
+  }
+}

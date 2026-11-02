@@ -1,0 +1,119 @@
+{
+  "app": "http://127.0.0.1:5411/",
+  "builtFrom": "current wb/ui-2 build",
+  "steps": [
+    {
+      "label": "输入 \"- \" 之后",
+      "top": [
+        {
+          "tag": "ul",
+          "type": null,
+          "className": "",
+          "hasCheckbox": false,
+          "text": ""
+        }
+      ],
+      "taskLists": 0,
+      "taskItems": 0,
+      "checkboxes": 0,
+      "bulletLists": 1,
+      "html": "<ul data-id=\"53130adf-d5d1-4e46-a2c0-9004f9ba70d3\"><li data-id=\"ff4d7573-55c3-4da8-9acd-94bc535dff31\"><p data-id=\"96c51d1b-88c7-4dcd-b76f-44ab69a6f43c\"><br class=\"ProseMirror-trailingBreak\"></p></li></ul>"
+    },
+    {
+      "label": "输入 \"[ \" 之后",
+      "top": [
+        {
+          "tag": "ul",
+          "type": null,
+          "className": "",
+          "hasCheckbox": false,
+          "text": "[ "
+        }
+      ],
+      "taskLists": 0,
+      "taskItems": 0,
+      "checkboxes": 0,
+      "bulletLists": 1,
+      "html": "<ul data-id=\"53130adf-d5d1-4e46-a2c0-9004f9ba70d3\"><li data-id=\"ff4d7573-55c3-4da8-9acd-94bc535dff31\"><p data-id=\"96c51d1b-88c7-4dcd-b76f-44ab69a6f43c\">[ </p></li></ul>"
+    },
+    {
+      "label": "输入 \"- [ ] \" 之后",
+      "top": [
+        {
+          "tag": "ul",
+          "type": "taskList",
+          "className": "",
+          "hasCheckbox": true,
+          "text": "Task item checkbox for empty task item"
+        }
+      ],
+      "taskLists": 1,
+      "taskItems": 0,
+      "checkboxes": 1,
+      "bulletLists": 0,
+      "html": "<ul data-id=\"e638eaca-e392-4705-8dd9-204aecf3308e\" data-type=\"taskList\"><li data-checked=\"false\" data-id=\"eca9e35d-fdf5-4dbb-bcb7-a4472b16b433\"><label contenteditable=\"false\"><input aria-label=\"Task item checkbox for empty task item\" type=\"checkbox\"><span style=\"position: absolute; width: 1px; height: 1px; padding: 0px; margin: -1px; overflow: hidden; clip: rect(0px, 0px, 0px, 0px); white-space: nowrap; border: 0px;\">Task item checkbox for empty task item</span></label><div><p data-id=\"96c51d1b-88c7-4dcd-b76f-44ab69a6f43c\"><br class=\"ProseMirror-trailingBreak\"></p></div></li></ul>"
+    },
+    {
+      "label": "输入正文并等待自动保存之后",
+      "top": [
+        {
+          "tag": "ul",
+          "type": "taskList",
+          "className": "",
+          "hasCheckbox": true,
+          "text": "Task item checkbox for 买牛奶买牛奶"
+        }
+      ],
+      "taskLists": 1,
+      "taskItems": 0,
+      "checkboxes": 1,
+      "bulletLists": 0,
+      "html": "<ul data-id=\"e638eaca-e392-4705-8dd9-204aecf3308e\" data-type=\"taskList\"><li data-checked=\"false\" data-id=\"eca9e35d-fdf5-4dbb-bcb7-a4472b16b433\"><label contenteditable=\"false\"><input aria-label=\"Task item checkbox for 买牛奶\" type=\"checkbox\"><span style=\"position: absolute; width: 1px; height: 1px; padding: 0px; margin: -1px; overflow: hidden; clip: rect(0px, 0px, 0px, 0px); white-space: nowrap; border: 0px;\">Task item checkbox for 买牛奶</span></label><div><p data-id=\"96c51d1b-88c7-4dcd-b76f-44ab69a6f43c\">买牛奶</p></div></li></ul>"
+    }
+  ],
+  "writes": [
+    {
+      "method": "POST",
+      "path": "/api/journals"
+    }
+  ],
+  "savedDocument": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "taskList",
+        "attrs": {
+          "id": "e638eaca-e392-4705-8dd9-204aecf3308e"
+        },
+        "content": [
+          {
+            "type": "taskItem",
+            "attrs": {
+              "id": "eca9e35d-fdf5-4dbb-bcb7-a4472b16b433",
+              "checked": false
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "96c51d1b-88c7-4dcd-b76f-44ab69a6f43c"
+                },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "买牛奶"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "consoleErrors": [
+    "console.log: [probe] taskMarker [\"paragraph\",\"listItem\",\"bulletList\",\"doc\"] true",
+    "console.log: [probe] steps true [false] true",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+}

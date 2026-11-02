@@ -1,0 +1,46 @@
+{
+  "app": "http://127.0.0.1:5411/",
+  "states": {
+    "S1-status-empty": "还没有保存到服务器写下正文后自动创建；空白草稿不会产生服务器记录。本地草稿待写入……",
+    "S1-drafts-empty": "本地草稿（0）",
+    "S1-navigated": true,
+    "S1-writes": 0,
+    "S1-drafts-after-return": "本地草稿（0）",
+    "S1-writes-after-return": 0,
+    "S2-status-offline": "保存失败Failed to fetch本地草稿已保存（仅本机浏览器）重试保存",
+    "S2-critical": true,
+    "S3-status-retried": "服务器已保存文件 #501 · 版本 1",
+    "S3-writes": [
+      "POST /api/journals",
+      "POST /api/journals"
+    ],
+    "S4-held": 1,
+    "S4-held-while-typing": 1,
+    "S4-released": 1,
+    "S4-writes": [
+      "POST /api/journals",
+      "PATCH /api/journals/501"
+    ],
+    "S4-last-body-has-both": true,
+    "S4-status": "服务器已保存文件 #501 · 版本 2",
+    "S5-status-before-reload": "保存失败Failed to fetch本地草稿已保存（仅本机浏览器）重试保存",
+    "S5-drafts-after-reload": "本地草稿（1）",
+    "S5-callout-visible": true,
+    "S6-payload-types": [
+      "doc",
+      "taskList",
+      "taskItem",
+      "paragraph",
+      "text",
+      "taskItem",
+      "paragraph",
+      "text"
+    ],
+    "S6-checked-flag": true,
+    "S6-body-head": "{\"client_create_id\":\"d19d6191-f6fa-4f80-81ff-fe57bc9ea761\",\"title\":null,\"content_doc\":{\"type\":\"doc\",\"content\":[{\"type\":\""
+  },
+  "consoleErrors": [
+    "Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+    "Failed to load resource: net::ERR_INTERNET_DISCONNECTED"
+  ]
+}

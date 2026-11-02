@@ -1,0 +1,22 @@
+import { connect, sleep, resetLog } from './lib/cdp.mjs'
+import { world, write } from './lib/mock-api.mjs'
+const APP = process.env.APP_URL
+const cdp = await connect(process.env.CDP_URL)
+await cdp.setViewport(1440, 900)
+world.writing = []; write.mode = 'ok'; resetLog()
+await cdp.clearLocalDrafts(new URL(APP).origin)
+await cdp.send('Page.navigate', { url: APP })
+await cdp.waitFor(`document.querySelector('.dash-hero') !== null`)
+await sleep(300)
+await cdp.clickByLabel('.sj-nav button, .sj-shortcuts button', '速记')
+await cdp.waitFor(`document.querySelector('.ProseMirror') !== null`)
+await sleep(400)
+await cdp.evaluate(`document.querySelector('.ProseMirror').focus()`)
+await cdp.type('第一项'); await cdp.press('Enter'); await cdp.type('第二项'); await cdp.press('Enter')
+await sleep(300)
+console.log('BEFORE', await cdp.evaluate(`document.querySelector('.ProseMirror').innerHTML`))
+await cdp.type('[ ] 第三项')
+await sleep(1500)
+console.log('AFTER', await cdp.evaluate(`document.querySelector('.ProseMirror').innerHTML`))
+console.log('LOGS', JSON.stringify(cdp.consoleErrors.filter((x) => x.includes('probe2'))))
+cdp.close()

@@ -534,3 +534,317 @@
     padding: 9px 14px;
   }
 }
+
+/* ==========================================================================
+ * 第二轮 UI：沉浸式正文（速记）
+ *
+ * 原则：正文是页面主体，其余都是「按需出现」的辅助界面。
+ * - 顶栏、今天列表、属性、AI 面板、正文工具栏在输入时淡出（opacity + pointer-events），
+ *   指针移动或 Tab / Escape 重新显示；节点保留在 DOM 里，不卸载、不丢状态。
+ * - 状态行**永远不淡出**：保存失败、版本冲突、本地草稿写不进去必须能被看见。
+ * - 淡出只改透明度，不改栅格尺寸，所以不会因为显隐导致正文跳动。
+ * ========================================================================== */
+
+.sj-write {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------ 顶栏 */
+.sj-write__bar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 2px 12px;
+  background: var(--sj-bg, #ffffff);
+  transition: opacity 240ms ease, transform 240ms ease;
+}
+.sj-write.is-immersed .sj-write__bar {
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+}
+.sj-write__ident {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sj-write__date {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--sj-text-soft, #9a94a4);
+  font-variant-numeric: tabular-nums;
+}
+.sj-write__tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+/* 说明：`.writing-page button` 带边框和内边距，这里用两级选择器覆盖。 */
+.sj-write .sj-write__ghost {
+  border: 0;
+  background: transparent;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--sj-text-muted, #6b6375);
+}
+.sj-write .sj-write__ghost:hover:not(:disabled) {
+  background: var(--sj-surface-muted, #f3f1f7);
+  color: var(--sj-text, #202124);
+  border-color: transparent;
+}
+.sj-write .sj-write__back {
+  color: var(--sj-text, #202124);
+}
+.sj-write .sj-write__save {
+  border: 0;
+  background: transparent;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--sj-text, #202124);
+}
+.sj-write .sj-write__save:hover:not(:disabled) {
+  background: var(--sj-surface-muted, #f3f1f7);
+}
+.sj-write .sj-write__save:disabled {
+  opacity: 0.4;
+  background: transparent;
+}
+
+/* ------------------------------------------------------------ 栅格 */
+.sj-write__stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+}
+.sj-write__stage.has-drawer {
+  grid-template-columns: 252px minmax(0, 1fr);
+  gap: 30px;
+}
+@media (max-width: 920px) {
+  .sj-write__stage.has-drawer {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+.sj-write__drawer {
+  position: sticky;
+  top: 44px;
+  max-height: calc(100vh - 76px);
+  overflow: auto;
+  padding: 4px 2px 24px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+/*
+ * 抽屉不淡出：它是一列真实占位的列表，透明度归零只会让正文左边留一条看不见的
+ * 空白（正文仍然窄、仍然右偏）。开始输入时直接收起（见页面的 onInput），
+ * 需要它时点顶栏「今天 N 篇」再打开。
+ */
+
+/* ------------------------------------------------------------ 纸面 */
+/* 提醒条只谈「别的草稿」：去掉卡片底色，避免在正文上方压一块紫底。 */
+.sj-write .writing-recovery-callout {
+  max-width: 700px;
+  margin: 0 auto 12px;
+  padding: 2px 0 2px 14px;
+  border: 0;
+  border-left: 2px solid var(--sj-border-strong, #cfc9d6);
+  border-radius: 0;
+  background: transparent;
+}
+
+.sj-write__paper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 10px 0 120px;
+  min-width: 0;
+}
+
+/* 标题：无边框，聚焦时才有一条淡线，像在纸上写而不是填表 */
+.sj-write .sj-write__title {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 0;
+  padding: 2px 0 12px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  font: 400 27px/1.32 Georgia, 'Songti SC', serif;
+  letter-spacing: -0.01em;
+  color: var(--sj-text, #202124);
+}
+.sj-write .sj-write__title:focus,
+.sj-write .sj-write__title:focus-visible {
+  outline: none;
+  border-bottom-color: var(--sj-border, #e5e2ea);
+}
+.sj-write .sj-write__title::placeholder {
+  color: var(--sj-text-soft, #b3adbd);
+}
+
+/* 正文：去掉编辑器的框，只留文字 */
+.sj-write__body {
+  min-width: 0;
+}
+.sj-write .s4-editor {
+  gap: 0;
+}
+.sj-write .s4-editor-content {
+  min-height: 48vh;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 17px;
+  line-height: 1.95;
+  color: var(--sj-text, #202124);
+}
+.sj-write .s4-editor-content:focus,
+.sj-write .s4-editor-content:focus-visible {
+  border: 0;
+  box-shadow: none;
+  /* AppShell 给全局 `:focus-visible` 画了 3px 焦点环；纸面上只要有光标就够了，
+     否则正文会被一个方框圈起来，比输入框还重。 */
+  outline: none;
+}
+.sj-write .s4-editor-content p {
+  margin: 0 0 0.8em;
+}
+.sj-write .s4-editor.is-immersed .s4-editor-content,
+.sj-write .s4-editor-content {
+  border: 0;
+}
+.sj-write .s4-toolbar {
+  padding: 0 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  transition: opacity 240ms ease;
+}
+.sj-write .s4-editor.is-immersed .s4-toolbar {
+  opacity: 0;
+  pointer-events: none;
+}
+.sj-write .s4-toolbar-button {
+  border-radius: 999px;
+}
+
+/* 属性（日期 / 文件夹）：按需展开。它是用户自己打开的设置条，淡出会留下一条
+   空白，所以不参与沉浸式显隐，只在收起时消失。 */
+.sj-write__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 2px;
+  padding: 4px 0 12px;
+  border-bottom: 1px dashed var(--sj-border, #e8e4ee);
+  font-size: 12.5px;
+  color: var(--sj-text-muted, #6b6375);
+}
+.sj-write__metafield {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sj-write .sj-write__metafield input {
+  min-height: 0;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--sj-text, #202124);
+}
+
+/* 状态行：永远可见 */
+.sj-write__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sj-border, #efeaf3);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--sj-text-soft, #9a94a4);
+}
+.sj-write__status-label {
+  color: var(--sj-text-muted, #6b6375);
+}
+.sj-write__status-local {
+  margin-left: auto;
+}
+.sj-write__status.is-critical {
+  padding: 10px 12px;
+  border: 1px solid var(--sj-danger-border, #e3b7b7);
+  border-radius: 10px;
+  background: var(--sj-danger-bg, #fdf4f4);
+  color: var(--sj-danger, #8a2f2f);
+}
+.sj-write__status.is-critical .sj-write__status-label {
+  color: var(--sj-danger, #8a2f2f);
+  font-weight: 600;
+}
+.sj-write__quiet {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--sj-text-soft, #9a94a4);
+}
+
+/* AI 写作：收起时只 display:none，组件仍挂载，在途请求不丢。
+   展开后是用户自己要看的內容，淡出只会在正文下方留一块空白，因此不参与显隐。 */
+.sj-write__ai {
+  margin-top: 6px;
+}
+.sj-write__ai.is-collapsed {
+  display: none;
+}
+
+/* 淡出时仍要能被读屏找到的操作：Tab 进来就恢复 */
+.sj-write.is-immersed .sj-write__bar:focus-within {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+/* 窄屏：外壳的快捷入口固定在右下角，状态行的右半段不能压在它下面 */
+@media (max-width: 720px) {
+  .sj-write__paper {
+    padding-bottom: 96px;
+  }
+  .sj-write__status-local {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sj-write__bar,
+  .sj-write .s4-toolbar {
+    transition: none;
+  }
+}

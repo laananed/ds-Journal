@@ -19,14 +19,14 @@
  *    降级为普通段落文字，评论 Mark 与节点 ID 一并剥离。
  */
 
-import { Extension } from '@tiptap/core'
+import { Extension, InputRule } from '@tiptap/core'
 import type { Extensions, JSONContent } from '@tiptap/core'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { UniqueID } from '@tiptap/extension-unique-id'
 import StarterKit from '@tiptap/starter-kit'
 import { Fragment, Slice } from '@tiptap/pm/model'
 import type { Node as PMNode, Schema } from '@tiptap/pm/model'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 import type { ContentDocument, Mark } from '../types/document.ts'
 import { AiPlaceholder } from './extensions/AiPlaceholder.ts'
 import { AiReply } from './extensions/AiReply.ts'
@@ -37,6 +37,11 @@ import { LegacyText } from './extensions/LegacyText.ts'
 import { LegacyBlocks } from './extensions/LegacyBlocks.ts'
 import { MindComment } from './extensions/MindComment.ts'
 import { RitualQuestion } from './extensions/RitualQuestion.ts'
+import {
+  TASK_MARKER_PATTERN,
+  canConvertTaskMarker,
+  taskMarkerChecked,
+} from '../utils/taskListInput.ts'
 
 /** 与后端 `document_schema_version` 对齐；格式不匹配由服务端 422。 */
 export const DOCUMENT_SCHEMA_VERSION = 1 as const
@@ -317,6 +322,88 @@ const DocumentGuards = Extension.create({
   },
 })
 
+/**
+ * 清单标记输入规则（第二轮 UI 修复）。
+ *
+ * 内置 `TaskItem` 规则用 `wrappingInputRule`，只在段落**不在列表里**时成功。
+ * 用户先输入 `- ` 时 `BulletList` 规则已经把这一行变成 `bulletList >
+ * listItem > paragraph`；此时 `findWrapping` 找不到合法包裹（listItem 的
+ * 第一个子节点必须是段落），规则静默失败，`[ ] ` 就留在正文里。
+ *
+ * `liftListItem` 也救不了：它按 `childCount > 0` 找 lift 范围，而刚删掉标记的
+ * 段落是空的，取不到范围。所以这里直接构造替换节点：
+ *
+ * - **在列表里**：只把当前这一项换成 `taskList`，前后同级的项原样保留在原来的
+ *   列表类型里（必要时拆成两个列表）。普通列表的其他项一个字符都不改。
+ * - **在顶层段落**：仍走 `toggleTaskList`（wrap 本来就成立）。
+ * - **已经在 `taskItem` 里**：只删标记，`[x]` 时改勾选，不重复包裹。
+ *
+ * 结构不在白名单（`canConvertTaskMarker`）时返回 null，用户文字原样保留。
+ */
+const TaskMarkerInput = Extension.create({
+  name: 'taskMarkerInput',
+  // 高于 TaskItem / BulletList 的默认 100：先于内置规则处理 `- [ ] `。
+  priority: 110,
+
+  addInputRules() {
+    return [
+      new InputRule({
+        find: TASK_MARKER_PATTERN,
+        handler: ({ state, range, match, chain }) => {
+          const $from = state.doc.resolve(range.from)
+          const path: string[] = []
+          for (let depth = $from.depth; depth >= 0; depth -= 1) path.push($from.node(depth).type.name)
+          if (!canConvertTaskMarker(path)) return null
+
+          const checked = taskMarkerChecked(match)
+          if (path.includes('taskItem')) {
+            // 已经是清单项：删标记即可，`[x]` 再补一次勾选。
+            if (!chain().deleteRange(range).run()) return null
+            if (checked) chain().updateAttributes('taskItem', { checked: true }).run()
+            return
+          }
+
+          // 不在列表里：普通段落直接包成清单（wrap 在这里本来就成立）。
+          if (!path.includes('listItem')) {
+            if (!chain().deleteRange(range).run()) return null
+            chain().toggleTaskList().run()
+            return
+          }
+
+          // 在列表里：把「当前项所在的列表」拆成 前列表 + 当前项的 taskList + 后列表。
+          const listItemIndex = path.indexOf('listItem')
+          const listItemDepth = $from.depth - listItemIndex
+          const listDepth = listItemDepth - 1
+          const tr = state.tr.delete(range.from, range.to)
+          const $pos = tr.doc.resolve(range.from)
+          const listNode = $pos.node(listDepth)
+          const listPos = $pos.before(listDepth)
+          const index = $pos.index(listDepth)
+          const items = listNode.content.content as unknown as PMNode[]
+          const before = items.slice(0, index)
+          const after = items.slice(index + 1)
+          const paragraph = $pos.parent
+          const taskItem = state.schema.nodes.taskItem.create({ checked }, paragraph)
+          const taskList = state.schema.nodes.taskList.create(null, taskItem)
+          const replacement: PMNode[] = []
+          if (before.length > 0) replacement.push(listNode.type.create(listNode.attrs, before))
+          replacement.push(taskList)
+          if (after.length > 0) replacement.push(listNode.type.create(listNode.attrs, after))
+
+          const taskListStart = listPos + (before.length > 0 ? (replacement[0] as PMNode).nodeSize : 0)
+          tr.replaceWith(listPos, listPos + listNode.nodeSize, replacement)
+          // 光标落进新 taskItem 的段落里：taskList +1 → taskItem +1 → 段落 +1。
+          const caret = taskListStart + 3
+          if (caret <= tr.doc.content.size) {
+            tr.setSelection(TextSelection.near(tr.doc.resolve(caret)))
+          }
+          return
+        },
+      }),
+    ]
+  },
+})
+
 export interface EditorExtensionOptions {
   /** 只读模式不补 ID、不落库（API §1：GET 零写）。 */
   readOnly?: boolean
@@ -346,6 +433,7 @@ export function buildExtensions({ readOnly = false }: EditorExtensionOptions = {
     }),
     TaskList,
     TaskItem.configure({ nested: true }),
+    TaskMarkerInput,
     UniqueID.configure({
       types: [...ID_NODE_TYPES],
       updateDocument: !readOnly,

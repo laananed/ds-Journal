@@ -1,0 +1,152 @@
+{
+  "app": "http://127.0.0.1:5411/",
+  "states": {
+    "writing-idle": {
+      "root": "writing-page sj-write",
+      "immersed": false,
+      "barOpacity": "1",
+      "contextOpacity": null,
+      "date": "26-11-02",
+      "statusVisible": "1",
+      "toolbarOpacity": "1",
+      "hasBack": false
+    },
+    "writing-typing": {
+      "root": "writing-page sj-write is-immersed",
+      "immersed": true,
+      "barOpacity": "0",
+      "contextOpacity": null,
+      "date": "26-11-02",
+      "statusVisible": "1",
+      "toolbarOpacity": "0",
+      "hasBack": false
+    },
+    "writing-after-move": {
+      "root": "writing-page sj-write",
+      "immersed": false,
+      "barOpacity": "1",
+      "contextOpacity": null,
+      "date": "26-11-02",
+      "statusVisible": "1",
+      "toolbarOpacity": "1",
+      "hasBack": false
+    },
+    "writing-typing-again": {
+      "root": "writing-page sj-write is-immersed",
+      "immersed": true,
+      "barOpacity": "0",
+      "contextOpacity": null,
+      "date": "26-11-02",
+      "statusVisible": "1",
+      "toolbarOpacity": "0",
+      "hasBack": false
+    },
+    "writing-after-key": {
+      "root": "writing-page sj-write",
+      "immersed": false,
+      "barOpacity": "1",
+      "contextOpacity": null,
+      "date": "26-11-02",
+      "statusVisible": "1",
+      "toolbarOpacity": "1",
+      "hasBack": false
+    },
+    "writing-save-failed": {
+      "root": "writing-page sj-write is-immersed",
+      "immersed": true,
+      "barOpacity": "0",
+      "contextOpacity": null,
+      "date": "26-11-02",
+      "statusVisible": "1",
+      "toolbarOpacity": "0",
+      "hasBack": false
+    },
+    "writing-failed-text": "保存失败mock 写入失败本地草稿已保存（仅本机浏览器）重试保存",
+    "writing-conflict": {
+      "root": "writing-page sj-write is-immersed",
+      "immersed": true,
+      "barOpacity": "0",
+      "contextOpacity": null,
+      "date": "26-11-02",
+      "statusVisible": "1",
+      "toolbarOpacity": "0",
+      "hasBack": false
+    },
+    "writing-conflict-text": "版本冲突版本冲突：服务器上已有更新的版本本地草稿已保存（仅本机浏览器）对照服务器版本",
+    "ritual-set-idle": {
+      "root": "ritual-page sj-ritual",
+      "immersed": false,
+      "barOpacity": "1",
+      "contextOpacity": null,
+      "date": "26-11-02",
+      "statusVisible": "1",
+      "toolbarOpacity": "1",
+      "hasBack": false
+    },
+    "ritual-set-typing": {
+      "root": "ritual-page sj-ritual is-immersed",
+      "immersed": true,
+      "barOpacity": "0",
+      "contextOpacity": null,
+      "date": "26-11-02",
+      "statusVisible": "1",
+      "toolbarOpacity": "0",
+      "hasBack": false
+    },
+    "ritual-set-after-move": {
+      "root": "ritual-page sj-ritual",
+      "immersed": false,
+      "barOpacity": "1",
+      "contextOpacity": null,
+      "date": "26-11-02",
+      "statusVisible": "1",
+      "toolbarOpacity": "1",
+      "hasBack": false
+    },
+    "ritual-end-idle": {
+      "root": "ritual-page sj-ritual",
+      "immersed": false,
+      "barOpacity": "1",
+      "contextOpacity": null,
+      "date": "26-11-02",
+      "statusVisible": "1",
+      "toolbarOpacity": "1",
+      "hasBack": false
+    },
+    "ritual-end-typing": {
+      "root": "ritual-page sj-ritual is-immersed",
+      "immersed": true,
+      "barOpacity": "0",
+      "contextOpacity": null,
+      "date": "26-11-02",
+      "statusVisible": "1",
+      "toolbarOpacity": "0",
+      "hasBack": false
+    },
+    "ritual-end-after-move": {
+      "root": "ritual-page sj-ritual",
+      "immersed": false,
+      "barOpacity": "1",
+      "contextOpacity": null,
+      "date": "26-11-02",
+      "statusVisible": "1",
+      "toolbarOpacity": "1",
+      "hasBack": false
+    },
+    "narrow": {
+      "root": "writing-page sj-write is-immersed",
+      "immersed": true,
+      "barOpacity": "0",
+      "contextOpacity": null,
+      "date": "26-11-02",
+      "statusVisible": "1",
+      "toolbarOpacity": "0",
+      "hasBack": false
+    }
+  },
+  "writes": [],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "Failed to load resource: the server responded with a status of 409 (Conflict)"
+  ]
+}

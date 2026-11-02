@@ -54,6 +54,7 @@ import {
 } from '../state/editSessions'
 import { journalToDraft, journalToServerFile, journalTransport } from '../state/journalSession'
 import { useEditSession, useEditSessionActions, useJournalDraftMirror } from '../hooks/useEditSession'
+import { useImmersiveChrome } from '../hooks/useImmersiveChrome'
 import {
   draftRecordKey,
   localDraftWriter,
@@ -115,6 +116,14 @@ export interface RitualPageProps {
   onFlushReady?: (flush: (() => Promise<FlushResult>) | null) => void
   /** 提供时在对照入口显示「去回收箱」；页面本身不改路由。 */
   onOpenTrash?: () => void
+  /**
+   * 可访问的返回入口（第二轮 UI）。
+   *
+   * 由 `App.tsx` 的 `navigate(() => changeModule('dashboard'))` 提供：
+   * 「先 flush 最新草稿再导航、失败留在原地」与左栏导航同一套保护；
+   * 本页不自己跳转。未接线时不渲染按钮。
+   */
+  onBack?: () => void
 }
 
 /** 回收箱翻页上限：只为找到同日同类的旧版本，不把整个回收箱拉进内存。 */
@@ -171,7 +180,17 @@ function RitualPage({
   onBusyChange,
   onFlushReady,
   onOpenTrash,
+  onBack,
 }: RitualPageProps) {
+  const chrome = useImmersiveChrome()
+  /**
+   * 沉浸式布局：问题模板 / 目标 / 同日版本**默认收起**，由顶栏按钮按需展开。
+   *
+   * 之前默认展开成左侧 268px 常驻栏，外壳正文列上限 760px，正文因此只剩
+   * 460px 并整体右偏；淡出时它虽然透明，位置还占着，正文仍然窄。
+   * 收起 + 需要时在正文上方展开，正文才真正成为主体（且显隐不引起重排）。
+   */
+  const [contextOpen, setContextOpen] = useState(false)
   /* ------------------------------------------------------------ 读取 */
 
   const [status, setStatus] = useState<LoadStatus>('loading')
@@ -438,6 +457,16 @@ function RitualPage({
       fileId: currentFileId,
     }))
   }, [records, kind, effectiveDate, currentFileId])
+
+  /**
+   * 正在编辑的这份**不**进提醒条：它的本机镜像在输入时必然存在，把它算进
+   * 「还有未提交的草稿」会让正文上方一直压着一张卡片。面板与顶栏入口仍然
+   * 包含它，可发现性不变。
+   */
+  const otherRitualDrafts = useMemo(() => {
+    const currentDraftId = session?.draftId ?? ''
+    return ritualCandidates.filter((item) => item.draft_id !== currentDraftId)
+  }, [ritualCandidates, session])
 
   // 未取得服务器身份的记录不必探测就能定性：在渲染时直接给出计划，
   // 面板一打开就是正确动作（「恢复原请求」而不是先点一次「恢复」）。
@@ -802,6 +831,13 @@ function RitualPage({
     editSessionStore.changeSession(sessionId, next, origin)
   }, [sessionId])
 
+  /**
+   * 正文变化只写会话——**不**在这里触发沉浸式淡出。
+   *
+   * 编辑器挂载时会把服务端文档回传一次（`onUserChange`），全新草稿还会被规范化
+   * 成带空段落与节点 ID 的文档；把「有回调」当「有输入」会让页面一打开就淡出。
+   * 淡出只认正文/标题上的真实 DOM 输入事件（`onInput`，见渲染部分）。
+   */
   function handleBodyChange(next: ContentDocument) {
     if (draft === null) return
     changeDraft({ ...draft, content_doc: next })
@@ -1258,30 +1294,40 @@ function RitualPage({
     }
   })
 
+  const dayLabel = effectiveDate === '' ? '──-──-──' : effectiveDate.slice(2)
+  /** 保存失败/冲突/本地草稿写不进去：这些信息永远不淡出。 */
+  const statusCritical = sessionStatus === 'failed' || sessionStatus === 'conflict'
+    || sessionStatus === 'missing' || mirror.localState === 'failed' || saveHint !== ''
+
   return (
-    <div className="ritual-page">
-      <header className="ritual-head">
-        <p className="ritual-eyebrow">{KIND_LABEL[kind]} · 业务日 {effectiveDate === '' ? '读取中' : effectiveDate}</p>
-        <h2 className="ritual-title">
-          {displayTitle(kind, effectiveDate, title)}
-          {fileId === null && <span className="ritual-badge">未保存</span>}
-        </h2>
-        <p className="ritual-sub">
-          上海时间每日 04:00 换日；本页的日期在打开草稿时固定，不会因为跨过 04:00 自动跳转。
-          {openFile !== null && openFile.journal_date !== effectiveDate && `（历史文件：${openFile.journal_date}）`}
-        </p>
-        <div className="ritual-status" role="status" aria-live="polite">
-          {session !== null && <span>{statusLabel(sessionStatus)}</span>}
-          {mirror.localState !== 'idle' && <span>{localStateLabel(mirror.localState)}</span>}
-          {session !== null && !busy && dirty && <span>还有改动未提交</span>}
+    <div
+      className={`ritual-page sj-ritual${chrome.hidden ? ' is-immersed' : ''}${contextOpen ? ' has-context' : ''}`}
+      onPointerMove={chrome.reveal}
+      onKeyDown={chrome.onKeyDown}
+    >
+      <header className="sj-ritual__bar" onFocus={chrome.hold} onBlur={chrome.release}>
+        <div className="sj-ritual__ident">
+          {onBack !== undefined && (
+            <button type="button" className="sj-ritual__ghost" onClick={onBack} aria-label="返回概览">
+              ← 概览
+            </button>
+          )}
+          <time className="sj-ritual__date" dateTime={effectiveDate === '' ? undefined : effectiveDate}>{dayLabel}</time>
+          <span className="sj-ritual__kind">{KIND_LABEL[kind]}</span>
+        </div>
+        <div className="sj-ritual__tools">
+          <button type="button" className="sj-ritual__ghost" aria-expanded={contextOpen}
+            onClick={() => setContextOpen((open) => !open)}>
+            问题模板与目标
+          </button>
         </div>
       </header>
 
       {draftNotice !== '' && <p className="ritual-notice" role="status">{draftNotice}</p>}
 
-      {ritualCandidates.length > 0 && !recoveryOpen && (
+      {otherRitualDrafts.length > 0 && !recoveryOpen && (
         <div className="ritual-recovery-callout" role="status">
-          <p>本机还有 {ritualCandidates.length} 份未提交的草稿（只保存在这台浏览器，不代表服务器已保存）。</p>
+          <p>本机还有 {otherRitualDrafts.length} 份未提交的草稿（只保存在这台浏览器，不代表服务器已保存）。</p>
           <p className="ritual-hint">可以打开列表选择恢复、稍后处理或明确丢弃；不做选择时不会有任何自动写入。</p>
           <button type="button" className="ritual-button" onClick={openRecoveryPanel}>
             查看本地草稿
@@ -1336,123 +1382,125 @@ function RitualPage({
       )}
 
       {status === 'ready' && (
-        <div className={`ritual-layout${compareSource !== null ? ' ritual-layout--compare' : ''}`}>
-          <aside className="ritual-context" aria-label={`${KIND_LABEL[kind]} 上下文`}>
-            <RitualQuestions
-              kind={kind}
-              journalDate={effectiveDate}
-              questions={currentTemplate.questions}
-              revision={currentTemplate.revision}
-              loading={templatesLoading}
-              disabled={disabled || busy}
-              error={templateError}
-              canInsert={sessionId !== null}
-              insertBlockedReason="请先写入并保存正文。"
-              onSave={(questions) => void saveTemplate(questions)}
-              onReload={() => void reloadTemplates()}
-              onInsert={(question) => void insertTemplateQuestion(question)}
-              insertError={insertError}
-            />
+        <div className={`sj-ritual__stage${compareSource !== null ? ' is-compare' : ''}`}>
+          {contextOpen && (
+            <aside className="ritual-context sj-ritual__context" aria-label={`${KIND_LABEL[kind]} 上下文`}>
+              <RitualQuestions
+                kind={kind}
+                journalDate={effectiveDate}
+                questions={currentTemplate.questions}
+                revision={currentTemplate.revision}
+                loading={templatesLoading}
+                disabled={disabled || busy}
+                error={templateError}
+                canInsert={sessionId !== null}
+                insertBlockedReason="请先写入并保存正文。"
+                onSave={(questions) => void saveTemplate(questions)}
+                onReload={() => void reloadTemplates()}
+                onInsert={(question) => void insertTemplateQuestion(question)}
+                insertError={insertError}
+              />
 
-            <section className="ritual-goals" aria-labelledby="ritual-goals-title">
-              <h3 id="ritual-goals-title">{kind === 'set' ? '今天的目标' : '目标回顾'}</h3>
-              {kind === 'set' && checklistCandidates(document).map((item) => (
-                <div key={item.id} className="ritual-goal-item">
-                  <span>{item.text}</span>{' '}
-                  <button type="button" disabled={disabled || busy} onClick={() => void convertGoal(item.id)}>转为目标</button>
-                </div>
-              ))}
-              {kind === 'set' && goals.length === 0 && (
-                <p className="ritual-hint">
-                  保存后，正文中的纯文字清单会自动成为目标；含格式或嵌套的条目需先调整。
-                </p>
-              )}
-              {kind === 'set' && goals.length > 0 && (
-                <ul className="ritual-goal-list">
-                  {goals.map((goal) => (
-                    <li key={goal.goalId} className="ritual-goal-item">
-                      <label className="ritual-goal-check">
-                        <input type="checkbox" checked={goal.checked} disabled={disabled || goalBusy !== ''}
-                          onChange={(event) => void toggleGoal(goal, event.target.checked)} />
-                        <span>{goal.text}</span>
-                      </label>
-                      <button type="button" className="ritual-button"
-                        disabled={disabled || goalBusy !== '' || !addToEnd.available}
-                        title={addToEnd.available ? undefined : addToEnd.reason}
-                        onClick={() => void addGoalToEnd(goal)}>
-                        加入结束今天
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {kind === 'end' && reviews.length === 0 && (
-                <p className="ritual-hint">还没有关联的目标回顾。目标需要在开始今天里主动加入结束今天。</p>
-              )}
-              {kind === 'end' && reviews.length > 0 && (
-                <ul className="ritual-review-list">
-                  {reviews.map((review) => (
-                    <li key={review.nodeId} className="ritual-review-item">
-                      <p className="ritual-review-title">{review.title === '' ? '（无标题回顾）' : review.title}</p>
-                      <p className="ritual-review-meta">
-                        快照：{review.snapshot === '' ? '（空）' : review.snapshot}
-                        {' · '}
-                        {review.checked ? '已完成' : '未完成'}
-                      </p>
-                      {!review.sourceAvailable && (
-                        <p className="ritual-review-unavailable" role="status">
-                          目标来源不可用（关联已解除），回顾快照和回答仍保留，恢复也不会自动重连。
-                        </p>
-                      )}
-                      <div className="ritual-review-actions">
+              <section className="ritual-goals" aria-labelledby="ritual-goals-title">
+                <h3 id="ritual-goals-title">{kind === 'set' ? '今天的目标' : '目标回顾'}</h3>
+                {kind === 'set' && checklistCandidates(document).map((item) => (
+                  <div key={item.id} className="ritual-goal-item">
+                    <span>{item.text}</span>{' '}
+                    <button type="button" disabled={disabled || busy} onClick={() => void convertGoal(item.id)}>转为目标</button>
+                  </div>
+                ))}
+                {kind === 'set' && goals.length === 0 && (
+                  <p className="ritual-hint">
+                    保存后，正文中的纯文字清单会自动成为目标；含格式或嵌套的条目需先调整。
+                  </p>
+                )}
+                {kind === 'set' && goals.length > 0 && (
+                  <ul className="ritual-goal-list">
+                    {goals.map((goal) => (
+                      <li key={goal.goalId} className="ritual-goal-item">
+                        <label className="ritual-goal-check">
+                          <input type="checkbox" checked={goal.checked} disabled={disabled || goalBusy !== ''}
+                            onChange={(event) => void toggleGoal(goal, event.target.checked)} />
+                          <span>{goal.text}</span>
+                        </label>
                         <button type="button" className="ritual-button"
-                          disabled={disabled || goalBusy !== '' || !reviewCanWriteBack(review)}
-                          onClick={() => void toggleReview(review, !review.checked)}>
-                          {review.checked ? '标记为未完成' : '标记为完成'}
+                          disabled={disabled || goalBusy !== '' || !addToEnd.available}
+                          title={addToEnd.available ? undefined : addToEnd.reason}
+                          onClick={() => void addGoalToEnd(goal)}>
+                          加入结束今天
                         </button>
-                      </div>
-                      {!review.sourceAvailable && !reviewCanWriteBack(review) && (
-                        <p className="ritual-hint">来源不可用时不能从结束今天回写；可以继续编辑回顾文字与回答。</p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {goalError !== '' && <p className="ritual-alert" role="alert">{goalError}</p>}
-            </section>
-
-            {deletedSources.length > 0 && (
-              <section className="ritual-restore" aria-labelledby="ritual-restore-title">
-                <h3 id="ritual-restore-title">同日旧版本</h3>
-                <p className="ritual-hint">
-                  回收箱里有 {deletedSources.length} 个同日{ KIND_LABEL[kind]}。可以对照后手动复制内容，或完整替换当前文件。
-                </p>
-                <label className="ritual-restore-select">
-                  <span>旧版本</span>
-                  <select value={compareSource?.id ?? ''} disabled={disabled || compareBusy}
-                    onChange={(event) => chooseCompareSource(Number(event.target.value))}>
-                    <option value="">选择旧版本…</option>
-                    {deletedSources.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        #{item.id} · revision {item.revision}
-                      </option>
+                      </li>
                     ))}
-                  </select>
-                </label>
-                <div className="ritual-restore-actions">
-                  <button type="button" className="ritual-button ritual-button--primary"
-                    disabled={disabled || compareBusy} onClick={() => void openCompare()}>
-                    打开对照
-                  </button>
-                  {onOpenTrash !== undefined && (
-                    <button type="button" className="ritual-button" onClick={onOpenTrash}>去回收箱</button>
-                  )}
-                </div>
+                  </ul>
+                )}
+                {kind === 'end' && reviews.length === 0 && (
+                  <p className="ritual-hint">还没有关联的目标回顾。目标需要在开始今天里主动加入结束今天。</p>
+                )}
+                {kind === 'end' && reviews.length > 0 && (
+                  <ul className="ritual-review-list">
+                    {reviews.map((review) => (
+                      <li key={review.nodeId} className="ritual-review-item">
+                        <p className="ritual-review-title">{review.title === '' ? '（无标题回顾）' : review.title}</p>
+                        <p className="ritual-review-meta">
+                          快照：{review.snapshot === '' ? '（空）' : review.snapshot}
+                          {' · '}
+                          {review.checked ? '已完成' : '未完成'}
+                        </p>
+                        {!review.sourceAvailable && (
+                          <p className="ritual-review-unavailable" role="status">
+                            目标来源不可用（关联已解除），回顾快照和回答仍保留，恢复也不会自动重连。
+                          </p>
+                        )}
+                        <div className="ritual-review-actions">
+                          <button type="button" className="ritual-button"
+                            disabled={disabled || goalBusy !== '' || !reviewCanWriteBack(review)}
+                            onClick={() => void toggleReview(review, !review.checked)}>
+                            {review.checked ? '标记为未完成' : '标记为完成'}
+                          </button>
+                        </div>
+                        {!review.sourceAvailable && !reviewCanWriteBack(review) && (
+                          <p className="ritual-hint">来源不可用时不能从结束今天回写；可以继续编辑回顾文字与回答。</p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {goalError !== '' && <p className="ritual-alert" role="alert">{goalError}</p>}
               </section>
-            )}
-          </aside>
 
-          <div className="ritual-main"
+              {deletedSources.length > 0 && (
+                <section className="ritual-restore" aria-labelledby="ritual-restore-title">
+                  <h3 id="ritual-restore-title">同日旧版本</h3>
+                  <p className="ritual-hint">
+                    回收箱里有 {deletedSources.length} 个同日{KIND_LABEL[kind]}。可以对照后手动复制内容，或完整替换当前文件。
+                  </p>
+                  <label className="ritual-restore-select">
+                    <span>旧版本</span>
+                    <select value={compareSource?.id ?? ''} disabled={disabled || compareBusy}
+                      onChange={(event) => chooseCompareSource(Number(event.target.value))}>
+                      <option value="">选择旧版本…</option>
+                      {deletedSources.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          #{item.id} · revision {item.revision}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="ritual-restore-actions">
+                    <button type="button" className="ritual-button ritual-button--primary"
+                      disabled={disabled || compareBusy} onClick={() => void openCompare()}>
+                      打开对照
+                    </button>
+                    {onOpenTrash !== undefined && (
+                      <button type="button" className="ritual-button" onClick={onOpenTrash}>去回收箱</button>
+                    )}
+                  </div>
+                </section>
+              )}
+            </aside>
+          )}
+
+          <div className="ritual-main sj-ritual__paper"
             onCompositionStart={handleCompositionStart}
             onCompositionEnd={handleCompositionEnd}>
             {notice !== '' && <p className="ritual-notice" role="status">{notice}</p>}
@@ -1498,20 +1546,6 @@ function RitualPage({
               </p>
             ) : (
               <>
-                <label className="ritual-title-field">
-                  <span>标题</span>
-                  <input
-                    type="text"
-                    value={title}
-                    disabled={disabled || session === null}
-                    placeholder={displayTitle(kind, effectiveDate, null)}
-                    onChange={(event) => handleTitleChange(event.target.value)}
-                  />
-                </label>
-                <p className="ritual-hint">
-                  类型与业务日期不可修改；标题、Folder 与正文可以编辑。
-                </p>
-
                 {compareSource !== null && targetRef !== null ? (
                   <RitualRestoreCompare
                     kind={kind}
@@ -1534,18 +1568,38 @@ function RitualPage({
                     )}
                   />
                 ) : (
-                  <div className="ritual-editor">
-                    {session === null
-                      ? <p className="ritual-state" role="status">正在准备编辑会话……</p>
-                      : (
-                        <RichTextEditor
-                          doc={document}
-                          locked={editorLocked}
-                          label={`${KIND_LABEL[kind]} 正文`}
-                          onUserChange={handleBodyChange}
-                        />
-                      )}
-                  </div>
+                  <>
+                    <input
+                      className="sj-ritual__title"
+                      type="text"
+                      aria-label="标题"
+                      placeholder={displayTitle(kind, effectiveDate, null)}
+                      value={title}
+                      disabled={disabled || session === null}
+                      onInput={chrome.onType}
+                      onChange={(event) => handleTitleChange(event.target.value)}
+                    />
+                    <div className="ritual-editor" onInput={chrome.onType}>
+                      {session === null
+                        ? <p className="ritual-state" role="status">正在准备编辑会话……</p>
+                        : (
+                          <RichTextEditor
+                            doc={document}
+                            locked={editorLocked}
+                            chromeHidden={chrome.hidden}
+                            label={`${KIND_LABEL[kind]} 正文`}
+                            onUserChange={handleBodyChange}
+                          />
+                        )}
+                    </div>
+                    <div className={`sj-ritual__status${statusCritical ? ' is-critical' : ''}`} role="status" aria-live="polite">
+                      <span>{session !== null ? statusLabel(sessionStatus) : '正在准备编辑会话……'}</span>
+                      {mirror.localState !== 'idle' && <span>{localStateLabel(mirror.localState)}</span>}
+                      {session !== null && !busy && dirty && <span>还有改动未提交</span>}
+                      {fileId === null && <span>写下正文后自动创建；空白不会产生记录</span>}
+                    </div>
+                    <p className="sj-ritual__quiet">类型与业务日期不可修改；标题与正文可以编辑。上海时间每日 04:00 换日，本页日期在打开草稿时固定。</p>
+                  </>
                 )}
               </>
             )}

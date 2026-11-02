@@ -32,6 +32,7 @@ import WritingAiPanel from '../components/WritingAiPanel'
 import { DraftConflictView, LocalDraftPanel, type DraftAction, type DraftPanelItem } from '../components/WritingDraftRecovery'
 import RichTextEditor, { type EditorSelectionInfo } from '../editor/RichTextEditor'
 import { useEditSession, useJournalDraftMirror } from '../hooks/useEditSession'
+import { useImmersiveChrome } from '../hooks/useImmersiveChrome'
 import type { FlushResult } from '../hooks/useAutosave'
 import type { AutoRange } from '../state/autoAi'
 import {
@@ -62,7 +63,6 @@ import {
   conflictHeadings,
   duplicateOfServer,
   filterWritingSessions,
-  formatBusinessDateLabel,
   hasUnsavedInput,
   idsWithLocalDrafts,
   isLegacyRecord,
@@ -98,6 +98,15 @@ export interface WritingPageProps {
    */
   initialFile?: { id: number; key: number } | null
   onInitialFileConsumed?: () => void
+  /**
+   * 可访问的返回入口（第二轮 UI）。
+   *
+   * 由 `App.tsx` 的 `navigate(() => changeModule('dashboard'))` 提供：
+   * 那样「先 flush 最新草稿再导航、flush 失败留在原地」的保护和左栏导航完全
+   * 一致，本页不自己发跳转、也不自己判断能否离开。
+   * 未接线时不渲染按钮（避免出现一个点了没反应的入口）。
+   */
+  onBack?: () => void
 }
 
 /** 当前正在编辑的草稿身份（切页返回时按它取回同一个会话）。 */
@@ -135,8 +144,10 @@ function WritingPage({
   onOpenLegacy,
   initialFile = null,
   onInitialFileConsumed,
+  onBack,
 }: WritingPageProps) {
   const store = editSessionStore
+  const chrome = useImmersiveChrome()
   const transport = useMemo(() => journalTransport({ journalKind: 'writing' }), [])
   const tabId = useMemo(
     () => injectedTabId ?? resolveTabId(browserSessionStorage(), newLocalId()),
@@ -168,6 +179,10 @@ function WritingPage({
   const [draftError, setDraftError] = useState('')
   const [draftNotice, setDraftNotice] = useState('')
   const [recoveryOpen, setRecoveryOpen] = useState(false)
+  /** 沉浸式布局的按需面板：今天列表 / 属性（日期与文件夹）/ AI 写作。 */
+  const [listOpen, setListOpen] = useState(false)
+  const [metaOpen, setMetaOpen] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
   const [plans, setPlans] = useState<Record<string, CandidatePlan>>({})
   const [busyKeys, setBusyKeys] = useState<string[]>([])
   const serverCache = useRef(new Map<number, Journal>())
@@ -326,6 +341,17 @@ function WritingPage({
     return () => clearTimeout(timer)
   }, [inputSeq, sessionId, store])
 
+  /**
+   * 真实输入（含中文 IME 上屏）才淡出辅助界面。
+   *
+   * 同时收起「今天」抽屉：它是一列真实占位的列表，淡出会留下一条看不见的
+   * 空白，正文就永远窄且右偏。用户要找回列表点顶栏「今天 N 篇」。
+   */
+  const handleTyping = useCallback(() => {
+    chrome.onType()
+    setListOpen(false)
+  }, [chrome])
+
   const display = session === null ? null : displayStatus(session)
   const dirty = display !== null && display !== 'saved'
 
@@ -404,6 +430,14 @@ function WritingPage({
   }, [sessionId, store])
 
   /* ------------------------------------------------------------ 动作 */
+  /**
+   * 草稿变化一律只写会话——**不**在这里触发沉浸式淡出。
+   *
+   * 编辑器挂载时会把服务端文档「回传」一次（`onUserChange`），全新草稿还会被
+   * 规范化成带空段落与节点 ID 的文档。按「内容变了就当用户输入」判断，会让
+   * 页面一打开就是淡出状态；按「与基线相等」判断，空草稿仍然会因为规范化而
+   * 误判。所以淡出只认正文/标题上的**真实 DOM 输入事件**（`onInput`）。
+   */
   const change = useCallback((next: DocumentDraft, origin: 'user_input' | 'system' = 'user_input') => {
     if (sessionId === null) return
     store.changeSession(sessionId, next, origin)
@@ -768,6 +802,15 @@ function WritingPage({
     [candidates],
   )
   /**
+   * 正在编辑的这份**不**进提醒条：它的本机镜像在输入时必然存在，
+   * 拿它当「还有未提交的草稿」等于每隔几秒在正文上方弹一次卡片。
+   * 草稿入口（顶栏按钮 + 面板）仍然包含它，不会丢可发现性。
+   */
+  const otherWritingDrafts = useMemo(() => {
+    const currentDraftId = active?.draftId ?? ''
+    return writingCandidates.filter((item) => item.draft_id !== currentDraftId)
+  }, [writingCandidates, active])
+  /**
    * 未取得服务器身份的记录**不需要探测**就能定性（`planCandidate` 只看记录本身）。
    * 这里预置它们的计划，让「创建未确认」的草稿一打开面板就显示「恢复原请求」，
    * 而不是先点一次「恢复」才暴露真正的动作；已有文件 id 的记录仍要等真实探测。
@@ -798,34 +841,62 @@ function WritingPage({
   /** 用户投影文本 U（不含 AI/系统节点）：AI 增量、去重与 apply 前置条件都用它。 */
   const draftUserText = session === null ? '' : userTextOf(session.draft.content_doc)
 
+  const dayLabel = businessDate === '' ? '──-──-──' : businessDate.slice(2)
+  /** 需要始终可被发现的状态：保存失败 / 冲突 / 本地草稿写不进去。 */
+  const statusCritical = display === 'failed' || display === 'conflict' || display === 'missing'
+    || session?.localState === 'failed'
+
   return (
-    <section className="writing-page" aria-label="速记">
-      <header className="writing-head">
-        <div>
-          <p className="writing-eyebrow">速记</p>
-          <h2 className="writing-title">
-            {businessDate === '' ? '今天' : formatBusinessDateLabel(businessDate)}
-          </h2>
-          <p className="writing-sub">普通日记，不限篇数 · 每天 04:00 换日（Asia/Shanghai）</p>
+    <section
+      className={`writing-page sj-write${chrome.hidden ? ' is-immersed' : ''}`}
+      aria-label="速记"
+      onPointerMove={chrome.reveal}
+      onKeyDown={chrome.onKeyDown}
+    >
+      <header className="sj-write__bar" onFocus={chrome.hold} onBlur={chrome.release}>
+        <div className="sj-write__ident">
+          {onBack !== undefined && (
+            <button type="button" className="sj-write__ghost sj-write__back" onClick={onBack} aria-label="返回概览">
+              ← 概览
+            </button>
+          )}
+          <time className="sj-write__date" dateTime={businessDate === '' ? undefined : businessDate}>{dayLabel}</time>
         </div>
-        <div className="writing-head-actions">
-          <button type="button" className="writing-primary" disabled={locked || dayStatus !== 'success'} onClick={startNew}>
-            新建一篇
+        <div className="sj-write__tools">
+          <button type="button" className="sj-write__ghost" aria-expanded={listOpen}
+            onClick={() => setListOpen((open) => !open)}>
+            今天 {today.total} 篇
           </button>
-          <button type="button" aria-expanded={recoveryOpen} onClick={() => {
+          <button type="button" className="sj-write__ghost" aria-expanded={aiOpen}
+            disabled={session === null} onClick={() => setAiOpen((open) => !open)}>
+            AI 写作
+          </button>
+          <button type="button" className="sj-write__ghost" aria-expanded={recoveryOpen} onClick={() => {
             setRecoveryOpen((open) => !open)
             void reloadDrafts()
           }}>
             本地草稿（{writingCandidates.length}）
+          </button>
+          <button type="button" className="sj-write__ghost" aria-expanded={metaOpen}
+            disabled={session === null} onClick={() => setMetaOpen((open) => !open)}>
+            属性
+          </button>
+          <button type="button" className="sj-write__save"
+            disabled={locked || !dirty || !savable} onClick={() => { void saveNow() }}>
+            保存
+          </button>
+          <button type="button" className="sj-write__ghost"
+            disabled={locked || dayStatus !== 'success'} onClick={startNew}>
+            新建
           </button>
         </div>
       </header>
 
       {notice !== '' && <p className="writing-notice" role="status">{notice}</p>}
 
-      {!recoveryOpen && writingCandidates.length > 0 && (
+      {!recoveryOpen && otherWritingDrafts.length > 0 && (
         <div className="writing-recovery-callout" role="status">
-          <p>本机还有 {writingCandidates.length} 份未提交的草稿（不含服务器已保存的内容）。</p>
+          <p>本机还有 {otherWritingDrafts.length} 份未提交的草稿（不含服务器已保存的内容）。</p>
           <p className="writing-hint">可以打开列表选择恢复、稍后处理或明确丢弃；不做选择时不会有任何自动写入。</p>
           <button type="button" onClick={() => { setRecoveryOpen(true); void reloadDrafts() }}>
             查看本地草稿
@@ -887,54 +958,57 @@ function WritingPage({
         />
       )}
 
-      <div className="writing-layout">
-        <aside className="writing-side" aria-label="今天的写作">
-          <div className="writing-side-head">
-            <h3>今天</h3>
-            <p>{listStatus === 'success' ? `共 ${today.total} 篇` : ''}</p>
-          </div>
-          {listStatus === 'loading' && <p className="writing-state" role="status">正在读取今天的写作……</p>}
-          {listStatus === 'error' && (
-            <div className="writing-state writing-state-error" role="alert">
-              <p>读取今天写作失败：{listError}</p>
-              <p className="writing-hint">重试只会重新读取，不会创建或修改任何文件。</p>
-              <button type="button" disabled={locked} onClick={() => { setListStatus('loading'); setListError(''); setListToken((value) => value + 1) }}>重新读取</button>
+      <div className={`sj-write__stage${listOpen ? ' has-drawer' : ''}`}>
+        {listOpen && (
+          <aside className="sj-write__drawer writing-side" aria-label="今天的写作">
+            <div className="writing-side-head">
+              <h3>今天</h3>
+              <p>{listStatus === 'success' ? `共 ${today.total} 篇` : ''}</p>
             </div>
-          )}
-          {listStatus === 'success' && today.items.length === 0 && (
-            <p className="writing-state">今天还没有写作。写下第一句就会创建，空白不会产生记录。</p>
-          )}
-          {listStatus === 'success' && today.items.length > 0 && (
-            <ul className="writing-items">
-              {today.items.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    className={`writing-item${selectedFileId === item.id ? ' is-current' : ''}`}
-                    aria-current={selectedFileId === item.id ? 'true' : undefined}
-                    disabled={locked}
-                    onClick={() => { void openExisting(item.id) }}
-                  >
-                    <span className="writing-item-title">{item.displayTitle}</span>
-                    {item.preview !== '' && <span className="writing-item-preview">{item.preview}</span>}
-                    <span className="writing-item-meta">
-                      版本 {item.revision}
-                      {localIds.has(item.id) ? ' · 本机有未提交草稿' : ''}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {listStatus === 'success' && today.total > 0 && (
-            <Pagination page={today.page} total={today.total} hasNext={today.hasNext}
-              onPageChange={(value) => { setListStatus('loading'); setListPage(value); setListToken((token) => token + 1) }}
-              disabled={locked} label="今天写作分页" />
-          )}
-          {today.hasNext && <p className="writing-hint">还有更多写作在下一页。</p>}
-        </aside>
+            {listStatus === 'loading' && <p className="writing-state" role="status">正在读取今天的写作……</p>}
+            {listStatus === 'error' && (
+              <div className="writing-state writing-state-error" role="alert">
+                <p>读取今天写作失败：{listError}</p>
+                <p className="writing-hint">重试只会重新读取，不会创建或修改任何文件。</p>
+                <button type="button" disabled={locked} onClick={() => { setListStatus('loading'); setListError(''); setListToken((value) => value + 1) }}>重新读取</button>
+              </div>
+            )}
+            {listStatus === 'success' && today.items.length === 0 && (
+              <p className="writing-state">今天还没有写作。写下第一句就会创建，空白不会产生记录。</p>
+            )}
+            {listStatus === 'success' && today.items.length > 0 && (
+              <ul className="writing-items">
+                {today.items.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      className={`writing-item${selectedFileId === item.id ? ' is-current' : ''}`}
+                      aria-current={selectedFileId === item.id ? 'true' : undefined}
+                      disabled={locked}
+                      onClick={() => { void openExisting(item.id) }}
+                    >
+                      <span className="writing-item-title">{item.displayTitle}</span>
+                      {item.preview !== '' && <span className="writing-item-preview">{item.preview}</span>}
+                      <span className="writing-item-meta">
+                        版本 {item.revision}
+                        {localIds.has(item.id) ? ' · 本机有未提交草稿' : ''}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {listStatus === 'success' && today.total > 0 && (
+              <Pagination page={today.page} total={today.total} hasNext={today.hasNext}
+                onPageChange={(value) => { setListStatus('loading'); setListPage(value); setListToken((token) => token + 1) }}
+                disabled={locked} label="今天写作分页" />
+            )}
+            {today.hasNext && <p className="writing-hint">还有更多写作在下一页。</p>}
+            <button type="button" className="sj-write__ghost" onClick={() => setListOpen(false)}>收起</button>
+          </aside>
+        )}
 
-        <div className="writing-main">
+        <div className="sj-write__paper">
           {dayStatus === 'loading' && <p className="writing-state" role="status">正在读取业务日期……</p>}
           {dayStatus === 'error' && (
             <div className="writing-state writing-state-error" role="alert">
@@ -968,31 +1042,81 @@ function WritingPage({
 
           {legacy === null && session !== null && (
             <>
-              <div className={`writing-status writing-status-${display ?? 'saved'}`} role="status" aria-live="polite">
-                <span className="writing-status-label">
+              {metaOpen && (
+                <div className="sj-write__meta" role="group" aria-label="日期与文件夹">
+                  <label className="sj-write__metafield">
+                    <span>日期</span>
+                    <input
+                      type="date"
+                      value={session.draft.date}
+                      disabled={locked}
+                      onChange={(event) => change({ ...session.draft, date: event.target.value })}
+                    />
+                  </label>
+                  <FolderSelect value={session.draft.folder_id} disabled={locked}
+                    onChange={(folderId) => change({ ...session.draft, folder_id: folderId })} />
+                </div>
+              )}
+
+              <input
+                className="sj-write__title"
+                type="text"
+                aria-label="标题（可留空）"
+                placeholder="标题（可留空）"
+                value={session.draft.title}
+                disabled={locked}
+                onInput={handleTyping}
+                onChange={(event) => change({ ...session.draft, title: event.target.value })}
+              />
+
+              <div
+                className="sj-write__body"
+                onInput={handleTyping}
+                onCompositionStart={() => { if (sessionId !== null) store.setComposing(sessionId, true) }}
+                onCompositionEnd={() => { if (sessionId !== null) store.setComposing(sessionId, false) }}
+              >
+                <RichTextEditor
+                  doc={session.draft.content_doc as ContentDocument | null}
+                  // 视图只读只跟外部写锁；本页显式动作（保存/新建）走 `locked`，
+                  // 避免保存状态变化重建编辑器、丢掉光标与正在进行的组合。
+                  readOnly={disabled}
+                  locked={busy}
+                  chromeHidden={chrome.hidden}
+                  label="速记正文"
+                  onUserChange={(document) => change({ ...session.draft, content_doc: document })}
+                  onSelection={onEditorSelection}
+                />
+              </div>
+
+              {/*
+                状态行永远不淡出：保存失败、版本冲突、本地草稿写不进去时必须能被发现。
+                正常状态下它只是很小的一行灰字。
+              */}
+              <div className={`sj-write__status${statusCritical ? ' is-critical' : ''}`} role="status" aria-live="polite">
+                <span className="sj-write__status-label">
                   {session.fileId === null && (display === 'saved' || display === 'unsaved')
                     ? '还没有保存到服务器'
                     : statusLabel(display ?? 'saved')}
                 </span>
-                <span className="writing-status-hint">
-                  {display === 'conflict' || display === 'failed' || display === 'missing'
+                <span className="sj-write__status-hint">
+                  {statusCritical
                     ? session.error
                     : session.fileId === null
                       ? '写下正文后自动创建；空白草稿不会产生服务器记录。'
                       : `文件 #${session.fileId} · 版本 ${session.revision ?? 0}`}
                 </span>
-                <span className="writing-status-local">{localStateLabel(session.localState)}</span>
+                <span className="sj-write__status-local">{localStateLabel(session.localState)}</span>
                 {display === 'failed' && (
-                  <button type="button" disabled={locked} onClick={() => { void store.retry(sessionId as string) }}>重试保存</button>
+                  <button type="button" className="sj-write__ghost" disabled={locked} onClick={() => { void store.retry(sessionId as string) }}>重试保存</button>
                 )}
                 {display === 'conflict' && session.fileId !== null && (
-                  <button type="button" disabled={locked}
+                  <button type="button" className="sj-write__ghost" disabled={locked}
                     onClick={() => { void loadServerForSessionConflict(session.fileId as number) }}>
                     对照服务器版本
                   </button>
                 )}
                 {display === 'missing' && (
-                  <button type="button" disabled={locked} onClick={() => {
+                  <button type="button" className="sj-write__ghost" disabled={locked} onClick={() => {
                     const record = records.find((item) => item.file_id === session.fileId)
                     if (record !== undefined) openAsNewDraft(record)
                     else setNotice('服务器上已没有这篇；本地输入仍在编辑器里，可以复制到新草稿。')
@@ -1000,85 +1124,36 @@ function WritingPage({
                 )}
               </div>
 
-              <div className="writing-editor">
-                <label className="writing-field">
-                  <span>标题（可留空）</span>
-                  <input
-                    type="text"
-                    value={session.draft.title}
-                    disabled={locked}
-                    placeholder="给今天起个标题，也可以留空"
-                    onChange={(event) => change({ ...session.draft, title: event.target.value })}
-                  />
-                </label>
-                <label className="writing-field">
-                  <span>日期</span>
-                  <input
-                    type="date"
-                    value={session.draft.date}
-                    disabled={locked}
-                    onChange={(event) => change({ ...session.draft, date: event.target.value })}
-                  />
-                </label>
-                <div className="writing-field">
-                  <span>正文</span>
-                  <div
-                    onCompositionStart={() => { if (sessionId !== null) store.setComposing(sessionId, true) }}
-                    onCompositionEnd={() => { if (sessionId !== null) store.setComposing(sessionId, false) }}
-                  >
-                    <RichTextEditor
-                      doc={session.draft.content_doc as ContentDocument | null}
-                      // 视图只读只跟外部写锁；本页显式动作（立即保存/新建）走 `locked`，
-                      // 避免保存状态变化重建编辑器、丢掉光标与正在进行的组合。
-                      readOnly={disabled}
-                      locked={busy}
-                      label="写作正文"
-                      onUserChange={(document) => change({ ...session.draft, content_doc: document })}
-                      onSelection={onEditorSelection}
-                    />
-                  </div>
-                </div>
-                <FolderSelect value={session.draft.folder_id} disabled={locked}
-                  onChange={(folderId) => change({ ...session.draft, folder_id: folderId })} />
-                {tooLong && (
-                  <p className="writing-hint" role="alert">
-                    正文超过 50,000 个字符（按 Unicode 码点），暂不提交；内容仍保留在编辑器里。
-                  </p>
-                )}
-                {!savable && !tooLong && (
-                  <p className="writing-hint" role="status">空白正文不会提交，也不会创建空记录。</p>
-                )}
-                <div className="writing-actions">
-                  <button type="button" className="writing-primary"
-                    disabled={locked || !dirty || !savable}
-                    onClick={() => { void saveNow() }}>
-                    立即保存
-                  </button>
-                  <button type="button" disabled={locked} onClick={startNew}>新建一篇</button>
-                </div>
-              </div>
+              {tooLong && (
+                <p className="writing-hint" role="alert">
+                  正文超过 50,000 个字符（按 Unicode 码点），暂不提交；内容仍保留在编辑器里。
+                </p>
+              )}
+              {!savable && !tooLong && (
+                <p className="sj-write__quiet" role="status">空白正文不会提交，也不会创建空记录。</p>
+              )}
 
               {/*
-                AI 写作面板（T09）。
-                这里**不把 `locked` 传给它**：`locked` 含本页 `busy`（保存动作中），
-                而 AI 的「在途」语义明确允许继续写、允许切页。
-                只有页面级全局写锁 `disabled` 会禁用入口。
+                AI 写作面板：只在需要时展开，但始终挂载——在途请求与结果不因收起而丢。
+                这里不传 `locked`（含本页 busy），只有页面级写锁 `disabled` 会禁用入口。
               */}
-              <WritingAiPanel
-                sessionId={sessionId}
-                fileId={session.fileId}
-                userText={draftUserText}
-                editorDocument={session.draft.content_doc}
-                saved={display === 'saved'}
-                userInputSeq={session.userInputSeq}
-                composing={session.imeComposing}
-                settings={aiSettings}
-                selection={aiSelection}
-                disabled={disabled}
-                store={store}
-                onNotice={setNotice}
-                onReloadSettings={() => setAiSettingsToken((value) => value + 1)}
-              />
+              <div className={`sj-write__ai${aiOpen ? '' : ' is-collapsed'}`} aria-hidden={!aiOpen}>
+                <WritingAiPanel
+                  sessionId={sessionId}
+                  fileId={session.fileId}
+                  userText={draftUserText}
+                  editorDocument={session.draft.content_doc}
+                  saved={display === 'saved'}
+                  userInputSeq={session.userInputSeq}
+                  composing={session.imeComposing}
+                  settings={aiSettings}
+                  selection={aiSelection}
+                  disabled={disabled}
+                  store={store}
+                  onNotice={setNotice}
+                  onReloadSettings={() => setAiSettingsToken((value) => value + 1)}
+                />
+              </div>
             </>
           )}
         </div>

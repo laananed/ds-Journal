@@ -1,0 +1,835 @@
+{
+  "app": "http://127.0.0.1:5411/",
+  "summary": {
+    "S1-bullet-marker": {
+      "taskLists": 1,
+      "taskItems": 1,
+      "bulletLists": 0,
+      "orderedLists": 0,
+      "checkboxes": 1,
+      "checked": [
+        false
+      ],
+      "text": [
+        "买牛奶买牛奶"
+      ],
+      "savedTypes": [
+        "doc",
+        "taskList",
+        "taskItem",
+        "paragraph",
+        "text(买牛奶)"
+      ]
+    },
+    "S2-plain-marker": {
+      "taskLists": 1,
+      "taskItems": 1,
+      "bulletLists": 0,
+      "orderedLists": 0,
+      "checkboxes": 1,
+      "checked": [
+        false
+      ],
+      "text": [
+        "独立清单独立清单"
+      ],
+      "savedTypes": [
+        "doc",
+        "taskList",
+        "taskItem",
+        "paragraph",
+        "text(独立清单)"
+      ]
+    },
+    "S3-ordered-marker": {
+      "taskLists": 1,
+      "taskItems": 1,
+      "bulletLists": 0,
+      "orderedLists": 0,
+      "checkboxes": 1,
+      "checked": [
+        false
+      ],
+      "text": [
+        "有序清单有序清单"
+      ],
+      "savedTypes": [
+        "doc",
+        "taskList",
+        "taskItem",
+        "paragraph",
+        "text(有序清单)"
+      ]
+    },
+    "S4-checked-marker": {
+      "taskLists": 1,
+      "taskItems": 1,
+      "bulletLists": 0,
+      "orderedLists": 0,
+      "checkboxes": 1,
+      "checked": [
+        true
+      ],
+      "text": [
+        "已完成已完成"
+      ],
+      "savedTypes": [
+        "doc",
+        "taskList",
+        "taskItem",
+        "paragraph",
+        "text(已完成)"
+      ]
+    },
+    "S5-enter-splits": {
+      "taskLists": 1,
+      "taskItems": 2,
+      "bulletLists": 0,
+      "orderedLists": 0,
+      "checkboxes": 2,
+      "checked": [
+        false,
+        false
+      ],
+      "text": [
+        "第一件第一件第二件第二件"
+      ],
+      "savedTypes": [
+        "doc",
+        "taskList",
+        "taskItem",
+        "paragraph",
+        "text(第一件)",
+        "taskItem",
+        "paragraph",
+        "text(第二件)"
+      ]
+    },
+    "S6-toggle-undo-redo": {
+      "taskLists": 1,
+      "taskItems": 1,
+      "bulletLists": 0,
+      "orderedLists": 0,
+      "checkboxes": 1,
+      "checked": [
+        true
+      ],
+      "text": [
+        "待勾选待勾选"
+      ],
+      "savedTypes": [
+        "doc",
+        "taskList",
+        "taskItem",
+        "paragraph",
+        "text(待勾选)"
+      ]
+    },
+    "S7-bullets-preserved": {
+      "taskLists": 1,
+      "taskItems": 1,
+      "bulletLists": 1,
+      "orderedLists": 0,
+      "checkboxes": 1,
+      "checked": [
+        false
+      ],
+      "text": [
+        "第一项第二项",
+        "第三项第三项"
+      ],
+      "savedTypes": [
+        "doc",
+        "bulletList",
+        "listItem",
+        "paragraph",
+        "text(第一项)",
+        "listItem",
+        "paragraph",
+        "text(第二项)",
+        "taskList",
+        "taskItem",
+        "paragraph",
+        "text(第三项)"
+      ]
+    },
+    "S8-paste-not-converted": {
+      "taskLists": 0,
+      "taskItems": 0,
+      "bulletLists": 0,
+      "orderedLists": 0,
+      "checkboxes": 0,
+      "checked": [],
+      "text": [
+        "- [ ] 粘贴进来的内容"
+      ],
+      "savedTypes": [
+        "doc",
+        "paragraph",
+        "text(- [ ] 粘贴进来的内容)"
+      ]
+    },
+    "S9-literal-preserved": {
+      "taskLists": 0,
+      "taskItems": 0,
+      "bulletLists": 0,
+      "orderedLists": 0,
+      "checkboxes": 0,
+      "checked": [],
+      "text": [
+        "- [ ] 老数据里的字面文本"
+      ],
+      "savedTypes": null
+    },
+    "S10-ime-simulated": {
+      "duringComposition": {
+        "writes": 0,
+        "text": "pinyin"
+      },
+      "afterCommit": {
+        "writes": 1,
+        "text": "中文",
+        "saved": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": "51f248b4-ff84-4502-b8a8-c87470384727"
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "中文"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "note": "CDP imeSetComposition 模拟，非真实 Windows 输入法"
+    },
+    "S11-reload-persist": {
+      "taskLists": 1,
+      "taskItems": 1,
+      "bulletLists": 0,
+      "orderedLists": 0,
+      "checkboxes": 1,
+      "checked": [
+        true
+      ],
+      "text": [
+        "已完成的项已完成的项"
+      ],
+      "savedTypes": null
+    }
+  },
+  "raw": {
+    "S1-bullet-marker": {
+      "dom": {
+        "top": [
+          {
+            "tag": "ul",
+            "type": "taskList",
+            "items": [
+              null
+            ],
+            "text": "买牛奶买牛奶",
+            "checked": [
+              false
+            ]
+          }
+        ],
+        "taskLists": 1,
+        "taskItems": 1,
+        "bulletLists": 0,
+        "orderedLists": 0,
+        "checkboxes": 1
+      },
+      "saved": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "taskList",
+            "attrs": {
+              "id": "b713b16f-8799-4d0f-83c1-5f1ec4b340cb"
+            },
+            "content": [
+              {
+                "type": "taskItem",
+                "attrs": {
+                  "id": "b1476fa0-37eb-469d-93cf-7744cf3a2916",
+                  "checked": false
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "id": "5ee28615-ea04-48a6-b75b-932cc9c00f56"
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "买牛奶"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "S2-plain-marker": {
+      "dom": {
+        "top": [
+          {
+            "tag": "ul",
+            "type": "taskList",
+            "items": [
+              null
+            ],
+            "text": "独立清单独立清单",
+            "checked": [
+              false
+            ]
+          }
+        ],
+        "taskLists": 1,
+        "taskItems": 1,
+        "bulletLists": 0,
+        "orderedLists": 0,
+        "checkboxes": 1
+      },
+      "saved": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "taskList",
+            "attrs": {
+              "id": "e6a751b4-1dc6-4843-9e44-335b4788a405"
+            },
+            "content": [
+              {
+                "type": "taskItem",
+                "attrs": {
+                  "id": "800a45d2-c0e1-41dd-9e74-77ace8fcefbf",
+                  "checked": false
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "id": "a98d77ba-9df9-4607-b463-6dd161249f91"
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "独立清单"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "S3-ordered-marker": {
+      "dom": {
+        "top": [
+          {
+            "tag": "ul",
+            "type": "taskList",
+            "items": [
+              null
+            ],
+            "text": "有序清单有序清单",
+            "checked": [
+              false
+            ]
+          }
+        ],
+        "taskLists": 1,
+        "taskItems": 1,
+        "bulletLists": 0,
+        "orderedLists": 0,
+        "checkboxes": 1
+      },
+      "saved": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "taskList",
+            "attrs": {
+              "id": "ee6911f3-772e-4d61-9c29-bc0cfeb22132"
+            },
+            "content": [
+              {
+                "type": "taskItem",
+                "attrs": {
+                  "id": "f575798b-8e0c-4d17-b36c-c46bb3b94c16",
+                  "checked": false
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "id": "d2939da6-b3d5-4bb4-bc58-538b5f6396f5"
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "有序清单"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "S4-checked-marker": {
+      "dom": {
+        "top": [
+          {
+            "tag": "ul",
+            "type": "taskList",
+            "items": [
+              null
+            ],
+            "text": "已完成已完成",
+            "checked": [
+              true
+            ]
+          }
+        ],
+        "taskLists": 1,
+        "taskItems": 1,
+        "bulletLists": 0,
+        "orderedLists": 0,
+        "checkboxes": 1
+      },
+      "saved": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "taskList",
+            "attrs": {
+              "id": "2fbc346c-6fe9-4459-b788-1b208986a166"
+            },
+            "content": [
+              {
+                "type": "taskItem",
+                "attrs": {
+                  "id": "ffb369de-2c14-4d2a-b99e-ad7a43845ab2",
+                  "checked": true
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "id": "7a28a741-e556-4726-bfd6-df90979b8cd6"
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "已完成"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "S5-enter-splits": {
+      "dom": {
+        "top": [
+          {
+            "tag": "ul",
+            "type": "taskList",
+            "items": [
+              null,
+              null
+            ],
+            "text": "第一件第一件第二件第二件",
+            "checked": [
+              false,
+              false
+            ]
+          }
+        ],
+        "taskLists": 1,
+        "taskItems": 2,
+        "bulletLists": 0,
+        "orderedLists": 0,
+        "checkboxes": 2
+      },
+      "saved": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "taskList",
+            "attrs": {
+              "id": "abcbe672-4798-4c69-838f-8d16530ec67c"
+            },
+            "content": [
+              {
+                "type": "taskItem",
+                "attrs": {
+                  "id": "11b316e9-2739-41c8-99f8-8b530f3ea8c8",
+                  "checked": false
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "id": "d06f35f2-a3de-4b26-8980-ece8be630f4a"
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "第一件"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "taskItem",
+                "attrs": {
+                  "id": "33857b19-8f36-4aa0-9485-1d33f347e9ba",
+                  "checked": false
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "id": "0b221a13-1458-414f-9287-1f2596e3ba61"
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "第二件"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "S6-toggle-undo-redo": {
+      "dom": {
+        "top": [
+          {
+            "tag": "ul",
+            "type": "taskList",
+            "items": [
+              null
+            ],
+            "text": "待勾选待勾选",
+            "checked": [
+              true
+            ]
+          }
+        ],
+        "taskLists": 1,
+        "taskItems": 1,
+        "bulletLists": 0,
+        "orderedLists": 0,
+        "checkboxes": 1
+      },
+      "saved": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "taskList",
+            "attrs": {
+              "id": "eefc0791-4e6e-4695-9e3d-9c1988f63b03"
+            },
+            "content": [
+              {
+                "type": "taskItem",
+                "attrs": {
+                  "id": "6c05bae5-c848-4c7b-ae2b-a182c9d1fb15",
+                  "checked": true
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "id": "baeb5b4e-e4b7-4fe3-ae20-93fe44247229"
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "待勾选"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "beforeToggle": [
+        false
+      ],
+      "afterCheck": [
+        true
+      ],
+      "afterUncheck": [
+        false
+      ],
+      "afterUndo": [
+        false
+      ],
+      "afterRedo": [
+        true
+      ]
+    },
+    "S7-bullets-preserved": {
+      "dom": {
+        "top": [
+          {
+            "tag": "ul",
+            "type": null,
+            "items": [
+              null,
+              null
+            ],
+            "text": "第一项第二项",
+            "checked": []
+          },
+          {
+            "tag": "ul",
+            "type": "taskList",
+            "items": [
+              null
+            ],
+            "text": "第三项第三项",
+            "checked": [
+              false
+            ]
+          }
+        ],
+        "taskLists": 1,
+        "taskItems": 1,
+        "bulletLists": 1,
+        "orderedLists": 0,
+        "checkboxes": 1
+      },
+      "saved": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "bulletList",
+            "attrs": {
+              "id": "e7d1cc56-64d6-4cb1-940d-62f78fefaebd"
+            },
+            "content": [
+              {
+                "type": "listItem",
+                "attrs": {
+                  "id": "303e158a-141b-494d-8e09-f2e310290cd8"
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "id": "c8c7b057-7b43-4ac4-8ef7-5c5857167651"
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "第一项"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "listItem",
+                "attrs": {
+                  "id": "c3fc0ed7-c712-4a8f-afc0-ca7c5a0704b5"
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "id": "f33b36b5-eb62-439a-949f-bdcee4abc381"
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "第二项"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "taskList",
+            "attrs": {
+              "id": "c299c711-c535-40f4-ac2d-cad91d1cef73"
+            },
+            "content": [
+              {
+                "type": "taskItem",
+                "attrs": {
+                  "id": "655357d2-18b5-4d61-9a13-be422fcc8895",
+                  "checked": false
+                },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": {
+                      "id": "8cde8fe5-5906-4b5c-8705-8385b88a7140"
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "第三项"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "S8-paste-not-converted": {
+      "dom": {
+        "top": [
+          {
+            "tag": "p",
+            "type": null,
+            "items": [],
+            "text": "- [ ] 粘贴进来的内容",
+            "checked": []
+          }
+        ],
+        "taskLists": 0,
+        "taskItems": 0,
+        "bulletLists": 0,
+        "orderedLists": 0,
+        "checkboxes": 0
+      },
+      "saved": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "5ab5c7f2-a4dc-48c8-89d9-23d436a110d5"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "- [ ] 粘贴进来的内容"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "S9-literal-preserved": {
+      "dom": {
+        "top": [
+          {
+            "tag": "p",
+            "type": null,
+            "items": [],
+            "text": "- [ ] 老数据里的字面文本",
+            "checked": []
+          }
+        ],
+        "taskLists": 0,
+        "taskItems": 0,
+        "bulletLists": 0,
+        "orderedLists": 0,
+        "checkboxes": 0
+      },
+      "saved": null
+    },
+    "S10-ime-simulated": {
+      "duringComposition": {
+        "writes": 0,
+        "text": "pinyin"
+      },
+      "afterCommit": {
+        "writes": 1,
+        "text": "中文",
+        "saved": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": "51f248b4-ff84-4502-b8a8-c87470384727"
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "中文"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "note": "CDP imeSetComposition 模拟，非真实 Windows 输入法"
+    },
+    "S11-reload-persist": {
+      "dom": {
+        "top": [
+          {
+            "tag": "ul",
+            "type": "taskList",
+            "items": [
+              null
+            ],
+            "text": "已完成的项已完成的项",
+            "checked": [
+              true
+            ]
+          }
+        ],
+        "taskLists": 1,
+        "taskItems": 1,
+        "bulletLists": 0,
+        "orderedLists": 0,
+        "checkboxes": 1
+      },
+      "saved": null
+    }
+  },
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+}

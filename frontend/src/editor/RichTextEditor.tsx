@@ -19,7 +19,7 @@
  * 目标同步属于 T07，AI 执行/应用属于 T08。本组件是纯受控视图。
  */
 
-import { useCallback, useEffect, useReducer, useRef } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { Extension, type Editor, type JSONContent } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
@@ -56,6 +56,14 @@ export interface RichTextEditorProps {
   /** 可访问名称，例如「正文」「日记正文」。 */
   label?: string
   className?: string
+  /**
+   * 沉浸式编辑（第二轮 UI）：为 true 时淡出工具栏，只留正文。
+   *
+   * 这是**纯视觉**开关：不重建实例、不换 DOM、不改变可编辑性，
+   * 因此不会丢焦点、不会打断输入法组合。工具栏仍留在原位并可被键盘聚焦；
+   * 焦点落进工具栏时会自动重新显示（见组件内部 `toolbarFocused`）。
+   */
+  chromeHidden?: boolean
 }
 
 const TEXTBLOCKS = new Set(['paragraph', 'heading'])
@@ -201,7 +209,12 @@ function requestLink(editor: Editor): void {
   editor.chain().focus().extendMarkRange('link').setLink({ href }).run()
 }
 
-function Toolbar({ editor, locked = false }: { editor: Editor; locked?: boolean }) {
+function Toolbar({ editor, locked = false, onFocus, onBlur }: {
+  editor: Editor
+  locked?: boolean
+  onFocus?: () => void
+  onBlur?: () => void
+}) {
   const [, bump] = useReducer((value: number) => value + 1, 0)
   useEffect(() => {
     const update = () => bump()
@@ -235,7 +248,7 @@ function Toolbar({ editor, locked = false }: { editor: Editor; locked?: boolean 
   ]
 
   return (
-    <div className="s4-toolbar" role="toolbar" aria-label="正文格式">
+    <div className="s4-toolbar" role="toolbar" aria-label="正文格式" onFocus={onFocus} onBlur={onBlur}>
       {buttons.map((button) => (
         <button
           key={button.title}
@@ -257,9 +270,12 @@ function Toolbar({ editor, locked = false }: { editor: Editor; locked?: boolean 
 }
 
 function RichTextEditor({
-  doc, readOnly = false, locked = false, onUserChange, onSelection, onLink, label, className,
+  doc, readOnly = false, locked = false, onUserChange, onSelection, onLink, label, className, chromeHidden = false,
 }: RichTextEditorProps) {
   const editableNow = !readOnly && !locked
+  // 焦点进入工具栏时暂停淡出：否则键盘用户 Tab 过去会落在看不见的按钮上。
+  const [toolbarFocused, setToolbarFocused] = useState(false)
+  const fadeToolbar = chromeHidden && !toolbarFocused
   const changeHandler = useRef(onUserChange)
   const selectionHandler = useRef(onSelection)
   useEffect(() => {
@@ -355,8 +371,15 @@ function RichTextEditor({
   if (editor === null) return null
 
   return (
-    <div className={`s4-editor${readOnly ? ' is-readonly' : ''}${locked ? ' is-locked' : ''}${className === undefined ? '' : ` ${className}`}`}>
-      {!readOnly && <Toolbar editor={editor} locked={locked} />}
+    <div className={`s4-editor${readOnly ? ' is-readonly' : ''}${locked ? ' is-locked' : ''}${fadeToolbar ? ' is-immersed' : ''}${className === undefined ? '' : ` ${className}`}`}>
+      {!readOnly && (
+        <Toolbar
+          editor={editor}
+          locked={locked}
+          onFocus={() => setToolbarFocused(true)}
+          onBlur={() => setToolbarFocused(false)}
+        />
+      )}
       <EditorContent editor={editor} />
     </div>
   )
