@@ -1,0 +1,369 @@
+/*
+ * 「记录」时间线样式（UI 调整第三轮）。
+ *
+ * 参考图 8：顶部药丸形「日 / 周 / 月 / 年」切换；左侧一条细时间线，
+ * 日期节点是小蓝点；同一天的记录是宽松、圆角、浅灰底的卡片，
+ * 卡片带「计划 / 复盘 / 速记」小标识。
+ *
+ * 颜色策略（与第一轮首页一致）：
+ *   - 日期节点与小标签的时间线蓝色用固定值（#5563e6 系），不跟随主题反转；
+ *   - 其余底色、文字、边框取外壳 `--sj-*` 变量，自动跟随浅色 / 深色主题。
+ */
+
+.rt {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  max-width: 640px;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 4px 0 48px;
+}
+
+/* ---------------- 顶部「日 / 周 / 月 / 年」切换 ---------------- */
+
+.rt-switch {
+  display: inline-flex;
+  gap: 4px;
+  align-self: center;
+  padding: 4px;
+  border: 1px solid var(--sj-border);
+  border-radius: 999px;
+  background: var(--sj-bg-soft);
+}
+
+.rt-switch-tab {
+  padding: 7px 22px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sj-text-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background-color 130ms ease, color 130ms ease;
+}
+
+.rt-switch-tab:hover:not(:disabled) {
+  color: var(--sj-text);
+}
+
+.rt-switch-tab[aria-pressed='true'] {
+  background: var(--sj-surface);
+  color: var(--sj-text);
+  font-weight: 650;
+  box-shadow: 0 1px 5px rgb(32 33 36 / 14%);
+}
+
+/* ---------------- 范围条：‹ 参考区间 › + 回到今天 ---------------- */
+
+.rt-rangebar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 34px;
+}
+
+.rt-range-label {
+  min-width: 0;
+  color: var(--sj-text);
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: center;
+}
+
+.rt-range-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0 0 3px;
+  border: 1px solid var(--sj-border);
+  border-radius: 50%;
+  background: var(--sj-surface);
+  color: var(--sj-text-muted);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.rt-range-step:hover:not(:disabled) {
+  color: var(--sj-text);
+  border-color: var(--sj-border-strong);
+}
+
+.rt-range-today {
+  padding: 5px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sj-accent-soft);
+  color: var(--sj-accent);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ---------------- 时间线与日期节点 ---------------- */
+
+.rt-groups {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  margin: 0;
+  padding: 2px 0 2px 26px;
+  list-style: none;
+}
+
+/* 左侧细时间线 */
+.rt-groups::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 5px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--sj-border);
+}
+
+.rt-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rt-node {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.rt-dot {
+  position: absolute;
+  top: 50%;
+  left: -26px;
+  width: 12px;
+  height: 12px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: #5563e6;
+  /* 白色外圈把节点从时间线上托出来 */
+  box-shadow: 0 0 0 3px var(--sj-bg);
+}
+
+.rt-date {
+  margin: 0;
+  color: var(--sj-text);
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+/* ---------------- 记录卡片 ---------------- */
+
+.rt-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rt-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 18px 22px 20px;
+  border: 1px solid var(--sj-border);
+  border-radius: 16px;
+  background: var(--sj-bg-soft);
+  color: var(--sj-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 130ms ease, background-color 130ms ease;
+}
+
+.rt-card:hover:not(:disabled) {
+  border-color: var(--sj-border-strong);
+  background: var(--sj-surface-muted);
+}
+
+.rt-card:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+
+.rt-card[disabled] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.rt-card-summary {
+  color: var(--sj-text);
+  font-size: 14.5px;
+  line-height: 1.66;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------- 类型标识 ---------------- */
+
+.rt-tag {
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.rt-tag--writing {
+  border: 1px solid var(--sj-border);
+  background: var(--sj-surface-muted);
+  color: var(--sj-text-muted);
+}
+
+.rt-tag--set {
+  background: #e6e9fc;
+  color: #4a56d8;
+}
+
+.rt-tag--end {
+  background: #ddf3e7;
+  color: #1e6b43;
+}
+
+/* ---------------- 计数 / 加载更多 / 状态 ---------------- */
+
+.rt-count {
+  margin: 0;
+  color: var(--sj-text-soft);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.rt-more {
+  display: flex;
+  justify-content: center;
+}
+
+.rt-more button {
+  padding: 9px 24px;
+  border: 1px solid var(--sj-border);
+  border-radius: 999px;
+  background: var(--sj-surface);
+  color: var(--sj-text);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.rt-more button:hover:not(:disabled) {
+  border-color: var(--sj-border-strong);
+}
+
+.rt-more button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.rt-state {
+  margin: 0;
+  padding: 42px 0;
+  color: var(--sj-text-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.rt-state-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 22px;
+  border: 1px solid var(--sj-danger-border);
+  border-radius: 16px;
+  background: var(--sj-danger-bg);
+  color: var(--sj-danger);
+}
+
+.rt-state-error p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.rt-state-error button {
+  padding: 8px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sj-inverse-bg);
+  color: var(--sj-inverse-text);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+/* ---------------- 焦点可见性 ---------------- */
+
+.rt-switch-tab:focus-visible,
+.rt-range-step:focus-visible,
+.rt-range-today:focus-visible,
+.rt-more button:focus-visible,
+.rt-state-error button:focus-visible {
+  outline: 3px solid var(--sj-focus);
+  outline-offset: 1px;
+}
+
+.rt-card:focus-visible {
+  outline: 3px solid var(--sj-focus);
+  outline-offset: 2px;
+}
+
+/* ---------------- 窄屏 ---------------- */
+
+@media (max-width: 520px) {
+  .rt {
+    gap: 14px;
+    padding-bottom: 32px;
+  }
+  .rt-switch-tab {
+    padding: 6px 14px;
+    font-size: 13.5px;
+  }
+  .rt-groups {
+    gap: 20px;
+    padding-left: 20px;
+  }
+  .rt-groups::before {
+    left: 4px;
+  }
+  .rt-dot {
+    left: -20px;
+  }
+  .rt-card {
+    padding: 14px 16px 16px;
+    border-radius: 14px;
+  }
+  .rt-card-summary {
+    font-size: 14px;
+  }
+  .rt-rangebar {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rt-switch-tab,
+  .rt-card {
+    transition: none;
+  }
+}
