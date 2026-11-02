@@ -12,7 +12,10 @@ import InsightDrafts from '../components/InsightDrafts'
 import MarkdownContent from '../components/MarkdownContent'
 import Pagination from '../components/Pagination'
 import RichTextEditor from '../editor/RichTextEditor.tsx'
+import { listFolders } from '../api/folders'
 import type { Insight, InsightPage as InsightPageData } from '../types/insight'
+import type { Folder } from '../types/folder'
+import './InsightPage.css'
 import type { ContentDocument } from '../types/document'
 import type { FlushResult } from '../hooks/useAutosave'
 import { useEditSession, useEditSessionActions } from '../hooks/useEditSession'
@@ -72,6 +75,17 @@ import { nearestValidPage } from '../utils/pagination'
  *   等价转换；服务端只接受这一种转换，其余一律 409 `legacy_conversion_required`。
  * - **创建幂等**：AI 草稿种子带稳定 `createKey`，重试/重放回同一份文件；
  *   「另加一份」换新键（沿用 S3-T10 语义）。
+ *
+ * wb/ui-4 视觉重做边界（2026-11-02）：
+ *
+ * - 列表态新增蓝色视觉区、Folder 分类入口（复用既有 `GET /api/folders` 与
+ *   `listInsights(folder_id)` 过滤，均为既有只读能力）与「长期分析」占位卡
+ *   （性格 / 反复话题 / 建议当前无真实能力，明确标注「尚未生成 · 暂不可用」，
+ *   不展示虚构分析，不新增模型调用或后台分析）。
+ * - 所有新样式在 `InsightPage.css` 的 `.insight-page` 命名空间内，
+ *   不修改共享编辑器、App.tsx、AppShell 或其他页面文件；
+ *   既有功能（列表、打开、编辑、保存、AI 草稿入口、本地草稿恢复、
+ *   冲突提示、legacy 查看）行为不变。
  */
 export interface InsightDraftRequest {
   seed: InsightDraftSeed
@@ -821,6 +835,9 @@ function InsightPage({
   const [listStatus, setListStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [listError, setListError] = useState('')
   const [listRevision, setListRevision] = useState(0)
+  // 视觉重做（wb/ui-4）：用既有 Folder 作为真实「分类」；只读 GET，不新增后端能力。
+  const [folders, setFolders] = useState<Folder[]>([])
+  const [listFolder, setListFolder] = useState<number | null>(null)
 
   const [notice, setNotice] = useState('')
   const [actionError, setActionError] = useState('')
@@ -867,7 +884,7 @@ function InsightPage({
 
   useEffect(() => {
     const controller = new AbortController()
-    listInsights(undefined, listPage, controller.signal).then((data) => {
+    listInsights(listFolder ?? undefined, listPage, controller.signal).then((data) => {
       if (controller.signal.aborted) return
       const validPage = nearestValidPage(data.page, data.total)
       if (validPage !== data.page) {
@@ -883,7 +900,20 @@ function InsightPage({
       setListStatus('error')
     })
     return () => controller.abort()
-  }, [listPage, listRevision])
+  }, [listPage, listRevision, listFolder])
+
+  // Folder 列表只读拉取一次；失败时只保留「全部」分类，不阻塞页面，也不重试轰炸。
+  useEffect(() => {
+    const controller = new AbortController()
+    listFolders(controller.signal).then((data) => {
+      if (controller.signal.aborted) return
+      setFolders(data)
+    }).catch(() => {
+      if (controller.signal.aborted) return
+      setFolders([])
+    })
+    return () => controller.abort()
+  }, [])
 
   function beginListLoading() {
     setListStatus('loading')
@@ -951,6 +981,15 @@ function InsightPage({
       setListPage(value)
     })
   }
+  /** 分类切换：只改列表过滤条件；分类入口来自既有 Folder，切换本身零写入。 */
+  function changeListFolder(folderId: number | null) {
+    onNavigate(() => {
+      showList()
+      beginListLoading()
+      setListFolder(folderId)
+      setListPage(1)
+    })
+  }
 
   function handleCreated(id: number) {
     // 列表身份只用于高亮；Dirty 与写队列仍归面板内的会话。
@@ -969,23 +1008,90 @@ function InsightPage({
 
   return (
     <section className="insight-page" aria-label="Insight 模块">
-      <section className="app-toolbar" aria-label="Insight 工具">
-        <button type="button" onClick={newInsight} disabled={busy}>新建 Insight</button>
-        <button type="button" onClick={() => onNavigate(showList)} disabled={busy}>Insight 列表</button>
-      </section>
+      {/* 列表态：蓝色视觉区（参考图 9）。按钮是既有 newInsight 入口，行为不变。 */}
+      {panel.kind === 'list' && (
+        <section className="insight-hero" aria-label="洞察介绍">
+          <p className="insight-hero-eyebrow">洞察</p>
+          <h2 className="insight-hero-title">把散落的想法，攒成长期的认知</h2>
+          <p className="insight-hero-sub">
+            Insight 收录你在记录与复盘中沉淀的观点；没有所属日期，随时回看、继续打磨。
+          </p>
+          <div className="insight-hero-actions">
+            <button type="button" className="insight-hero-new" onClick={newInsight} disabled={busy}>
+              新建 Insight
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* 详情 / 编辑态：保留原工具条入口，便于直接切换。 */}
+      {panel.kind !== 'list' && (
+        <section className="app-toolbar" aria-label="Insight 工具">
+          <button type="button" onClick={newInsight} disabled={busy}>新建 Insight</button>
+          <button type="button" onClick={() => onNavigate(showList)} disabled={busy}>Insight 列表</button>
+        </section>
+      )}
 
       {notice && <p className="detail-success" role="status">{notice}</p>}
       {actionError && <p className="detail-error" role="alert">{actionError}</p>}
 
+      {/* 分类入口：既有 Folder 即真实分类；Folder 读取失败时只剩「全部」，不影响列表。 */}
+      {panel.kind === 'list' && (
+        <nav className="insight-cats" aria-label="Insight 分类">
+          <button type="button" className="insight-cat" aria-pressed={listFolder === null}
+            onClick={() => changeListFolder(null)} disabled={busy}>全部</button>
+          {folders.map((folder) => (
+            <button key={folder.id} type="button" className="insight-cat"
+              aria-pressed={listFolder === folder.id}
+              onClick={() => changeListFolder(folder.id)} disabled={busy}>{folder.name}</button>
+          ))}
+        </nav>
+      )}
+
+      {/* 长期分析（性格 / 反复话题 / 建议）：系统当前没有这些真实能力，
+          明确标注「尚未生成 · 暂不可用」，不展示任何虚构分析内容。 */}
+      {panel.kind === 'list' && (
+        <section className="insight-analysis" aria-label="长期分析（暂不可用）">
+          <ul className="insight-analysis-grid">
+            <li className="insight-analysis-card">
+              <div className="insight-analysis-head">
+                <span className="insight-analysis-name">性格分析</span>
+                <span className="insight-analysis-badge">尚未生成</span>
+              </div>
+              <p className="insight-analysis-desc">基于长期记录的性格特质概览。该分析当前暂不可用，界面不会用虚构内容代替你的真实分析。</p>
+            </li>
+            <li className="insight-analysis-card">
+              <div className="insight-analysis-head">
+                <span className="insight-analysis-name">反复话题</span>
+                <span className="insight-analysis-badge">尚未生成</span>
+              </div>
+              <p className="insight-analysis-desc">从写作中提炼最常出现的主题。该分析当前暂不可用，界面不会用虚构内容代替你的真实分析。</p>
+            </li>
+            <li className="insight-analysis-card">
+              <div className="insight-analysis-head">
+                <span className="insight-analysis-name">建议</span>
+                <span className="insight-analysis-badge">尚未生成</span>
+              </div>
+              <p className="insight-analysis-desc">根据记录给出的可行动建议。该分析当前暂不可用，界面不会用虚构内容代替你的真实分析。</p>
+            </li>
+          </ul>
+        </section>
+      )}
+
       {/* 本机未提交草稿的恢复入口：只在本机，恢复前不会写入服务器。 */}
       {panel.kind === 'list' && localDrafts.length > 0 && (
-        <section className="detail-hint" aria-label="未提交的 Insight 草稿">
-          <p>发现 {localDrafts.length} 份未提交的 Insight 草稿（只存在本机，恢复后仍需保存才会写入服务器）：</p>
+        <section className="insight-local-drafts" aria-label="未提交的 Insight 草稿">
+          <p className="insight-local-drafts-title">发现 {localDrafts.length} 份未提交的 Insight 草稿</p>
+          <p className="insight-local-drafts-hint">只存在本机，恢复后仍需保存才会写入服务器。</p>
           <ul>
             {localDrafts.map((record) => (
               <li key={record.record_key}>
-                {record.title.trim() === '' ? '未命名 Insight' : record.title}
-                {` · ${record.file_id === null ? '新建' : '已有记录'} · ${formatDraftTime(record.saved_at)} `}
+                <span className="insight-local-draft-name">
+                  {record.title.trim() === '' ? '未命名 Insight' : record.title}
+                </span>
+                <span className="insight-local-draft-meta">
+                  {` ${record.file_id === null ? '新建' : '已有记录'} · ${formatDraftTime(record.saved_at)}`}
+                </span>
                 <button type="button" onClick={() => restoreLocalDraft(record)}>恢复</button>
                 <button type="button" onClick={() => discardLocalDraft(record)}>丢弃</button>
               </li>
@@ -1017,6 +1123,13 @@ function InsightPage({
           onClose={() => onNavigate(showList)} />
       )}
 
+      {panel.kind === 'list' && listStatus === 'success' && listResult && listResult.items.length > 0 && (
+        <div className="insight-list-head">
+          <h3 className="insight-list-title">{listFolder === null ? '全部 Insight' : '该分类下的 Insight'}</h3>
+          <span className="insight-list-count">共 {listResult.total} 条</span>
+        </div>
+      )}
+
       <section className="journal-results" aria-label="Insight 列表">
         {listStatus === 'loading' && <p className="app-state" role="status">加载中……</p>}
         {listStatus === 'error' && (
@@ -1028,7 +1141,9 @@ function InsightPage({
         {listStatus === 'success' && listResult && (
           <>
             {listResult.items.length === 0
-              ? <p className="app-state">还没有任何 Insight 记录。</p>
+              ? <p className="app-state">{listFolder === null
+                ? '还没有任何 Insight 记录。从上面的「新建 Insight」开始，或把复盘里的 AI 草稿添加进来。'
+                : '这个分类下还没有 Insight。'}</p>
               : (
                 <ul className="journal-list">
                   {listResult.items.map((insight) => (
