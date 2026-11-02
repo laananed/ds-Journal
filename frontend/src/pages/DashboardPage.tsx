@@ -4,7 +4,7 @@
  * 产品边界（`docs/stage4.md` §4）：
  * - 按当前**业务日期**展示今天的入口，业务日期由服务端按 Asia/Shanghai 04:00 计算，
  *   前端不拿浏览器本地日期替代；
- * - 「速记 / 计划 / 复盘」只是入口：**打开页面不创建任何文件**，
+ * - 「速记 / 日程管理」只是入口：**打开页面不创建任何文件**，
  *   当天已有记录时进入的是同一份记录（同业务日 Ritual 唯一约束不被突破）；
  * - 首页是入口集合，不自动生成「今日汇总」或其他文件；
  * - 重新读取只重新 GET，不产生写入。
@@ -13,8 +13,7 @@
  * 与 `App.tsx` 传入，所有会写库的动作只能来自用户点击并交回上层回调。
  *
  * 视觉（用户提供的参考图 3）：大面积留白、内容居中、白色背景；
- * 上方醒目的「速记」入口，下方一块蓝色渐变主卡片，卡内左「计划」右「复盘」，
- * 两者是白色按钮；当天没有有效计划时「复盘」为浅白禁用态并给出简短原因。
+ * 上方是「速记」入口，下方蓝色卡片提供日程管理入口。
  */
 
 import './DashboardPage.css'
@@ -36,7 +35,7 @@ export type DashboardWritingItem = {
  * 某一种 Ritual 的今日状态。
  *
  * `absent` 表示今天还没有有效文件——此时**不得**为了展示而创建草稿；
- * 用户点「计划 / 复盘」后由上层的 Ritual 页面决定是否落库（首次有效正文才创建）。
+ * 用户点「日程管理」后由上层的计划页面决定是否落库（首次有效正文才创建）。
  */
 export type DashboardRitualSlot =
   | { state: 'absent' }
@@ -107,13 +106,6 @@ function PencilIcon() {
   )
 }
 
-/** 卡片内的一句状态说明：既是可见原因，也是禁用按钮的 `aria-describedby` 目标。 */
-function ritualNote(setExists: boolean, endExists: boolean): string {
-  if (endExists) return '今天已经复盘过了，可以随时回来继续。'
-  if (setExists) return '计划已记录，今晚可以回来复盘。'
-  return '今天还没有计划，完成计划后即可复盘。'
-}
-
 function DashboardPage({
   status,
   today,
@@ -122,20 +114,11 @@ function DashboardPage({
   onRetry,
   onQuickNote,
   onOpenPlan,
-  onOpenReview,
 }: DashboardPageProps) {
   const view = today
   const writingsCount = view === null ? 0 : view.writings.length
   const setExists = view !== null && view.rituals.set.state === 'exists'
-  const endExists = view !== null && view.rituals.end.state === 'exists'
-
-  /*
-   * 「先计划后复盘」在本轮只作用于首页入口：没有有效计划时复盘按钮为禁用。
-   * 例外是今天已经存在复盘记录——历史复盘（含从回收箱恢复的）必须仍然可读可继续，
-   * 否则等于用入口禁用删掉了已有内容的访问路径。此处不涉及后端强制限制。
-   */
-  const reviewAllowed = setExists || endExists
-  const note = ritualNote(setExists, endExists)
+  const note = setExists ? '今天已有计划，可以继续编辑。' : '写下今天想完成的事。'
 
   const dateLabel = view === null ? '今天' : formatBusinessDate(view.businessDate)
   const shiftLabel = view === null
@@ -184,7 +167,7 @@ function DashboardPage({
           <section className="dash-hero dash-hero--error" role="alert">
             <p className="dash-hero-eyebrow">今天的记录</p>
             <h1 className="dash-hero-title">今天的数据不完整</h1>
-            <p className="dash-hero-sub">服务端返回的今日数据不完整，暂时无法给出计划与复盘入口。</p>
+            <p className="dash-hero-sub">服务端返回的今日数据不完整，暂时无法打开日程管理。</p>
             <p className="dash-hero-note">重新读取只会再次查询，不会创建任何文件。</p>
             <div className="dash-actions">
               <button type="button" className="dash-action dash-action--solo" onClick={onRetry}>
@@ -198,21 +181,12 @@ function DashboardPage({
           <>
             <section className="dash-hero" aria-labelledby="dash-hero-title">
               <p className="dash-hero-eyebrow">{dateLabel}</p>
-              <h1 className="dash-hero-title" id="dash-hero-title">先计划，再复盘</h1>
-              <p className="dash-hero-sub">用几句话写下今天想完成的事，晚上再回来收个尾。</p>
+              <h1 className="dash-hero-title" id="dash-hero-title">日程管理</h1>
+              <p className="dash-hero-sub">用几句话写下今天想完成的事。</p>
 
               <div className="dash-actions">
                 <button type="button" className="dash-action" disabled={disabled} onClick={onOpenPlan}>
-                  计划
-                </button>
-                <button
-                  type="button"
-                  className="dash-action dash-action--muted"
-                  disabled={disabled || !reviewAllowed}
-                  aria-describedby="dash-hero-note"
-                  onClick={onOpenReview}
-                >
-                  复盘
+                  日程管理
                 </button>
               </div>
 

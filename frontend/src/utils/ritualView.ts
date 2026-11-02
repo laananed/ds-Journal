@@ -44,7 +44,7 @@ export const QUESTION_TEXT_LIMIT = 500
  * 「AI 复盘」（多篇源复盘）是另一个功能，不要复用这里的「复盘」。
  */
 export const KIND_LABEL: Record<RitualKind, string> = {
-  set: '计划',
+  set: '日程管理',
   end: '复盘',
 }
 
