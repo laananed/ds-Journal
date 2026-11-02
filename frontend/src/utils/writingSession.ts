@@ -392,7 +392,7 @@ export function planCandidate(record: LocalJournalDraft, probe: ServerDraftProbe
 /** 候选来源标签：同一标签与「其他标签」要区分，避免误以为自己刚写的东西消失了。 */
 export function candidateOriginLabel(candidate: DraftCandidate, currentTabId: string): string {
   const own = candidate.tab_id === currentTabId ? '本标签' : '其他标签'
-  const kindLabel = candidate.journal_kind === 'writing' ? '写作' : candidate.journal_kind === 'set' ? '开始今天' : '结束今天'
+  const kindLabel = candidate.journal_kind === 'writing' ? '速记' : candidate.journal_kind === 'set' ? '计划' : '复盘'
   return `${own} · ${kindLabel}`
 }
 

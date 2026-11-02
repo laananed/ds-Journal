@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import {
+  draftHasContent,
   editSessionStore,
   type DocumentDraft,
   type EditSession,
@@ -176,29 +177,18 @@ function toRecord(
 /** 仅供 `toRecord` 使用的必填化类型。 */
 
 /**
- * 文档里有没有任何用户可见文字（只看 `type: 'text'` 的 `text`）。
- *
- * 不能直接遍历所有字符串：段落的 `attrs.id` 也是字符串，会把空文档判成有内容。
- */
-function documentHasText(node: unknown): boolean {
-  if (typeof node !== 'object' || node === null) return false
-  const record = node as Record<string, unknown>
-  if (record.type === 'text') return typeof record.text === 'string' && record.text.trim() !== ''
-  if (Array.isArray(record.content)) return record.content.some(documentHasText)
-  return false
-}
-
-/**
  * 空草稿（无标题、无正文、也没有已发出的创建请求）不写本地记录。
  *
  * 编辑器挂载时会把初始文档同步进会话（`system` 来源），这会推进输入序号；
  * 若照写不误，每次打开写作页都会留下一份「空的本机草稿」，
  * 恢复面板会把它们当成待恢复内容，用户也不知道该恢复什么。
+ *
+ * 「空白」与 `planWrite` 使用同一个判定（`draftHasContent`），
+ * 两处口径必须一致：否则要么留下空记录，要么把空白误报成保存失败。
  */
 function isEmptyDraft(session: EditSession): boolean {
   if (session.firstRequest !== null) return false
-  if (session.draft.title.trim() !== '') return false
-  return !documentHasText(session.draft.content_doc)
+  return !draftHasContent(session.draft)
 }
 /**
  * 把会话草稿镜像到浏览器本地。

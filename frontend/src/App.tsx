@@ -5,6 +5,7 @@ import { listJournals } from './api/journals'
 import { searchFiles } from './api/search'
 import { journalSearchConditions } from './utils/homeSearch'
 import AppShell from './components/AppShell'
+import AppNav, { PageShortcuts, type AppNavItem } from './components/AppNav'
 import DashboardPage from './pages/DashboardPage'
 import WritingPage from './pages/WritingPage'
 import RitualPage from './pages/RitualPage'
@@ -41,11 +42,11 @@ const schedulesClient = createHttpSchedulesClient()
  * 接线原则（`docs/stage4-tasks.md` §5「文件所有权与交接」、本次用户指令）：
  * - 外壳只提供布局、响应式与外观；导航点击、「先保存再跳转」仍由本文件的
  *   `navigate` / `registerFlush` 负责，没有第二套导航或保存逻辑；
- * - 既有模块（所有日记/收件箱/复盘/洞察/全部搜索/回收箱/文件夹/设置）原样保留，
+ * - 既有模块（记录/历史收件箱/AI 复盘/洞察/搜索/回收箱/文件夹/设置）原样保留，
  *   它们的面板、卸载 flush、删除与链接解析行为都不变；
- * - 尚未交付的功能（开始今天 / 结束今天的独立编辑页属 T10）**不伪造**：
- *   点击只给明确说明，不创建任何记录，也不放 Mock 数据冒充真实接线；
- * - 概览与写作都只读或走既有会话队列，进入页面本身不产生写入。
+ * - 「计划 / 复盘」是 Ritual 页面（T10）的两个入口，只在首页卡片出现；
+ *   点击进入的是当天的同一份记录，创建时机仍由 Ritual 页面按「首次有效正文」决定；
+ * - 概览与速记都只读或走既有会话队列，进入页面本身不产生写入。
  */
 type Module =
   | 'dashboard'
@@ -64,28 +65,36 @@ type Module =
 type Panel = { kind: 'list' } | { kind: 'create'; key: number } | { kind: 'detail'; file: FileIdentity; key: number }
 
 /**
- * 主导航顺序按「今天 → 写作 → 归档与查找」排列。
- * 「开始今天 / 结束今天」不在这里：它们是 Ritual 页面（T10）的入口，
- * 本轮只在概览卡片上出现，不提供未实现的导航项。
+ * 导航（UI 调整第一轮）。
+ *
+ * 命名统一：Writing → 速记、Set The Day → 计划、End The Day → 复盘；
+ * 原「多篇 AI 复盘」改名「AI 复盘」，与「复盘（End）」区分，两者不共用入口。
+ *
+ * 左侧图标栏只放四个主入口；日程、AI 复盘、历史收件箱、文件夹收进「更多」，
+ * 搜索 / 设置 / 回收箱在页面右下角。**入口只搬位置，功能与数据都不删除。**
  */
-const modules: { id: Module; label: string }[] = [
-  { id: 'dashboard', label: '概览' },
-  { id: 'writing', label: '写作' },
-  { id: 'set', label: '开始今天' },
-  { id: 'end', label: '结束今天' },
-  { id: 'schedule', label: '日程' },
-  { id: 'journal', label: '所有日记' },
-  { id: 'inbox', label: '历史收件箱' },
-  { id: 'review', label: '复盘' },
-  { id: 'insight', label: '洞察' },
-  { id: 'search', label: '全部搜索' },
-  { id: 'trash', label: '回收箱' },
-  { id: 'folder', label: '文件夹' },
-  { id: 'settings', label: '设置' },
+const navItems: ReadonlyArray<AppNavItem<Module>> = [
+  { id: 'dashboard', label: '概览', icon: 'overview' },
+  { id: 'writing', label: '速记', icon: 'quick' },
+  { id: 'journal', label: '记录', icon: 'records' },
+  { id: 'insight', label: '洞察', icon: 'insight' },
 ]
 
-/** 写作页的一次性「打开某篇」请求；由 WritingPage 消费后清空。 */
-type WritingOpenRequest = { id: number; key: number }
+const overflowItems: ReadonlyArray<AppNavItem<Module>> = [
+  { id: 'schedule', label: '日程', icon: 'schedule' },
+  { id: 'review', label: 'AI 复盘', icon: 'review' },
+  { id: 'inbox', label: '历史收件箱', icon: 'inbox' },
+  { id: 'folder', label: '文件夹', icon: 'folder' },
+]
+
+const shortcutItems: ReadonlyArray<AppNavItem<Module>> = [
+  { id: 'search', label: '搜索', icon: 'search' },
+  { id: 'settings', label: '设置', icon: 'settings' },
+  { id: 'trash', label: '回收箱', icon: 'trash' },
+]
+
+/** 「更多」里包含的模块：用于给触发按钮加高亮，不影响选中语义。 */
+const overflowIds: ReadonlyArray<Module> = overflowItems.map((item) => item.id)
 
 /**
  * 今日概览模块。
@@ -96,10 +105,9 @@ type WritingOpenRequest = { id: number; key: number }
  */
 function DashboardModule(props: {
   disabled: boolean
-  onNewWriting: () => void
-  onOpenWriting: (id: number) => void
-  onStartRitual: (kind: 'set' | 'end') => void
-  onOpenRitual: (kind: 'set' | 'end', id: number) => void
+  onQuickNote: () => void
+  onOpenPlan: () => void
+  onOpenReview: () => void
 }) {
   const overview = useTodayOverview()
   return (
@@ -109,10 +117,9 @@ function DashboardModule(props: {
       error={overview.error}
       disabled={props.disabled}
       onRetry={overview.reload}
-      onNewWriting={props.onNewWriting}
-      onOpenWriting={props.onOpenWriting}
-      onStartRitual={props.onStartRitual}
-      onOpenRitual={props.onOpenRitual}
+      onQuickNote={props.onQuickNote}
+      onOpenPlan={props.onOpenPlan}
+      onOpenReview={props.onOpenReview}
     />
   )
 }
@@ -167,10 +174,6 @@ function App() {
   // T09：详情页「复盘这篇」的一次性预选源；ReviewPage 消费后清空。
   const [reviewSeed, setReviewSeed] = useState<{ source: ReviewSource; key: number } | null>(null)
   const consumeReviewSeed = useCallback(() => setReviewSeed(null), [])
-  // T06：概览的今日写作点击后，交给写作页打开那一篇（一次性请求）。
-  const [writingOpen, setWritingOpen] = useState<WritingOpenRequest | null>(null)
-  const consumeWritingOpen = useCallback(() => setWritingOpen(null), [])
-  const writingKey = useRef(0)
 
   useEffect(() => {
     if (module !== 'journal') return
@@ -313,19 +316,14 @@ function App() {
   }
 
   /**
-   * 概览 → 写作：切到写作模块并让 WritingPage 打开指定文件。
+   * 首页「速记」入口：切到速记模块。
    *
    * 这里不自己读详情、不自己建会话：写作页会用 T02 的 `openSession` 复用/打开
-   * 同一篇的会话（含未提交输入），并走同一条保存队列。
+   * 今天已有的会话（含未提交输入），并走同一条保存队列；
+   * 只有真实用户正文才会首次 POST，点击入口本身不创建记录。
    */
-  function openWriting(id: number) {
-    navigate(() => {
-      dirtyRef.current = false
-      setNotice('')
-      writingKey.current += 1
-      setWritingOpen({ id, key: writingKey.current })
-      setModule('writing')
-    })
+  function openQuickNote() {
+    changeModule('writing')
   }
 
   /**
@@ -449,37 +447,38 @@ function App() {
   const uiLocked = busy || aiLocked
 
   /**
-   * 导航槽内容：品牌、新建入口、模块导航。
+   * 导航槽内容：品牌标识 + 主入口图标栏 + 「更多」。
    *
-   * 外层带 `app app-embedded`：`.app` 只作为按钮/输入框的基础样式命名空间，
-   * 布局交给 AppShell（见 App.css 末尾的接线说明）。导航的点击语义仍是
-   * `changeModule` → `navigate`，与接线前完全一致。
+   * 点击语义仍然是 `changeModule` → `navigate`（先 flush 最新草稿再跳转），
+   * 与改版前完全一致；图标栏只换表现，不换导航与保存逻辑。
    */
   const navigation = (
-    <div className="app app-embedded app-nav-host">
-      <header className="app-header">
-        <h1>SeekJournal</h1>
-        <p className="app-subtitle">记录经历与思考</p>
-      </header>
-      <button
-        className="home-new"
-        type="button"
-        disabled={uiLocked}
-        onClick={() => { if (module === 'journal') newJournal(); else navigate(() => { dirtyRef.current = false; setNotice(''); setModule('journal'); setPanel({ kind: 'create', key: editorKey + 1 }); setEditorKey(editorKey + 1); beginLoading() }) }}
-      >
-        新建记录
-      </button>
-      <nav className="app-navigation" aria-label="模块导航">
-        {modules.map((item) => (
-          <button key={item.id} type="button" aria-pressed={module === item.id}
-            disabled={uiLocked} onClick={() => changeModule(item.id)}>{item.label}</button>
-        ))}
-      </nav>
-    </div>
+    <AppNav
+      items={navItems}
+      overflow={overflowItems}
+      overflowLabel="更多"
+      active={module}
+      overflowActive={overflowIds.includes(module)}
+      disabled={uiLocked}
+      onSelect={changeModule}
+      onHome={() => changeModule('dashboard')}
+    />
   )
 
   return (
-    <AppShell navigation={navigation} context={null} aside={null}>
+    <AppShell
+      navigation={navigation}
+      context={null}
+      aside={null}
+      shortcuts={
+        <PageShortcuts
+          items={shortcutItems}
+          active={module}
+          disabled={uiLocked}
+          onSelect={changeModule}
+        />
+      }
+    >
       <div className="app app-embedded">
         <div className="app-content">
 
@@ -490,10 +489,9 @@ function App() {
           {module === 'dashboard' && (
             <DashboardModule
               disabled={uiLocked}
-              onNewWriting={() => changeModule('writing')}
-              onOpenWriting={openWriting}
-              onStartRitual={openRitual}
-              onOpenRitual={(kind) => openRitual(kind)}
+              onQuickNote={openQuickNote}
+              onOpenPlan={() => openRitual('set')}
+              onOpenReview={() => openRitual('end')}
             />
           )}
 
@@ -503,8 +501,6 @@ function App() {
               onDirtyChange={setDirty}
               onFlushReady={registerFlush}
               onOpenLegacy={openLegacyJournal}
-              initialFile={writingOpen}
-              onInitialFileConsumed={consumeWritingOpen}
             />
           )}
 
@@ -559,15 +555,17 @@ function App() {
           {module === 'journal' && (
             <>
               {panel.kind === 'list' && <>
-                <div className="home-heading"><h2>{homeQuery ? '搜索结果' : '所有日记'}</h2><span>{homeQuery ? (homeStatus === 'success' ? `${homeResult?.total ?? 0} 条匹配` : '') : (status === 'success' ? `${result?.total ?? 0} 篇日记` : '')}</span></div>
+                <div className="home-heading"><h2>{homeQuery ? '搜索结果' : '记录'}</h2><span>{homeQuery ? (homeStatus === 'success' ? `${homeResult?.total ?? 0} 条匹配` : '') : (status === 'success' ? `${result?.total ?? 0} 篇记录` : '')}</span></div>
                 <form className="home-search" onSubmit={(event) => { event.preventDefault(); const value = homeInput.trim(); setHomePage(1); setHomeQuery(value); if (value === homeQuery && value) setHomeRevision((v) => v + 1) }}>
-                  <label className="sr-only" htmlFor="home-search">搜索日记标题和正文</label>
-                  <input id="home-search" type="search" value={homeInput} onChange={(event) => setHomeInput(event.target.value)} placeholder="搜索日记标题和正文" />
+                  <label className="sr-only" htmlFor="home-search">搜索记录标题和正文</label>
+                  <input id="home-search" type="search" value={homeInput} onChange={(event) => setHomeInput(event.target.value)} placeholder="搜索记录标题和正文" />
                   <button type="submit">搜索</button>
                 </form>
                 {homeQuery && <button className="clear-search" type="button" onClick={() => { setHomeQuery(''); setHomeInput(''); setHomePage(1) }}>清除搜索</button>}
               </>}
-              {panel.kind === 'list' && !homeQuery && <section className="app-toolbar" aria-label="日记列表工具">
+              {/* 图标导航收窄后，「新建记录」从导航栏移到列表工具条，功能不变 */}
+              {panel.kind === 'list' && !homeQuery && <section className="app-toolbar" aria-label="记录列表工具">
+                <button className="home-new" type="button" disabled={uiLocked} onClick={() => newJournal()}>新建记录</button>
                 <label className="app-filter">
                   <span>按日期查看</span>
                   <input type="date" value={filterDate} disabled={uiLocked}

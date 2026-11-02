@@ -799,10 +799,10 @@ function WritingPage({
   const draftUserText = session === null ? '' : userTextOf(session.draft.content_doc)
 
   return (
-    <section className="writing-page" aria-label="写作">
+    <section className="writing-page" aria-label="速记">
       <header className="writing-head">
         <div>
-          <p className="writing-eyebrow">写作</p>
+          <p className="writing-eyebrow">速记</p>
           <h2 className="writing-title">
             {businessDate === '' ? '今天' : formatBusinessDateLabel(businessDate)}
           </h2>

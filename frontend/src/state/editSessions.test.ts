@@ -90,6 +90,15 @@ function doc(text = ''): unknown {
   }
 }
 
+/** 与速记页 `writingSavable` 同口径的最小替身：正文里有没有可见文字。 */
+function hasUserText(value: unknown): boolean {
+  const node = value as { type?: unknown; text?: unknown; content?: unknown } | null
+  if (node === null || typeof node !== 'object') return false
+  if (node.type === 'text') return typeof node.text === 'string' && node.text.trim() !== ''
+  if (Array.isArray(node.content)) return node.content.some(hasUserText)
+  return false
+}
+
 function draft(overrides: Partial<DocumentDraft> = {}): DocumentDraft {
   return { title: '', content_doc: doc(''), date: '2026-10-30', folder_id: null, ...overrides }
 }
@@ -590,6 +599,69 @@ async function testRunFileCommand(): Promise<void> {
   const blocked = await store.saveToSequence('s1')
   expectEqual(blocked, { kind: 'blocked', reason: 'invalid' }, '不可提交时不发请求')
   expectEqual(calls.length, 0, '不可提交时零请求')
+}
+
+/**
+ * 第一轮独立测试缺陷 1 的判定层回归。
+ *
+ * 全新速记会话的基线是 `content_doc: null`；编辑器挂载后会把空文档规范化成
+ * `{type:'doc', content:[…]}`（结构不同、文字仍为空）。若把它当成「有改动但不合法」
+ * 就会返回 `blocked/invalid`，上层按保存失败处理 → 离开被「最新改动还没保存成功」拦截。
+ * 真正空白 ≠ 保存失败：必须判 `idle`，但**不得**放宽有内容 / 已失败 / 有在途创建的情况。
+ */
+{
+  const { transport, calls } = manualTransport()
+  const store = createEditSessionStore()
+  store.openSession({
+    sessionId: 'blank', type: 'journal', tabId: 'tab-1',
+    draft: { ...draft(), content_doc: null },
+    transport, isSavable: (value) => hasUserText(value.content_doc),
+  })
+  // 编辑器挂载：规范化后的空文档，只有空段落与 ID，没有任何文字。
+  store.changeSession('blank', { ...draft(), content_doc: doc('') }, 'user_input')
+  const session = store.getSession('blank')
+  check(session !== null, '空白会话已建立')
+  expectEqual(planWrite(session!), { kind: 'idle' }, '空白新草稿判为无需保存')
+  expectEqual(await store.saveToSequence('blank'), { kind: 'clean' }, '空白新草稿不阻断离开')
+  expectEqual(calls.length, 0, '空白新草稿零请求')
+}
+
+{
+  // 同一口径下不能误放：只有标题仍是「有输入但不可保存」，必须阻断并保留内容。
+  const { transport, calls } = manualTransport()
+  const store = createEditSessionStore()
+  store.openSession({
+    sessionId: 'title-only', type: 'journal', tabId: 'tab-1',
+    draft: { ...draft(), content_doc: null },
+    transport, isSavable: (value) => hasUserText(value.content_doc),
+  })
+  store.changeSession('title-only', { ...draft({ title: '只有标题' }), content_doc: doc('') }, 'user_input')
+  expectEqual(await store.saveToSequence('title-only'), { kind: 'blocked', reason: 'invalid' },
+    '只有标题的新草稿仍阻断离开（不静默丢弃输入）')
+  expectEqual(calls.length, 0, '不可保存时不发请求')
+}
+
+{
+  // 已冻结的首次创建请求优先于「现在看起来是空白」：重放才能取回丢失的 ID。
+  const replayKey = '11111111-2222-4333-8444-555555555555'
+  const { transport } = manualTransport()
+  const store = createEditSessionStore()
+  store.openSession({
+    sessionId: 'replay', type: 'journal', tabId: 'tab-1',
+    draft: { ...draft(), content_doc: null },
+    transport, isSavable: (value) => hasUserText(value.content_doc),
+    firstRequest: {
+      client_create_id: replayKey,
+      draft: draft({ content_doc: doc('先写了内容') }),
+      extras: null,
+      seq: 1,
+    },
+    resumedInputSeq: 1,
+  })
+  store.changeSession('replay', { ...draft(), content_doc: doc('') }, 'user_input')
+  const decision = planWrite(store.getSession('replay')!)
+  check(decision.kind === 'create' && decision.request.client_create_id === replayKey,
+    '空白外观下仍重放已冻结的创建请求，不退化成 idle')
 }
 
 {

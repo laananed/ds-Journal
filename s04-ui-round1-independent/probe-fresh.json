@@ -1,0 +1,62 @@
+{
+  "cases": [
+    {
+      "name": "virgin-速记-离开",
+      "entry": "速记",
+      "entered": {
+        "text": "写作 2026年11月1日 周日 普通日记，不限篇数 · 每天 04:00 换日（Asia/Shanghai） 新建一篇 本地草稿（0） 今天 共 0 篇 今天还没有写作。写下第一句就会创建，空白不会产生记录。 还没有保存到服务器 写下正文后自动创建；空白草稿不会产生服务器记录。 本地草稿待写入…… 标题（可留空） 日期 正文 B I S",
+        "current": [
+          "速记"
+        ],
+        "requests": [
+          "GET /api/business-day",
+          "GET /api/journals",
+          "GET /api/rituals",
+          "GET /api/ai/settings",
+          "GET /api/business-day",
+          "GET /api/journals",
+          "GET /api/folders"
+        ]
+      },
+      "back": {
+        "dialogOpen": true,
+        "dialogTitle": "最新改动还没保存成功，确定离开？",
+        "current": [
+          "速记"
+        ],
+        "title": null,
+        "requests": []
+      }
+    },
+    {
+      "name": "virgin-计划(无记录)-离开",
+      "entry": "计划",
+      "entered": {
+        "text": "开始今天 · 业务日 2026-11-01 开始今天 2026-11-01 未保存 上海时间每日 04:00 换日；本页的日期在打开草稿时固定，不会因为跨过 04:00 自动跳转。 未提交到服务器 本地草稿待写入…… 当前问题模板 开始今天 2026-11-01 · 0 / 4 点击「插入正文」才会把当时的文字写进正文；之后修改模板不会改",
+        "current": [],
+        "requests": [
+          "GET /api/business-day",
+          "GET /api/journals",
+          "GET /api/rituals",
+          "GET /api/business-day",
+          "GET /api/rituals",
+          "GET /api/ritual-templates",
+          "GET /api/trash"
+        ]
+      },
+      "back": {
+        "dialogOpen": false,
+        "dialogTitle": "当前内容尚未保存，确定离开？",
+        "current": [
+          "概览"
+        ],
+        "title": "先计划，再复盘",
+        "requests": [
+          "GET /api/business-day",
+          "GET /api/journals",
+          "GET /api/rituals"
+        ]
+      }
+    }
+  ]
+}

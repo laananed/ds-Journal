@@ -255,6 +255,28 @@ export function draftHasChanges(draft: DocumentDraft, baseline: DocumentDraft): 
   return !draftEquals(draft, baseline)
 }
 
+/**
+ * 草稿里有没有用户真正填过的内容（标题文字或正文文字）。
+ *
+ * 「空白」只看**文字**：编辑器挂载会把 `content_doc: null` 规范化成带空段落、
+ * 带节点 ID 的空文档。结构不同但一个字也没有，这不是用户输入，也不该被当成
+ * 「有改动但保存失败」——否则全新草稿离开时会被误拦（第一轮独立测试缺陷 1）。
+ *
+ * 不能把所有字符串都当内容：段落 `attrs.id` 也是字符串，会把空文档判成有内容。
+ */
+export function draftHasContent(draft: DocumentDraft): boolean {
+  if (draft.title.trim() !== '') return true
+  return documentHasText(draft.content_doc)
+}
+
+function documentHasText(node: unknown): boolean {
+  if (typeof node !== 'object' || node === null) return false
+  const record = node as Record<string, unknown>
+  if (record.type === 'text') return typeof record.text === 'string' && record.text.trim() !== ''
+  if (Array.isArray(record.content)) return record.content.some(documentHasText)
+  return false
+}
+
 /** 只包含真实变化的补丁；空标题提交为 null（清空）。 */
 export function draftPatch(draft: DocumentDraft, baseline: DocumentDraft): DraftPatch {
   const patch: DraftPatch = {}
@@ -505,6 +527,10 @@ export function planWrite(session: EditSession): WriteDecision {
       }
     }
     if (draftEquals(session.draft, session.baseline)) return { kind: 'idle' }
+    // 新会话还没写过任何字：判 `idle`（无需保存），不是 `invalid`。
+    // 这里**只**覆盖「文字为空」这一种情况；有标题/正文但不可保存、保存失败、
+    // 409 冲突、写入在途仍由上面的状态判断与下面的 `isSavable` 拦截。
+    if (!draftHasContent(session.draft)) return { kind: 'idle' }
     if (session.isSavable !== null && !session.isSavable(session.draft)) {
       return { kind: 'blocked', reason: 'invalid' }
     }

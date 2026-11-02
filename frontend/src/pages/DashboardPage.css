@@ -1,62 +1,222 @@
 /*
- * 今日概览样式（Stage 4 / S04-T05）。
+ * 首页 / 今日样式（Stage 4 / S04-T05，UI 调整第一轮改版）。
  *
- * 颜色全部取自 AppShell 的 `--sj-*` 设计变量，并带浅色兜底值：
- * 概览放在外壳里时跟随主题；即使将来单独预览也不会变成无样式黑字。
- * 不引入 UI 框架，不使用图片/图标字体。
+ * 参考用户提供的图 3：大面积留白、内容居中、白色背景；
+ * 上方一块醒目的蓝色「速记」入口，下方蓝色渐变主卡片（卡内左计划、右复盘）。
+ *
+ * 颜色策略：
+ *   - 卡片与速记条是本页唯一的高饱和蓝色区域，用固定值（不跟随主题反转），
+ *     深色主题下同样是这块蓝色卡片，只由页面底色变化提供对比；
+ *   - 其余文字、错误面板、说明文字取外壳的 `--sj-*` 变量，自动跟随主题。
  */
 
 .dash {
   display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 外壳 main 上下 padding 合计 116px：减去后正好在视口里垂直居中偏上一点 */
+  min-height: calc(100dvh - 150px);
+  padding: 4px 0 24px;
+}
+
+.dash-stack {
+  display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 14px;
+  width: 100%;
+  max-width: 620px;
   min-width: 0;
 }
 
-/* ---------------- 标题区 ---------------- */
+/* ---------------- 速记入口 ---------------- */
 
-.dash-head {
+.dash .dash-quick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  min-height: 58px;
+  padding: 0 16px 0 22px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #5563e6 0%, #4a56d8 100%);
+  color: #ffffff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 14px 28px -18px rgb(70 84 216 / 85%);
+  transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+}
+
+.dash .dash-quick:hover:not(:disabled) {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 18px 32px -18px rgb(70 84 216 / 90%);
+}
+
+.dash .dash-quick:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.dash .dash-quick:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.dash .dash-quick-text {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dash .dash-quick-label {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.dash .dash-quick-hint {
+  color: rgb(255 255 255 / 70%);
+  font-size: 13px;
+}
+
+.dash .dash-quick-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: rgb(255 255 255 / 15%);
+}
+
+/* ---------------- 蓝色渐变主卡片 ---------------- */
+
+.dash-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  padding: 32px 32px 28px;
+  border-radius: 22px;
+  color: #ffffff;
+  background:
+    radial-gradient(122% 128% at 90% 104%, rgb(255 255 255 / 50%) 0%, rgb(255 255 255 / 0%) 58%),
+    linear-gradient(135deg, #6371ea 0%, #7c8af3 52%, #99a6fb 100%);
+  box-shadow: 0 26px 50px -34px rgb(84 98 226 / 55%);
 }
-.dash-eyebrow {
-  margin: 0;
-  color: var(--sj-text-muted, #6b6375);
-  font-size: 13px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+
+/* 右下角的大圆形高光，对应参考图里的白色弧形 */
+.dash-hero::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  right: -80px;
+  bottom: -140px;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 20%);
+  pointer-events: none;
 }
-.dash-title {
+
+.dash-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.dash-hero-eyebrow {
   margin: 0;
-  color: var(--sj-text, #202124);
-  font: 400 30px/1.25 Georgia, 'Songti SC', serif;
+  color: rgb(255 255 255 / 82%);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+
+.dash-hero-title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.24;
   letter-spacing: -0.4px;
 }
-.dash-sub {
+
+.dash-hero-sub {
   margin: 0;
-  color: var(--sj-text-soft, #767080);
+  max-width: 34ch;
+  color: rgb(255 255 255 / 86%);
+  font-size: 15px;
+  line-height: 1.62;
+}
+
+.dash-hero-note {
+  margin: 2px 0 0;
+  color: rgb(255 255 255 / 78%);
   font-size: 13px;
+  line-height: 1.5;
 }
 
-/* ---------------- 状态块 ---------------- */
+/* ---------------- 卡内按钮：左计划、右复盘 ---------------- */
 
-.dash-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 20px;
-  border: 1px solid var(--sj-border, #e5e2ea);
-  border-radius: 16px;
-  background: var(--sj-surface-muted, #faf9fc);
-  min-width: 0;
+.dash .dash-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
 }
-.dash-loading-text {
+
+.dash .dash-action {
+  min-height: 46px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #4a56d8;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 130ms ease, transform 130ms ease, opacity 130ms ease;
+}
+
+.dash .dash-action:hover:not(:disabled) {
+  background: #f2f3ff;
+}
+
+.dash .dash-action:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+/* 禁用：浅白底 + 半透明蓝字，既明显变淡又仍然可读。
+   `opacity: 1` 是必需的：`.app button:disabled` 会再叠一层 0.5，叠加后几乎看不见按钮。 */
+.dash .dash-action--muted:disabled {
+  background: rgb(255 255 255 / 56%);
+  color: rgb(74 86 216 / 82%);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.dash .dash-action--solo {
+  justify-self: start;
+}
+
+/* ---------------- 加载 ---------------- */
+
+.dash-hero--loading {
+  gap: 12px;
+}
+
+.dash-hero-status {
   margin: 0;
-  color: var(--sj-text-muted, #6b6375);
-  font-size: 14px;
+  color: rgb(255 255 255 / 88%);
+  font-size: 13.5px;
 }
+
 .dash-skeleton {
   display: flex;
   flex-direction: column;
@@ -66,211 +226,124 @@
   padding: 0;
   list-style: none;
 }
+
 .dash-skeleton-row {
   height: 14px;
   border-radius: 999px;
-  background: var(--sj-border, #e5e2ea);
+  background: rgb(255 255 255 / 32%);
   animation: dash-pulse 1.6s ease-in-out infinite;
 }
-.dash-skeleton-row:nth-child(1) { width: 62%; }
-.dash-skeleton-row:nth-child(2) { width: 88%; }
-.dash-skeleton-row:nth-child(3) { width: 44%; }
+
+.dash-skeleton-row:nth-child(1) { width: 46%; }
+.dash-skeleton-row:nth-child(2) { width: 74%; }
+.dash-skeleton-row--short { width: 30%; }
 
 @keyframes dash-pulse {
-  0%, 100% { opacity: 0.55; }
+  0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
 }
 
-.dash-error {
-  border-color: var(--sj-danger-border, #e3b7b7);
+/* ---------------- 失败 ---------------- */
+
+.dash-hero--error {
+  border: 1px solid var(--sj-danger-border, #e3b7b7);
   background: var(--sj-danger-bg, #fdf4f4);
+  color: var(--sj-text, #202124);
+  box-shadow: none;
 }
-.dash-error-text {
-  margin: 0;
+
+.dash-hero--error::after {
+  display: none;
+}
+
+.dash-hero--error .dash-hero-eyebrow {
+  color: var(--sj-text-muted, #6b6375);
+}
+
+.dash-hero--error .dash-hero-title {
+  color: var(--sj-text, #202124);
+  font-size: 24px;
+}
+
+.dash-hero--error .dash-hero-sub {
+  max-width: 46ch;
   color: var(--sj-danger, #8a2f2f);
   font-size: 14px;
-  overflow-wrap: anywhere;
-}
-.dash-error-hint {
-  margin: 0;
-  color: var(--sj-text-muted, #6b6375);
-  font-size: 13px;
 }
 
-.dash-empty-all {
-  margin: 0;
-  padding: 16px 18px;
-  border: 1px dashed var(--sj-border-strong, #cfc9d6);
-  border-radius: 16px;
+.dash-hero--error .dash-hero-note {
   color: var(--sj-text-muted, #6b6375);
-  font-size: 14px;
-  overflow-wrap: anywhere;
 }
 
-/* ---------------- 入口卡片 ---------------- */
-
-.dash-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 0;
-}
-.dash-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 22px;
-  border: 1px solid var(--sj-border, #e5e2ea);
-  border-radius: 18px;
-  background: var(--sj-surface, #ffffff);
-  box-shadow: var(--sj-shadow, 0 1px 2px rgb(32 33 36 / 6%));
-  min-width: 0;
-}
-.dash-card-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-.dash-card-title {
-  margin: 0;
-  color: var(--sj-text, #202124);
-  font-size: 18px;
-  font-weight: 600;
-}
-.dash-card-meta {
-  margin: 0;
-  color: var(--sj-text-soft, #767080);
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-.dash-card-desc {
-  margin: 0;
-  color: var(--sj-text-muted, #6b6375);
-  font-size: 14px;
-}
-.dash-card-empty {
-  margin: 0;
-  padding: 12px 14px;
-  border: 1px dashed var(--sj-border-strong, #cfc9d6);
-  border-radius: 12px;
-  color: var(--sj-text-soft, #767080);
-  font-size: 13px;
-}
-.dash-card-preview {
-  margin: 0;
-  color: var(--sj-text-muted, #6b6375);
-  font-size: 13px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* 今日写作列表 */
-.dash-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  min-width: 0;
-}
-.dash-list-item {
-  min-width: 0;
-}
-.dash-list-open {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--sj-border, #e5e2ea);
-  border-radius: 12px;
-  background: var(--sj-surface-muted, #faf9fc);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.dash-list-open:hover:not(:disabled) {
-  border-color: var(--sj-border-strong, #cfc9d6);
-  background: var(--sj-bg-soft, #f7f6f8);
-}
-.dash-list-open:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-.dash-list-title {
-  color: var(--sj-text, #202124);
-  font-size: 15px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.dash-list-preview {
-  color: var(--sj-text-muted, #6b6375);
-  font-size: 13px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* 按钮 */
-.dash-card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-.dash-button {
-  padding: 9px 18px;
-  border: 1px solid var(--sj-border-strong, #cfc9d6);
-  border-radius: 999px;
-  background: var(--sj-surface, #ffffff);
-  color: var(--sj-text, #202124);
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-}
-.dash-button--primary {
-  border-color: var(--sj-inverse-bg, #202124);
+.dash-hero--error .dash-action {
   background: var(--sj-inverse-bg, #202124);
   color: var(--sj-inverse-text, #ffffff);
 }
-.dash-button:hover:not(:disabled) {
+
+.dash-hero--error .dash-action:hover:not(:disabled) {
+  background: var(--sj-inverse-bg, #202124);
   opacity: 0.9;
 }
-.dash-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
+
+/* ---------------- 卡片下方说明 ---------------- */
+
+.dash-meta {
+  margin: 0;
+  color: var(--sj-text-soft, #767080);
+  font-size: 12.5px;
+  text-align: center;
 }
 
-/* 手机宽度：卡片内边距与字号略收紧，保持可点面积 */
-@media (max-width: 480px) {
+.dash-meta-sep {
+  margin: 0 6px;
+  opacity: 0.7;
+}
+
+/* ---------------- 窄屏 ---------------- */
+
+@media (max-width: 860px) {
   .dash {
-    gap: 18px;
+    min-height: calc(100dvh - 210px);
+    padding: 12px 0 20px;
   }
-  .dash-title {
-    font-size: 26px;
+}
+
+@media (max-width: 520px) {
+  .dash-stack {
+    gap: 12px;
   }
-  .dash-card {
-    padding: 16px;
-    border-radius: 16px;
+  .dash .dash-quick {
+    min-height: 54px;
+    padding: 0 12px 0 18px;
   }
-  .dash-panel {
-    padding: 16px;
+  .dash .dash-quick-hint {
+    display: none;
   }
-  .dash-button {
-    width: 100%;
-    text-align: center;
+  .dash-hero {
+    padding: 22px 20px 20px;
+    border-radius: 20px;
+  }
+  .dash-hero-title {
+    font-size: 24px;
+  }
+  .dash-hero-sub {
+    font-size: 14px;
+  }
+  .dash .dash-actions {
+    gap: 10px;
+  }
+  .dash .dash-action {
+    min-height: 44px;
+    font-size: 14.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-quick,
+  .dash .dash-action {
+    transition: none;
+  }
+  .dash-skeleton-row {
+    animation: none;
   }
 }

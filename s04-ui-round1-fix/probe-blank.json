@@ -1,0 +1,80 @@
+{
+  "at": "2026-11-02T04:14:50.130Z",
+  "beforeEntering": 0,
+  "entered": true,
+  "timeline": [
+    {
+      "at": 0,
+      "records": 0,
+      "note": "db_absent"
+    },
+    {
+      "at": 250,
+      "records": 0,
+      "note": null
+    },
+    {
+      "at": 500,
+      "records": 0,
+      "note": null
+    },
+    {
+      "at": 750,
+      "records": 0,
+      "note": null
+    },
+    {
+      "at": 1000,
+      "records": 0,
+      "note": null
+    },
+    {
+      "at": 1250,
+      "records": 0,
+      "note": null
+    },
+    {
+      "at": 1500,
+      "records": 0,
+      "note": null
+    },
+    {
+      "at": 1750,
+      "records": 0,
+      "note": null
+    },
+    {
+      "at": 2000,
+      "records": 0,
+      "note": null
+    },
+    {
+      "at": 2250,
+      "records": 0,
+      "note": null
+    },
+    {
+      "at": 2500,
+      "records": 0,
+      "note": null
+    },
+    {
+      "at": 2750,
+      "records": 0,
+      "note": null
+    },
+    {
+      "at": 3000,
+      "records": 0,
+      "note": null
+    }
+  ],
+  "firstWrite": null,
+  "ui": {
+    "banner": null,
+    "button": "本地草稿（0）",
+    "editor": ""
+  },
+  "items": [],
+  "writes": []
+}

@@ -1,0 +1,250 @@
+{
+  "startedAt": "2026-11-02T04:15:23.283Z",
+  "scenarios": {
+    "blankQuickLeave": {
+      "entered": {
+        "module": "速记",
+        "heading": "2026年11月1日 周日",
+        "dialogOpen": false,
+        "dialogText": null,
+        "draftBanner": null,
+        "draftButton": "本地草稿（0）",
+        "activePageLabels": [
+          "速记"
+        ]
+      },
+      "timeline": [
+        {
+          "at": 0,
+          "drafts": {
+            "records": 0,
+            "keys": [],
+            "detail": []
+          }
+        },
+        {
+          "at": 300,
+          "drafts": {
+            "records": 0,
+            "keys": [],
+            "detail": []
+          }
+        },
+        {
+          "at": 600,
+          "drafts": {
+            "records": 0,
+            "keys": [],
+            "detail": []
+          }
+        },
+        {
+          "at": 900,
+          "drafts": {
+            "records": 0,
+            "keys": [],
+            "detail": []
+          }
+        },
+        {
+          "at": 1200,
+          "drafts": {
+            "records": 0,
+            "keys": [],
+            "detail": []
+          }
+        },
+        {
+          "at": 1500,
+          "drafts": {
+            "records": 0,
+            "keys": [],
+            "detail": []
+          }
+        }
+      ],
+      "draftsInEditor": {
+        "records": 0,
+        "keys": [],
+        "detail": []
+      },
+      "writesInEditor": [],
+      "afterLeave": {
+        "module": "记录",
+        "heading": "记录",
+        "dialogOpen": false,
+        "dialogText": null,
+        "draftBanner": null,
+        "draftButton": null,
+        "activePageLabels": [
+          "记录"
+        ]
+      },
+      "draftsAfterLeave": {
+        "records": 0,
+        "keys": [],
+        "detail": []
+      },
+      "writes": [],
+      "left": true
+    },
+    "typedSaved": {
+      "draftsAfterSave": {
+        "records": 0,
+        "keys": [],
+        "detail": []
+      },
+      "draftsAfterLeave": {
+        "records": 0,
+        "keys": [],
+        "detail": []
+      },
+      "afterLeave": {
+        "module": "记录",
+        "heading": "记录",
+        "dialogOpen": false,
+        "dialogText": null,
+        "draftBanner": null,
+        "draftButton": null,
+        "activePageLabels": [
+          "记录"
+        ]
+      },
+      "writes": [
+        "POST /api/journals"
+      ],
+      "left": true
+    },
+    "typedSaveFailed": {
+      "afterLeave": {
+        "module": "速记",
+        "heading": "2026年11月1日 周日",
+        "dialogOpen": true,
+        "dialogText": "最新改动还没保存成功，确定离开？",
+        "draftBanner": "本机还有 1 份未提交的草稿（不含服务器已保存的内容）。",
+        "draftButton": "本地草稿（1）",
+        "activePageLabels": [
+          "速记"
+        ]
+      },
+      "drafts": {
+        "records": 1,
+        "keys": [
+          "9ef03bc6-879c-4607-925f-a0c6f475b025:da76a8fb-2ab4-45fe-bb86-85f1d0efc308"
+        ],
+        "detail": [
+          {
+            "keys": [
+              "key",
+              "record"
+            ],
+            "raw": "{\"key\":\"9ef03bc6-879c-4607-925f-a0c6f475b025:da76a8fb-2ab4-45fe-bb86-85f1d0efc308\",\"record\":{\"schema\":1,\"draft_id\":\"da76a8fb-2ab4-45fe-bb86-85f1d0efc308\",\"tab_id\":\"9ef03bc6-879c-4607-925f-a0c6f475b025\",\"file_id\":null,\"base_revision\":null,\"journal_kind\":\"writing\",\"business_date\":\"2026-11-01\",\"draft_started_at\":\"2026-11-02T04:15:33.067Z\",\"title\":\"\",\"content_doc\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"attrs\":{\"id"
+          }
+        ]
+      },
+      "writes": [
+        "POST /api/journals"
+      ],
+      "blocked": true
+    },
+    "inFlightTyping": {
+      "duringPending": {
+        "module": "速记",
+        "heading": "2026年11月1日 周日",
+        "dialogOpen": false,
+        "dialogText": null,
+        "draftBanner": "本机还有 1 份未提交的草稿（不含服务器已保存的内容）。",
+        "draftButton": "本地草稿（1）",
+        "activePageLabels": [
+          "速记"
+        ]
+      },
+      "releasedHeldRequests": 1,
+      "afterRelease": {
+        "module": "记录",
+        "heading": "记录",
+        "dialogOpen": false,
+        "dialogText": null,
+        "draftBanner": null,
+        "draftButton": null,
+        "activePageLabels": [
+          "记录"
+        ]
+      },
+      "writeBodies": [
+        {
+          "method": "POST",
+          "path": "/api/journals",
+          "body": "{\"client_create_id\":\"01b5dcca-ba96-4427-b3dc-54b27e5dcb6f\",\"title\":null,\"content_doc\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"attrs\":{\"id\":\"235cba3f-8b2c-4f2e-9d0a-5528821fb930\"},\"content\":[{\"type\":\"text\",\"text\":\"第一段\"}]}]},\"document_schema_version\":1,\"journal_date\":\"2026-11-01\",\"folder_id\":null,\"journal_kind\":\"writing\"}"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/journals/501",
+          "body": "{\"expected_revision\":1,\"content_doc\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"attrs\":{\"id\":\"235cba3f-8b2c-4f2e-9d0a-5528821fb930\"},\"content\":[{\"type\":\"text\",\"text\":\"第一段第二段\"}]}]},\"document_schema_version\":1}"
+        }
+      ],
+      "finalContainsBoth": true
+    },
+    "overflowA11y": {
+      "triggerClick": true,
+      "opened": {
+        "expanded": "true",
+        "label": "更多",
+        "focusedText": "日程",
+        "items": [
+          "日程",
+          "AI 复盘",
+          "历史收件箱",
+          "文件夹"
+        ]
+      },
+      "clickedSchedule": true,
+      "closed": {
+        "expanded": "false",
+        "label": "更多（当前：日程）",
+        "tip": "更多（当前：日程）",
+        "hasPopup": null,
+        "focusIsTrigger": true,
+        "focusedTag": "BUTTON",
+        "currentLabels": []
+      },
+      "reopen": true,
+      "reopened": {
+        "currentInMenu": [
+          "日程"
+        ]
+      },
+      "afterEsc": {
+        "expanded": "false",
+        "focusIsTrigger": true
+      }
+    },
+    "naming": {
+      "writing": {
+        "eyebrow": "速记",
+        "ariaLabel": "速记"
+      },
+      "plan": {
+        "eyebrow": "计划 · 业务日 2026-11-01",
+        "title": "计划 2026-11-01"
+      },
+      "openMore": true,
+      "clickAiReview": true,
+      "review": {
+        "heading": "AI 复盘",
+        "ariaLabel": "AI 复盘模块"
+      }
+    }
+  },
+  "requests": [
+    "GET /api/business-day",
+    "GET /api/journals",
+    "GET /api/rituals",
+    "GET /api/journals"
+  ],
+  "console": [
+    "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  ],
+  "writeRequestCount": 0,
+  "endedAt": "2026-11-02T04:15:50.816Z"
+}

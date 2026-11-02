@@ -1,20 +1,20 @@
 /**
- * 今日概览（Stage 4 / S04-T05）。
+ * 首页 / 今日（Stage 4 / S04-T05，UI 调整第一轮改版）。
  *
  * 产品边界（`docs/stage4.md` §4）：
- * - 按当前**业务日期**动态展示今天的普通写作、开始今天、结束今天；
- * - 「开始今天 / 结束今天」提供进入或继续入口，写作提供开始/继续入口；
- * - 概览是动态列表，**不自动创建**「今日汇总」文件、复盘或其他记录；
- * - 仅打开页面不得产生任何写入。
+ * - 按当前**业务日期**展示今天的入口，业务日期由服务端按 Asia/Shanghai 04:00 计算，
+ *   前端不拿浏览器本地日期替代；
+ * - 「速记 / 计划 / 复盘」只是入口：**打开页面不创建任何文件**，
+ *   当天已有记录时进入的是同一份记录（同业务日 Ritual 唯一约束不被突破）；
+ * - 首页是入口集合，不自动生成「今日汇总」或其他文件；
+ * - 重新读取只重新 GET，不产生写入。
  *
- * 因此本组件是一个**纯展示组件**：
- * - 不收发 HTTP，不 import 任何 `api/*`，不在 `useEffect` 里读取数据；
- * - 数据（`today`）与状态（`status`）由上层接线者传入；
- * - 所有会写库的动作只能来自用户点击，并交回上层回调执行。
- * 这样「进入概览零创建」是由组件结构保证的，而不是靠调用顺序约定。
+ * 因此本组件是一个**纯展示组件**：不收发 HTTP，数据与状态由 `useTodayOverview`
+ * 与 `App.tsx` 传入，所有会写库的动作只能来自用户点击并交回上层回调。
  *
- * 本轮不接线到 `App.tsx`（T02 正在改 App）。真实数据读取的验收门禁见
- * `docs/stage4-tasks.md` §3.6：等 T01 后端、隔离库与公共入口就绪后再验。
+ * 视觉（用户提供的参考图 3）：大面积留白、内容居中、白色背景；
+ * 上方醒目的「速记」入口，下方一块蓝色渐变主卡片，卡内左「计划」右「复盘」，
+ * 两者是白色按钮；当天没有有效计划时「复盘」为浅白禁用态并给出简短原因。
  */
 
 import './DashboardPage.css'
@@ -22,8 +22,7 @@ import './DashboardPage.css'
 /** Ritual 类型：原样对应 `journal_kind=set|end`，仅内部使用，界面不显示英文缩写。 */
 export type DashboardRitualKind = 'set' | 'end'
 
-
-/** 今日普通写作文件（`journal_kind=writing` 的列表项字段子集）。 */
+/** 今日普通速记文件（`journal_kind=writing` 的列表项字段子集）。 */
 export type DashboardWritingItem = {
   id: number
   title: string
@@ -37,7 +36,7 @@ export type DashboardWritingItem = {
  * 某一种 Ritual 的今日状态。
  *
  * `absent` 表示今天还没有有效文件——此时**不得**为了展示而创建草稿；
- * 用户点「开始今天 / 结束今天」后由上层的创建流程决定是否落库。
+ * 用户点「计划 / 复盘」后由上层的 Ritual 页面决定是否落库（首次有效正文才创建）。
  */
 export type DashboardRitualSlot =
   | { state: 'absent' }
@@ -66,14 +65,12 @@ export type DashboardPageProps = {
   disabled?: boolean
   /** 失败后重试读取；只重新 GET，不创建任何文件。 */
   onRetry: () => void
-  /** Writing 入口：进入今天的普通写作（首次进入打开未落库草稿）。 */
-  onNewWriting: () => void
-  /** 打开今天已有的某篇普通写作。 */
-  onOpenWriting: (id: number) => void
-  /** 今天还没有该 Ritual：进入创建流程（是否落库由上层决定）。 */
-  onStartRitual: (kind: DashboardRitualKind) => void
-  /** 今天已有该 Ritual：打开继续编辑。 */
-  onOpenRitual: (kind: DashboardRitualKind, id: number) => void
+  /** 速记入口：进入今天的速记（复用已有草稿/记录，不新建空记录）。 */
+  onQuickNote: () => void
+  /** 计划入口：进入今天的计划；今天已有计划时进入的是同一份记录。 */
+  onOpenPlan: () => void
+  /** 复盘入口：进入今天的复盘；今天已有复盘时继续同一份记录。 */
+  onOpenReview: () => void
 }
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
@@ -99,10 +96,22 @@ function formatBusinessDate(value: string): string {
   return `${year}年${month}月${day}日 ${WEEKDAYS[date.getDay()]}`
 }
 
-/** 标题为空时的兜底显示，不伪造内容。 */
-function displayTitle(title: string): string {
-  const trimmed = title.trim()
-  return trimmed === '' ? '（无标题）' : trimmed
+/** 速记入口右侧的铅笔图标（内联 SVG，不引入图标库）。 */
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"
+      fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.2 19.9l4.3-1 9.2-9.2a2.1 2.1 0 0 0 0-3l-.4-.4a2.1 2.1 0 0 0-3 0l-9.2 9.2-1 4.4z" />
+      <path d="M14.2 7.1l2.8 2.8" />
+    </svg>
+  )
+}
+
+/** 卡片内的一句状态说明：既是可见原因，也是禁用按钮的 `aria-describedby` 目标。 */
+function ritualNote(setExists: boolean, endExists: boolean): string {
+  if (endExists) return '今天已经复盘过了，可以随时回来继续。'
+  if (setExists) return '计划已记录，今晚可以回来复盘。'
+  return '今天还没有计划，完成计划后即可复盘。'
 }
 
 function DashboardPage({
@@ -111,171 +120,113 @@ function DashboardPage({
   error,
   disabled = false,
   onRetry,
-  onNewWriting,
-  onOpenWriting,
-  onStartRitual,
-  onOpenRitual,
+  onQuickNote,
+  onOpenPlan,
+  onOpenReview,
 }: DashboardPageProps) {
-  const writings = today === null ? [] : today.writings
-  const setSlot: DashboardRitualSlot = today === null ? { state: 'absent' } : today.rituals.set
-  const endSlot: DashboardRitualSlot = today === null ? { state: 'absent' } : today.rituals.end
-  const allEmpty = writings.length === 0 && setSlot.state === 'absent' && endSlot.state === 'absent'
+  const view = today
+  const writingsCount = view === null ? 0 : view.writings.length
+  const setExists = view !== null && view.rituals.set.state === 'exists'
+  const endExists = view !== null && view.rituals.end.state === 'exists'
+
+  /*
+   * 「先计划后复盘」在本轮只作用于首页入口：没有有效计划时复盘按钮为禁用。
+   * 例外是今天已经存在复盘记录——历史复盘（含从回收箱恢复的）必须仍然可读可继续，
+   * 否则等于用入口禁用删掉了已有内容的访问路径。此处不涉及后端强制限制。
+   */
+  const reviewAllowed = setExists || endExists
+  const note = ritualNote(setExists, endExists)
+
+  const dateLabel = view === null ? '今天' : formatBusinessDate(view.businessDate)
+  const shiftLabel = view === null
+    ? ''
+    : `${view.timezone} · 每日 ${String(view.dayStartHour).padStart(2, '0')}:00 换日`
 
   return (
     <div className="dash">
-      <header className="dash-head">
-        <p className="dash-eyebrow">今日概览</p>
-        <h2 className="dash-title">{today === null ? '今天' : formatBusinessDate(today.businessDate)}</h2>
-        <p className="dash-sub">
-          {today === null
-            ? '按服务端业务日期读取今天的记录'
-            : `${today.timezone} · 每日 ${String(today.dayStartHour).padStart(2, '0')}:00 换日`}
-        </p>
-      </header>
+      <div className="dash-stack">
+        <button type="button" className="dash-quick" disabled={disabled} onClick={onQuickNote}>
+          <span className="dash-quick-text">
+            <span className="dash-quick-label">速记</span>
+            <span className="dash-quick-hint">写下此刻的想法</span>
+          </span>
+          <span className="dash-quick-icon" aria-hidden="true"><PencilIcon /></span>
+        </button>
 
-      {status === 'loading' && (
-        <section className="dash-panel dash-loading" role="status" aria-live="polite">
-          <p className="dash-loading-text">正在读取今天的记录……</p>
-          <ul className="dash-skeleton" aria-hidden="true">
-            <li className="dash-skeleton-row" />
-            <li className="dash-skeleton-row" />
-            <li className="dash-skeleton-row" />
-          </ul>
-        </section>
-      )}
+        {status === 'loading' && (
+          <section className="dash-hero dash-hero--loading" aria-busy="true" aria-live="polite">
+            <p className="dash-hero-status">正在读取今天的记录……</p>
+            <ul className="dash-skeleton" aria-hidden="true">
+              <li className="dash-skeleton-row" />
+              <li className="dash-skeleton-row" />
+              <li className="dash-skeleton-row dash-skeleton-row--short" />
+            </ul>
+          </section>
+        )}
 
-      {status === 'error' && (
-        <section className="dash-panel dash-error" role="alert">
-          <p className="dash-error-text">{error && error.trim() !== '' ? error : '今天的记录加载失败，请稍后重试。'}</p>
-          <p className="dash-error-hint">概览只读取数据，重试不会创建任何文件。</p>
-          <button type="button" className="dash-button dash-button--primary" onClick={onRetry}>
-            重新读取
-          </button>
-        </section>
-      )}
-
-      {status === 'success' && (
-        <>
-          {allEmpty && (
-            <p className="dash-empty-all">
-              今天还没有任何记录。可以从写作或开始今天开始，概览本身不会生成汇总文件。
+        {status === 'error' && (
+          <section className="dash-hero dash-hero--error" role="alert">
+            <p className="dash-hero-eyebrow">今天的记录</p>
+            <h1 className="dash-hero-title">暂时读不到今天的状态</h1>
+            <p className="dash-hero-sub">
+              {error !== undefined && error.trim() !== '' ? error : '读取今天的记录失败，请稍后重试。'}
             </p>
-          )}
+            <p className="dash-hero-note">重新读取只会再次查询，不会创建任何文件。</p>
+            <div className="dash-actions">
+              <button type="button" className="dash-action dash-action--solo" onClick={onRetry}>
+                重新读取
+              </button>
+            </div>
+          </section>
+        )}
 
-          <div className="dash-cards">
-            <section className="dash-card" aria-labelledby="dash-writing-heading">
-              <div className="dash-card-head">
-                <h3 className="dash-card-title" id="dash-writing-heading">写作</h3>
-                <p className="dash-card-meta">
-                  {writings.length === 0 ? '今天还没有写作' : `今天 ${writings.length} 篇`}
-                </p>
-              </div>
-              <p className="dash-card-desc">普通日记，不限篇数；写作入口默认打开今天的草稿。</p>
+        {status === 'success' && view === null && (
+          <section className="dash-hero dash-hero--error" role="alert">
+            <p className="dash-hero-eyebrow">今天的记录</p>
+            <h1 className="dash-hero-title">今天的数据不完整</h1>
+            <p className="dash-hero-sub">服务端返回的今日数据不完整，暂时无法给出计划与复盘入口。</p>
+            <p className="dash-hero-note">重新读取只会再次查询，不会创建任何文件。</p>
+            <div className="dash-actions">
+              <button type="button" className="dash-action dash-action--solo" onClick={onRetry}>
+                重新读取
+              </button>
+            </div>
+          </section>
+        )}
 
-              {writings.length === 0 ? (
-                <p className="dash-card-empty">今天还没有写作记录。</p>
-              ) : (
-                <ul className="dash-list">
-                  {writings.map((item) => (
-                    <li className="dash-list-item" key={item.id}>
-                      <button
-                        type="button"
-                        className="dash-list-open"
-                        disabled={disabled}
-                        onClick={() => onOpenWriting(item.id)}
-                      >
-                        <span className="dash-list-title">{displayTitle(item.title)}</span>
-                        {item.preview.trim() !== '' && (
-                          <span className="dash-list-preview">{item.preview}</span>
-                        )}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+        {status === 'success' && view !== null && (
+          <>
+            <section className="dash-hero" aria-labelledby="dash-hero-title">
+              <p className="dash-hero-eyebrow">{dateLabel}</p>
+              <h1 className="dash-hero-title" id="dash-hero-title">先计划，再复盘</h1>
+              <p className="dash-hero-sub">用几句话写下今天想完成的事，晚上再回来收个尾。</p>
 
-              <div className="dash-card-actions">
+              <div className="dash-actions">
+                <button type="button" className="dash-action" disabled={disabled} onClick={onOpenPlan}>
+                  计划
+                </button>
                 <button
                   type="button"
-                  className="dash-button dash-button--primary"
-                  disabled={disabled}
-                  onClick={onNewWriting}
+                  className="dash-action dash-action--muted"
+                  disabled={disabled || !reviewAllowed}
+                  aria-describedby="dash-hero-note"
+                  onClick={onOpenReview}
                 >
-                  开始写作
+                  复盘
                 </button>
               </div>
+
+              <p className="dash-hero-note" id="dash-hero-note">{note}</p>
             </section>
 
-            <section className="dash-card" aria-labelledby="dash-set-heading">
-              <div className="dash-card-head">
-                <h3 className="dash-card-title" id="dash-set-heading">开始今天</h3>
-                <p className="dash-card-meta">
-                  {setSlot.state === 'exists' ? `今天已有记录 · ${displayTitle(setSlot.title)}` : '今天还没有开始今天'}
-                </p>
-              </div>
-              <p className="dash-card-desc">日初 Ritual：写下今天想完成的目标，并可以从这里进入正文。</p>
-              {setSlot.state === 'exists' && setSlot.preview !== undefined && setSlot.preview.trim() !== '' && (
-                <p className="dash-card-preview">{setSlot.preview}</p>
-              )}
-              <div className="dash-card-actions">
-                {setSlot.state === 'exists' ? (
-                  <button
-                    type="button"
-                    className="dash-button dash-button--primary"
-                    disabled={disabled}
-                    onClick={() => onOpenRitual('set', setSlot.id)}
-                  >
-                    继续开始今天
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="dash-button dash-button--primary"
-                    disabled={disabled}
-                    onClick={() => onStartRitual('set')}
-                  >
-                    开始今天
-                  </button>
-                )}
-              </div>
-            </section>
-
-            <section className="dash-card" aria-labelledby="dash-end-heading">
-              <div className="dash-card-head">
-                <h3 className="dash-card-title" id="dash-end-heading">结束今天</h3>
-                <p className="dash-card-meta">
-                  {endSlot.state === 'exists' ? `今天已有记录 · ${displayTitle(endSlot.title)}` : '今天还没有结束今天'}
-                </p>
-              </div>
-              <p className="dash-card-desc">日终 Ritual：回顾今天的目标与感受，已有记录可继续编辑。</p>
-              {endSlot.state === 'exists' && endSlot.preview !== undefined && endSlot.preview.trim() !== '' && (
-                <p className="dash-card-preview">{endSlot.preview}</p>
-              )}
-              <div className="dash-card-actions">
-                {endSlot.state === 'exists' ? (
-                  <button
-                    type="button"
-                    className="dash-button dash-button--primary"
-                    disabled={disabled}
-                    onClick={() => onOpenRitual('end', endSlot.id)}
-                  >
-                    继续结束今天
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="dash-button dash-button--primary"
-                    disabled={disabled}
-                    onClick={() => onStartRitual('end')}
-                  >
-                    结束今天
-                  </button>
-                )}
-              </div>
-            </section>
-          </div>
-        </>
-      )}
+            <p className="dash-meta">
+              {shiftLabel}
+              <span className="dash-meta-sep" aria-hidden="true">·</span>
+              {writingsCount === 0 ? '今天还没有速记' : `今天 ${writingsCount} 篇速记`}
+            </p>
+          </>
+        )}
+      </div>
     </div>
   )
 }

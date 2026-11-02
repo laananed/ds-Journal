@@ -1,0 +1,298 @@
+/*
+ * 全局导航样式（Stage 4 UI 调整第一轮）。
+ *
+ * 只依赖外壳（AppShell.css）定义的 `--sj-*` 变量，因此浅色/深色主题自动跟随，
+ * 不在本文件重复定义颜色。布局要点：
+ *   - 左侧竖栏：品牌 → 主入口 → 更多，宽度由外壳的 `--sj-nav-width` 决定；
+ *   - 文字提示用 `[data-tip]` 的 ::after 生成，不额外渲染 DOM，也不做重复描述；
+ *   - 「更多」菜单与右下角快捷入口向右/向左展开，避免贴边溢出。
+ */
+
+.sj-nav {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+/* ---------------- 品牌 ---------------- */
+
+.sj-nav__brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  /* 品牌是固定深色标识，不参与「当前页」高亮（选中状态由下方的入口表达） */
+  background: var(--sj-inverse-bg);
+  color: var(--sj-inverse-text);
+  cursor: pointer;
+}
+
+.sj-nav__brand:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+/* ---------------- 主入口 ---------------- */
+
+.sj-nav__main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sj-nav__item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  color: var(--sj-text-muted);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.sj-nav__item:hover:not(:disabled) {
+  background: var(--sj-surface-muted);
+  color: var(--sj-text);
+}
+
+/* 选中状态：底色 + 主色 + 左侧短竖条（不依赖颜色也能看出当前页） */
+.sj-nav__item[aria-current='page'],
+.sj-nav__item[data-active='true'] {
+  background: var(--sj-accent-soft);
+  color: var(--sj-accent);
+}
+
+.sj-nav__item[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--sj-accent);
+  transform: translateY(-50%);
+}
+
+.sj-nav__item:disabled,
+.sj-nav__brand:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* ---------------- 文字提示 ---------------- */
+
+.sj-nav__item[data-tip]::after,
+.sj-nav__brand[data-tip]::after,
+.sj-shortcuts__item[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 40;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--sj-inverse-bg);
+  color: var(--sj-inverse-text);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms ease 60ms;
+}
+
+.sj-nav__item[data-tip]::after,
+.sj-nav__brand[data-tip]::after {
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.sj-nav__item[data-tip]:hover::after,
+.sj-nav__item[data-tip]:focus-visible::after,
+.sj-nav__brand[data-tip]:hover::after,
+.sj-nav__brand[data-tip]:focus-visible::after,
+.sj-shortcuts__item[data-tip]:hover::after,
+.sj-shortcuts__item[data-tip]:focus-visible::after {
+  opacity: 1;
+}
+
+/* ---------------- 「更多」菜单 ---------------- */
+
+.sj-nav__overflow {
+  position: relative;
+  margin-top: auto;
+  display: flex;
+  justify-content: center;
+}
+
+.sj-nav__menu {
+  position: absolute;
+  left: calc(100% + 14px);
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 176px;
+  padding: 6px;
+  border: 1px solid var(--sj-border);
+  border-radius: 14px;
+  background: var(--sj-surface);
+  box-shadow: var(--sj-shadow);
+}
+
+.sj-nav__menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sj-text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sj-nav__menu-item .sj-nav__icon {
+  color: var(--sj-text-muted);
+  flex: none;
+}
+
+.sj-nav__menu-item:hover {
+  background: var(--sj-surface-muted);
+}
+
+.sj-nav__menu-item[aria-current='page'] {
+  background: var(--sj-accent-soft);
+  color: var(--sj-accent);
+  font-weight: 600;
+}
+
+.sj-nav__menu-item[aria-current='page'] .sj-nav__icon {
+  color: var(--sj-accent);
+}
+
+/* ---------------- 右下角快捷入口 ---------------- */
+
+.sj-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--sj-border);
+  border-radius: 16px;
+  background: var(--sj-surface);
+  box-shadow: var(--sj-shadow);
+}
+
+.sj-shortcuts__item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--sj-text-muted);
+  cursor: pointer;
+}
+
+.sj-shortcuts__item:hover:not(:disabled) {
+  background: var(--sj-surface-muted);
+  color: var(--sj-text);
+}
+
+.sj-shortcuts__item[aria-current='page'] {
+  background: var(--sj-accent-soft);
+  color: var(--sj-accent);
+}
+
+.sj-shortcuts__item:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* 贴右侧：提示向左展开 */
+.sj-shortcuts__item[data-tip-side='left']::after {
+  right: calc(100% + 12px);
+  left: auto;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* ---------------- 窄屏：竖栏改为顶部横栏 ---------------- */
+
+@media (max-width: 860px) {
+  .sj-nav {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+  .sj-nav__main {
+    flex-direction: row;
+    gap: 4px;
+  }
+  .sj-nav__overflow {
+    margin-top: 0;
+    margin-left: auto;
+  }
+  .sj-nav__item[aria-current='page']::before {
+    left: 50%;
+    top: auto;
+    bottom: -1px;
+    width: 20px;
+    height: 3px;
+    transform: translateX(-50%);
+  }
+  .sj-nav__item[data-tip]::after,
+  .sj-nav__brand[data-tip]::after {
+    left: 50%;
+    top: calc(100% + 10px);
+    transform: translateX(-50%);
+  }
+  .sj-nav__menu {
+    left: auto;
+    right: 0;
+    bottom: auto;
+    top: calc(100% + 12px);
+  }
+}
+
+@media (max-width: 520px) {
+  .sj-nav__item,
+  .sj-nav__brand {
+    width: 40px;
+    height: 40px;
+  }
+  .sj-shortcuts {
+    gap: 2px;
+    padding: 4px;
+    border-radius: 14px;
+  }
+  .sj-shortcuts__item {
+    width: 36px;
+    height: 36px;
+  }
+}

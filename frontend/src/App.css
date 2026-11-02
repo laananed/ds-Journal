@@ -489,7 +489,7 @@
 .app-nav-host .app-header h1 { font-size: 24px; }
 .app.app-embedded .app-navigation { flex-direction: column; align-items: stretch; gap: 4px; }
 .app.app-embedded .app-navigation button { text-align: left; }
-.app.app-embedded .home-new { width: 100%; }
+/* 「新建记录」已随图标导航移到记录页工具条（UI 调整第一轮），不再需要整行拉伸 */
 
 [data-theme='dark'] .app.app-embedded { color: #eee; }
 [data-theme='dark'] .app.app-embedded .app-navigation button {

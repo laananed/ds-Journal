@@ -36,10 +36,16 @@ export const TEMPLATE_CAPACITY = 4
 /** 单个问题正文上限，与 `backend/app/ritual/schemas.py` 的 500 一致。 */
 export const QUESTION_TEXT_LIMIT = 500
 
-/** 管理端展示名：界面只用中文，不显示 set/end 缩写（产品 §2）。 */
+/**
+ * 管理端展示名：界面只用中文，不显示 set/end 缩写（产品 §2）。
+ *
+ * 第一轮 UI 统一命名（2026-11-02）：Set → 计划，End → 复盘。
+ * 这些名字同时用于页面标题、默认显示标题与恢复对照文案，改一处即全部跟随；
+ * 「AI 复盘」（多篇源复盘）是另一个功能，不要复用这里的「复盘」。
+ */
 export const KIND_LABEL: Record<RitualKind, string> = {
-  set: '开始今天',
-  end: '结束今天',
+  set: '计划',
+  end: '复盘',
 }
 
 /** 支持「块内文字范围」选择的块类型；其余块只能整块选择（API §5）。 */

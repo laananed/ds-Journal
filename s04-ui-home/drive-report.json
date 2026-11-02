@@ -1,0 +1,240 @@
+{
+  "appUrl": "http://127.0.0.1:5173/",
+  "methods": [
+    "GET"
+  ],
+  "callCount": 32,
+  "nonGet": [],
+  "focusOrder": [
+    {
+      "tag": "A",
+      "label": "跳到正文"
+    },
+    {
+      "tag": "BUTTON",
+      "label": "SeekJournal · 回到概览"
+    },
+    {
+      "tag": "BUTTON",
+      "label": "概览"
+    },
+    {
+      "tag": "BUTTON",
+      "label": "速记"
+    },
+    {
+      "tag": "BUTTON",
+      "label": "记录"
+    },
+    {
+      "tag": "BUTTON",
+      "label": "洞察"
+    },
+    {
+      "tag": "BUTTON",
+      "label": "更多"
+    },
+    {
+      "tag": "BUTTON",
+      "label": "外观"
+    },
+    {
+      "tag": "BUTTON",
+      "label": "速记\n写下此刻的想法"
+    },
+    {
+      "tag": "BUTTON",
+      "label": "重新读取"
+    },
+    {
+      "tag": "BUTTON",
+      "label": "搜索"
+    },
+    {
+      "tag": "BUTTON",
+      "label": "设置"
+    },
+    {
+      "tag": "BUTTON",
+      "label": "回收箱"
+    }
+  ],
+  "log": [
+    {
+      "step": "initial",
+      "nav": [
+        {
+          "label": "概览",
+          "tip": "概览",
+          "current": "page",
+          "title": null
+        },
+        {
+          "label": "速记",
+          "tip": "速记",
+          "current": null,
+          "title": null
+        },
+        {
+          "label": "记录",
+          "tip": "记录",
+          "current": null,
+          "title": null
+        },
+        {
+          "label": "洞察",
+          "tip": "洞察",
+          "current": null,
+          "title": null
+        }
+      ],
+      "shortcuts": [
+        {
+          "label": "搜索",
+          "tip": "搜索",
+          "current": null,
+          "title": null
+        },
+        {
+          "label": "设置",
+          "tip": "设置",
+          "current": null,
+          "title": null
+        },
+        {
+          "label": "回收箱",
+          "tip": "回收箱",
+          "current": null,
+          "title": null
+        }
+      ],
+      "more": {
+        "label": "更多",
+        "tip": "更多",
+        "current": null,
+        "title": null,
+        "expanded": "false",
+        "haspopup": "true"
+      },
+      "brand": {
+        "label": "SeekJournal · 回到概览",
+        "tip": "SeekJournal",
+        "current": null,
+        "title": null
+      },
+      "main": "速记\n写下此刻的想法\n\n今天的记录\n\n暂时读不到今天的状态\n\n连不上服务端，今天的记录暂时无法读取。请确认后端已启动后再"
+    },
+    {
+      "step": "nav:速记",
+      "clicked": true,
+      "active": [
+        "速记"
+      ],
+      "main": "写作\n\n今天\n\n普通日记，不限篇数 · 每天 04:00 换日（Asia/Shanghai）\n\n新建一篇\n本地草稿（0）\n今天\n\n正在读取今天的写作……\n\nFa"
+    },
+    {
+      "step": "nav:记录",
+      "clicked": true,
+      "active": [
+        "记录"
+      ],
+      "main": "记录\n搜索记录标题和正文\n搜索\n新建记录\n按日期查看\n清除筛选\n\n列表加载失败：Failed to fetch\n\n重试"
+    },
+    {
+      "step": "nav:洞察",
+      "clicked": true,
+      "active": [
+        "洞察"
+      ],
+      "main": "新建 Insight\nInsight 列表\n\n列表加载失败：Failed to fetch\n\n重试"
+    },
+    {
+      "step": "nav:概览",
+      "clicked": true,
+      "active": [
+        "概览"
+      ],
+      "main": "速记\n写下此刻的想法\n\n今天的记录\n\n暂时读不到今天的状态\n\n连不上服务端，今天的记录暂时无法读取。请确认后端已启动后再重新读取。\n\n重新读取只会再次查询，不会"
+    },
+    {
+      "step": "records:new",
+      "found": true,
+      "hasEditor": true,
+      "main": "写一篇日记\n返回列表\n\n从此刻的想法开始。有效输入会自动保存，标题也可以留空。\n\n尚未创建\n写下正文后自动创建，不会保存空白日记。\n日期\n标题（可留空）\n\n标题"
+    },
+    {
+      "step": "more:open",
+      "expanded": "true",
+      "items": [
+        {
+          "text": "日程",
+          "current": null
+        },
+        {
+          "text": "AI 复盘",
+          "current": null
+        },
+        {
+          "text": "历史收件箱",
+          "current": null
+        },
+        {
+          "text": "文件夹",
+          "current": null
+        }
+      ]
+    },
+    {
+      "step": "more:日程",
+      "clicked": true,
+      "active": [],
+      "moreActive": "true",
+      "main": "日程\n\n独立日程\n\n日程与「开始今天」的 Set 目标相互独立：这里的创建、完成、删除都不会自动改动 Set 或目标关联。 时间按 Asia"
+    },
+    {
+      "step": "more:AI 复盘",
+      "clicked": true,
+      "active": [],
+      "moreActive": "true",
+      "main": "完整复盘\n未开始\n\n选择 1～15 个 Journal（最多 7 个不同业务日期，非连续也可以， 同一天多篇不重复占名额）。生成只创建可编辑"
+    },
+    {
+      "step": "more:历史收件箱",
+      "clicked": true,
+      "active": [],
+      "moreActive": "true",
+      "main": "历史 Inbox 列表\n按日期查看\n清除筛选\n\n列表加载失败：Failed to fetch\n\n重试"
+    },
+    {
+      "step": "more:文件夹",
+      "clicked": true,
+      "active": [],
+      "moreActive": "true",
+      "main": "新建 Folder\n创建\nFolder（0）\n\nFolder 列表加载失败：Failed to fetch\n\n重试\n内容\n\n从左侧选择一个 "
+    },
+    {
+      "step": "shortcut:搜索",
+      "clicked": true,
+      "active": [
+        "搜索"
+      ],
+      "main": "关键词\n文件类型\n全部\nJournal\n历史 Inbox\nInsight\n重新搜索\n\n请输入关键词，搜索标题和正文。"
+    },
+    {
+      "step": "shortcut:设置",
+      "clicked": true,
+      "active": [
+        "设置"
+      ],
+      "main": "AI 设置\n重新读取\n\n读取设置失败：Failed to fetch\n\n重试"
+    },
+    {
+      "step": "shortcut:回收箱",
+      "clicked": true,
+      "active": [
+        "回收箱"
+      ],
+      "main": "全部\nJournal\nInsight\n\n只显示已删除的 Journal / Insight；Inbox 是永久删除，不会出现在回收箱。\n\n回"
+    }
+  ]
+}

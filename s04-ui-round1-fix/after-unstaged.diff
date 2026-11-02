@@ -1,0 +1,1938 @@
+diff --git a/frontend/src/App.css b/frontend/src/App.css
+index 7866bee..e0851cf 100644
+--- a/frontend/src/App.css
++++ b/frontend/src/App.css
+@@ -489,7 +489,7 @@
+ .app-nav-host .app-header h1 { font-size: 24px; }
+ .app.app-embedded .app-navigation { flex-direction: column; align-items: stretch; gap: 4px; }
+ .app.app-embedded .app-navigation button { text-align: left; }
+-.app.app-embedded .home-new { width: 100%; }
++/* 「新建记录」已随图标导航移到记录页工具条（UI 调整第一轮），不再需要整行拉伸 */
+ 
+ [data-theme='dark'] .app.app-embedded { color: #eee; }
+ [data-theme='dark'] .app.app-embedded .app-navigation button {
+diff --git a/frontend/src/App.tsx b/frontend/src/App.tsx
+index 0928174..a1bc2d3 100644
+--- a/frontend/src/App.tsx
++++ b/frontend/src/App.tsx
+@@ -5,6 +5,7 @@ import { listJournals } from './api/journals'
+ import { searchFiles } from './api/search'
+ import { journalSearchConditions } from './utils/homeSearch'
+ import AppShell from './components/AppShell'
++import AppNav, { PageShortcuts, type AppNavItem } from './components/AppNav'
+ import DashboardPage from './pages/DashboardPage'
+ import WritingPage from './pages/WritingPage'
+ import RitualPage from './pages/RitualPage'
+@@ -41,11 +42,11 @@ const schedulesClient = createHttpSchedulesClient()
+  * 接线原则（`docs/stage4-tasks.md` §5「文件所有权与交接」、本次用户指令）：
+  * - 外壳只提供布局、响应式与外观；导航点击、「先保存再跳转」仍由本文件的
+  *   `navigate` / `registerFlush` 负责，没有第二套导航或保存逻辑；
+- * - 既有模块（所有日记/收件箱/复盘/洞察/全部搜索/回收箱/文件夹/设置）原样保留，
++ * - 既有模块（记录/历史收件箱/AI 复盘/洞察/搜索/回收箱/文件夹/设置）原样保留，
+  *   它们的面板、卸载 flush、删除与链接解析行为都不变；
+- * - 尚未交付的功能（开始今天 / 结束今天的独立编辑页属 T10）**不伪造**：
+- *   点击只给明确说明，不创建任何记录，也不放 Mock 数据冒充真实接线；
+- * - 概览与写作都只读或走既有会话队列，进入页面本身不产生写入。
++ * - 「计划 / 复盘」是 Ritual 页面（T10）的两个入口，只在首页卡片出现；
++ *   点击进入的是当天的同一份记录，创建时机仍由 Ritual 页面按「首次有效正文」决定；
++ * - 概览与速记都只读或走既有会话队列，进入页面本身不产生写入。
+  */
+ type Module =
+   | 'dashboard'
+@@ -64,28 +65,36 @@ type Module =
+ type Panel = { kind: 'list' } | { kind: 'create'; key: number } | { kind: 'detail'; file: FileIdentity; key: number }
+ 
+ /**
+- * 主导航顺序按「今天 → 写作 → 归档与查找」排列。
+- * 「开始今天 / 结束今天」不在这里：它们是 Ritual 页面（T10）的入口，
+- * 本轮只在概览卡片上出现，不提供未实现的导航项。
++ * 导航（UI 调整第一轮）。
++ *
++ * 命名统一：Writing → 速记、Set The Day → 计划、End The Day → 复盘；
++ * 原「多篇 AI 复盘」改名「AI 复盘」，与「复盘（End）」区分，两者不共用入口。
++ *
++ * 左侧图标栏只放四个主入口；日程、AI 复盘、历史收件箱、文件夹收进「更多」，
++ * 搜索 / 设置 / 回收箱在页面右下角。**入口只搬位置，功能与数据都不删除。**
+  */
+-const modules: { id: Module; label: string }[] = [
+-  { id: 'dashboard', label: '概览' },
+-  { id: 'writing', label: '写作' },
+-  { id: 'set', label: '开始今天' },
+-  { id: 'end', label: '结束今天' },
+-  { id: 'schedule', label: '日程' },
+-  { id: 'journal', label: '所有日记' },
+-  { id: 'inbox', label: '历史收件箱' },
+-  { id: 'review', label: '复盘' },
+-  { id: 'insight', label: '洞察' },
+-  { id: 'search', label: '全部搜索' },
+-  { id: 'trash', label: '回收箱' },
+-  { id: 'folder', label: '文件夹' },
+-  { id: 'settings', label: '设置' },
++const navItems: ReadonlyArray<AppNavItem<Module>> = [
++  { id: 'dashboard', label: '概览', icon: 'overview' },
++  { id: 'writing', label: '速记', icon: 'quick' },
++  { id: 'journal', label: '记录', icon: 'records' },
++  { id: 'insight', label: '洞察', icon: 'insight' },
++]
++
++const overflowItems: ReadonlyArray<AppNavItem<Module>> = [
++  { id: 'schedule', label: '日程', icon: 'schedule' },
++  { id: 'review', label: 'AI 复盘', icon: 'review' },
++  { id: 'inbox', label: '历史收件箱', icon: 'inbox' },
++  { id: 'folder', label: '文件夹', icon: 'folder' },
++]
++
++const shortcutItems: ReadonlyArray<AppNavItem<Module>> = [
++  { id: 'search', label: '搜索', icon: 'search' },
++  { id: 'settings', label: '设置', icon: 'settings' },
++  { id: 'trash', label: '回收箱', icon: 'trash' },
+ ]
+ 
+-/** 写作页的一次性「打开某篇」请求；由 WritingPage 消费后清空。 */
+-type WritingOpenRequest = { id: number; key: number }
++/** 「更多」里包含的模块：用于给触发按钮加高亮，不影响选中语义。 */
++const overflowIds: ReadonlyArray<Module> = overflowItems.map((item) => item.id)
+ 
+ /**
+  * 今日概览模块。
+@@ -96,10 +105,9 @@ type WritingOpenRequest = { id: number; key: number }
+  */
+ function DashboardModule(props: {
+   disabled: boolean
+-  onNewWriting: () => void
+-  onOpenWriting: (id: number) => void
+-  onStartRitual: (kind: 'set' | 'end') => void
+-  onOpenRitual: (kind: 'set' | 'end', id: number) => void
++  onQuickNote: () => void
++  onOpenPlan: () => void
++  onOpenReview: () => void
+ }) {
+   const overview = useTodayOverview()
+   return (
+@@ -109,10 +117,9 @@ function DashboardModule(props: {
+       error={overview.error}
+       disabled={props.disabled}
+       onRetry={overview.reload}
+-      onNewWriting={props.onNewWriting}
+-      onOpenWriting={props.onOpenWriting}
+-      onStartRitual={props.onStartRitual}
+-      onOpenRitual={props.onOpenRitual}
++      onQuickNote={props.onQuickNote}
++      onOpenPlan={props.onOpenPlan}
++      onOpenReview={props.onOpenReview}
+     />
+   )
+ }
+@@ -167,10 +174,6 @@ function App() {
+   // T09：详情页「复盘这篇」的一次性预选源；ReviewPage 消费后清空。
+   const [reviewSeed, setReviewSeed] = useState<{ source: ReviewSource; key: number } | null>(null)
+   const consumeReviewSeed = useCallback(() => setReviewSeed(null), [])
+-  // T06：概览的今日写作点击后，交给写作页打开那一篇（一次性请求）。
+-  const [writingOpen, setWritingOpen] = useState<WritingOpenRequest | null>(null)
+-  const consumeWritingOpen = useCallback(() => setWritingOpen(null), [])
+-  const writingKey = useRef(0)
+ 
+   useEffect(() => {
+     if (module !== 'journal') return
+@@ -313,19 +316,14 @@ function App() {
+   }
+ 
+   /**
+-   * 概览 → 写作：切到写作模块并让 WritingPage 打开指定文件。
++   * 首页「速记」入口：切到速记模块。
+    *
+    * 这里不自己读详情、不自己建会话：写作页会用 T02 的 `openSession` 复用/打开
+-   * 同一篇的会话（含未提交输入），并走同一条保存队列。
++   * 今天已有的会话（含未提交输入），并走同一条保存队列；
++   * 只有真实用户正文才会首次 POST，点击入口本身不创建记录。
+    */
+-  function openWriting(id: number) {
+-    navigate(() => {
+-      dirtyRef.current = false
+-      setNotice('')
+-      writingKey.current += 1
+-      setWritingOpen({ id, key: writingKey.current })
+-      setModule('writing')
+-    })
++  function openQuickNote() {
++    changeModule('writing')
+   }
+ 
+   /**
+@@ -449,37 +447,38 @@ function App() {
+   const uiLocked = busy || aiLocked
+ 
+   /**
+-   * 导航槽内容：品牌、新建入口、模块导航。
++   * 导航槽内容：品牌标识 + 主入口图标栏 + 「更多」。
+    *
+-   * 外层带 `app app-embedded`：`.app` 只作为按钮/输入框的基础样式命名空间，
+-   * 布局交给 AppShell（见 App.css 末尾的接线说明）。导航的点击语义仍是
+-   * `changeModule` → `navigate`，与接线前完全一致。
++   * 点击语义仍然是 `changeModule` → `navigate`（先 flush 最新草稿再跳转），
++   * 与改版前完全一致；图标栏只换表现，不换导航与保存逻辑。
+    */
+   const navigation = (
+-    <div className="app app-embedded app-nav-host">
+-      <header className="app-header">
+-        <h1>SeekJournal</h1>
+-        <p className="app-subtitle">记录经历与思考</p>
+-      </header>
+-      <button
+-        className="home-new"
+-        type="button"
+-        disabled={uiLocked}
+-        onClick={() => { if (module === 'journal') newJournal(); else navigate(() => { dirtyRef.current = false; setNotice(''); setModule('journal'); setPanel({ kind: 'create', key: editorKey + 1 }); setEditorKey(editorKey + 1); beginLoading() }) }}
+-      >
+-        新建记录
+-      </button>
+-      <nav className="app-navigation" aria-label="模块导航">
+-        {modules.map((item) => (
+-          <button key={item.id} type="button" aria-pressed={module === item.id}
+-            disabled={uiLocked} onClick={() => changeModule(item.id)}>{item.label}</button>
+-        ))}
+-      </nav>
+-    </div>
++    <AppNav
++      items={navItems}
++      overflow={overflowItems}
++      overflowLabel="更多"
++      active={module}
++      overflowActive={overflowIds.includes(module)}
++      disabled={uiLocked}
++      onSelect={changeModule}
++      onHome={() => changeModule('dashboard')}
++    />
+   )
+ 
+   return (
+-    <AppShell navigation={navigation} context={null} aside={null}>
++    <AppShell
++      navigation={navigation}
++      context={null}
++      aside={null}
++      shortcuts={
++        <PageShortcuts
++          items={shortcutItems}
++          active={module}
++          disabled={uiLocked}
++          onSelect={changeModule}
++        />
++      }
++    >
+       <div className="app app-embedded">
+         <div className="app-content">
+ 
+@@ -490,10 +489,9 @@ function App() {
+           {module === 'dashboard' && (
+             <DashboardModule
+               disabled={uiLocked}
+-              onNewWriting={() => changeModule('writing')}
+-              onOpenWriting={openWriting}
+-              onStartRitual={openRitual}
+-              onOpenRitual={(kind) => openRitual(kind)}
++              onQuickNote={openQuickNote}
++              onOpenPlan={() => openRitual('set')}
++              onOpenReview={() => openRitual('end')}
+             />
+           )}
+ 
+@@ -503,8 +501,6 @@ function App() {
+               onDirtyChange={setDirty}
+               onFlushReady={registerFlush}
+               onOpenLegacy={openLegacyJournal}
+-              initialFile={writingOpen}
+-              onInitialFileConsumed={consumeWritingOpen}
+             />
+           )}
+ 
+@@ -559,15 +555,17 @@ function App() {
+           {module === 'journal' && (
+             <>
+               {panel.kind === 'list' && <>
+-                <div className="home-heading"><h2>{homeQuery ? '搜索结果' : '所有日记'}</h2><span>{homeQuery ? (homeStatus === 'success' ? `${homeResult?.total ?? 0} 条匹配` : '') : (status === 'success' ? `${result?.total ?? 0} 篇日记` : '')}</span></div>
++                <div className="home-heading"><h2>{homeQuery ? '搜索结果' : '记录'}</h2><span>{homeQuery ? (homeStatus === 'success' ? `${homeResult?.total ?? 0} 条匹配` : '') : (status === 'success' ? `${result?.total ?? 0} 篇记录` : '')}</span></div>
+                 <form className="home-search" onSubmit={(event) => { event.preventDefault(); const value = homeInput.trim(); setHomePage(1); setHomeQuery(value); if (value === homeQuery && value) setHomeRevision((v) => v + 1) }}>
+-                  <label className="sr-only" htmlFor="home-search">搜索日记标题和正文</label>
+-                  <input id="home-search" type="search" value={homeInput} onChange={(event) => setHomeInput(event.target.value)} placeholder="搜索日记标题和正文" />
++                  <label className="sr-only" htmlFor="home-search">搜索记录标题和正文</label>
++                  <input id="home-search" type="search" value={homeInput} onChange={(event) => setHomeInput(event.target.value)} placeholder="搜索记录标题和正文" />
+                   <button type="submit">搜索</button>
+                 </form>
+                 {homeQuery && <button className="clear-search" type="button" onClick={() => { setHomeQuery(''); setHomeInput(''); setHomePage(1) }}>清除搜索</button>}
+               </>}
+-              {panel.kind === 'list' && !homeQuery && <section className="app-toolbar" aria-label="日记列表工具">
++              {/* 图标导航收窄后，「新建记录」从导航栏移到列表工具条，功能不变 */}
++              {panel.kind === 'list' && !homeQuery && <section className="app-toolbar" aria-label="记录列表工具">
++                <button className="home-new" type="button" disabled={uiLocked} onClick={() => newJournal()}>新建记录</button>
+                 <label className="app-filter">
+                   <span>按日期查看</span>
+                   <input type="date" value={filterDate} disabled={uiLocked}
+diff --git a/frontend/src/components/AppShell.css b/frontend/src/components/AppShell.css
+index 0b9995c..c2581e4 100644
+--- a/frontend/src/components/AppShell.css
++++ b/frontend/src/components/AppShell.css
+@@ -35,8 +35,8 @@
+   --sj-success: #21623a;
+   --sj-shadow: 0 1px 2px rgb(32 33 36 / 6%), 0 10px 28px rgb(32 33 36 / 5%);
+ 
+-  /* 列宽 */
+-  --sj-nav-width: 232px;
++  /* 列宽：左列是图标导航栏（UI 调整第一轮收窄为 76px） */
++  --sj-nav-width: 76px;
+   --sj-context-width: 264px;
+   --sj-aside-width: 296px;
+ 
+@@ -123,28 +123,32 @@
+   left: 12px;
+ }
+ 
+-/* ---------------- 左列：导航 + 上下文 + 主题 ---------------- */
++/* ---------------- 左列：图标导航 + 外观 ---------------- */
+ 
+ .sj-shell__sidebar {
+   position: sticky;
+   top: 0;
+   display: flex;
+   flex-direction: column;
+-  gap: 20px;
++  align-items: center;
++  gap: 16px;
+   align-self: start;
+   height: 100vh;
+   height: 100dvh;
+   max-height: 100dvh;
+-  padding: 28px 20px 24px 24px;
++  padding: 18px 0 20px;
+   border-right: 1px solid var(--sj-border);
+-  overflow-y: auto;
++  /* 不能裁剪：图标栏上的「更多」「外观」是向右展开的浮层 */
++  overflow: visible;
+ }
+ 
++/* 导航插槽撑满剩余高度：品牌在上、「更多」贴底、外观最底 */
+ .sj-shell__nav {
+   display: flex;
+-  flex-direction: column;
+-  gap: 8px;
++  flex: 1;
+   min-width: 0;
++  width: 100%;
++  justify-content: center;
+ }
+ 
+ /*
+@@ -186,20 +190,35 @@
+   min-width: 0;
+ }
+ 
++/* 外观：图标按钮 + 向右弹出的面板（浅色 / 深色 / 跟随系统） */
+ .sj-shell__theme {
++  position: relative;
++  display: flex;
++  justify-content: center;
++  width: 100%;
++  flex: none;
++}
++.sj-shell__theme-panel {
++  position: absolute;
++  left: calc(50% + 34px);
++  bottom: -6px;
++  z-index: 30;
+   display: flex;
+   flex-direction: column;
+   gap: 8px;
+-  min-width: 0;
+-  margin: auto 0 0;
+-  padding: 14px 0 0;
+-  border: 0;
+-  border-top: 1px solid var(--sj-border);
++  min-width: 188px;
++  padding: 12px;
++  border: 1px solid var(--sj-border);
++  border-radius: 14px;
++  background: var(--sj-surface);
++  box-shadow: var(--sj-shadow);
+ }
+-.sj-shell__theme-legend {
+-  padding: 0;
++.sj-shell__theme-title {
++  margin: 0;
+   color: var(--sj-text-muted);
+-  font-size: 13px;
++  font-size: 12px;
++  font-weight: 600;
++  letter-spacing: 0.08em;
+ }
+ .sj-shell__theme-options {
+   display: flex;
+@@ -210,9 +229,9 @@
+   display: flex;
+   align-items: center;
+   gap: 8px;
+-  padding: 7px 10px;
+-  border-radius: 8px;
+-  color: var(--sj-text-muted);
++  padding: 7px 8px;
++  border-radius: 9px;
++  color: var(--sj-text);
+   font-size: 14px;
+   cursor: pointer;
+ }
+@@ -235,10 +254,20 @@
+ }
+ .sj-shell__theme-hint {
+   margin: 0;
++  padding-top: 6px;
++  border-top: 1px solid var(--sj-border);
+   color: var(--sj-text-soft);
+   font-size: 12px;
+ }
+ 
++/* 页面右下角快捷入口（搜索 / 设置 / 回收箱），由 App 通过 shortcuts 插槽传入 */
++.sj-shell__shortcuts {
++  position: fixed;
++  right: 22px;
++  bottom: 22px;
++  z-index: 25;
++}
++
+ /* ---------------- 主区域 ---------------- */
+ 
+ .sj-shell__main {
+@@ -271,7 +300,7 @@
+ /* 平板：四列放不下，先收窄侧列而不是立刻堆叠 */
+ @media (max-width: 1360px) {
+   .sj-shell {
+-    --sj-nav-width: 212px;
++    --sj-nav-width: 68px;
+     --sj-context-width: 236px;
+     --sj-aside-width: 264px;
+   }
+@@ -282,10 +311,10 @@
+ 
+ /*
+  * 窄屏（手机与小平板）：单列堆叠。
+- * 侧栏不再 sticky，导航在顶部；上下文区默认折叠，由可聚焦按钮展开（键盘可达），
+- * 右栏排到正文之后。
++ * 图标栏从左侧竖栏改为顶部横栏（结构同一份，只由 CSS 改方向）；
++ * 上下文区默认折叠，由可聚焦按钮展开（键盘可达），右栏排到正文之后。
+  */
+-@media (max-width: 1120px) {
++@media (max-width: 860px) {
+   .sj-shell,
+   .sj-shell[data-has-context='true'],
+   .sj-shell[data-has-aside='true'],
+@@ -295,17 +324,24 @@
+   }
+   .sj-shell__sidebar {
+     position: static;
++    flex-direction: row;
++    align-items: center;
++    gap: 10px;
++    width: 100%;
+     height: auto;
+     max-height: none;
+-    padding: 20px 20px 16px;
++    padding: 10px 14px;
+     border-right: 0;
+     border-bottom: 1px solid var(--sj-border);
+-    gap: 14px;
++  }
++  .sj-shell__nav {
++    width: auto;
++    flex: 1;
+   }
+   .sj-shell__context {
+     position: static;
+     max-height: none;
+-    padding: 14px 20px 16px;
++    padding: 14px 16px 16px;
+     border-right: 0;
+     border-bottom: 1px solid var(--sj-border);
+     overflow-y: visible;
+@@ -317,13 +353,14 @@
+     display: none;
+   }
+   .sj-shell__theme {
+-    margin: 0;
+-    padding-top: 10px;
++    width: auto;
++    flex: none;
+   }
+-  .sj-shell__theme-options {
+-    flex-direction: row;
+-    flex-wrap: wrap;
+-    gap: 4px;
++  /* 顶部横栏：外观面板改为向上展开，避免被视口顶边裁掉 */
++  .sj-shell__theme-panel {
++    left: auto;
++    right: 0;
++    bottom: calc(100% + 26px);
+   }
+   .sj-shell__main {
+     padding: 24px 20px 56px;
+@@ -338,11 +375,15 @@
+     border-left: 0;
+     border-top: 1px solid var(--sj-border);
+   }
++  .sj-shell__shortcuts {
++    right: 12px;
++    bottom: 12px;
++  }
+ }
+ 
+ @media (max-width: 480px) {
+   .sj-shell__sidebar {
+-    padding: 16px 16px 12px;
++    padding: 8px 12px;
+   }
+   .sj-shell__main {
+     padding: 20px 16px 44px;
+diff --git a/frontend/src/components/AppShell.tsx b/frontend/src/components/AppShell.tsx
+index b7ec444..ef42f98 100644
+--- a/frontend/src/components/AppShell.tsx
++++ b/frontend/src/components/AppShell.tsx
+@@ -1,22 +1,23 @@
+ /**
+- * 应用外壳（Stage 4 / S04-T05）。
++ * 应用外壳（Stage 4 / S04-T05，UI 调整第一轮更新）。
+  *
+  * 边界（`docs/stage4-tasks.md` §3.6）：
+  * - `AppShell` **只负责布局、响应式与外观主题**，不读业务数据、不发请求；
+- * - 四个插槽由上层传入：`navigation`、`context`、`children`、`aside`；
++ * - 插槽由上层传入：`navigation`、`context`、`children`、`aside`；
++ *   本轮新增可选的 `shortcuts`（页面右下角快捷入口，见文件末尾说明）；
+  * - 导航的点击行为、保存会话与 flush 仍由 `App.tsx` 的回调负责，
+  *   外壳不接管「先保存再跳转」的逻辑，也不改变现有导航语义。
+  *
+- * 本轮约束：不改 `App.tsx` / `App.css` / `index.css`（T02 正在改 App）。
+- * 因此外壳使用独立类名（`sj-shell`）与独立 CSS 变量，避免与 `.app` 规则互相覆盖；
+- * 主题通过根元素 `data-theme` 生效，不需要改全局样式表。
+- *
+- * 主题：三种选择（浅色 / 深色 / 跟随系统）保存在 localStorage，
+- * 系统外观变化时实时跟随；解析逻辑见 `utils/theme.ts`（纯函数，已单测）。
++ * 本轮变化（UI 调整第一轮：全局导航 + 首页）：
++ * - 左列从 232px 文字导航收窄为 76px 图标栏，高度仍占满视口；
++ * - 外观（浅色 / 深色 / 跟随系统）从常驻表单改为图标 + 弹出面板，
++ *   选项与持久化行为完全保留；
++ * - 新增 `shortcuts` 插槽：固定定位在外壳根部，因此能继承 `--sj-*` 主题变量。
+  */
+ 
+-import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
++import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+ import './AppShell.css'
++import { NavIcon } from './AppNav'
+ import {
+   SYSTEM_DARK_QUERY,
+   THEME_OPTIONS,
+@@ -31,12 +32,13 @@ import {
+ export const SJ_MAIN_ID = 'sj-main'
+ 
+ /**
+- * 冻结的外壳接口。
++ * 外壳接口。
+  *
+- * - `navigation`：品牌、主导航与新建入口，由 `App.tsx` 渲染后传入；
++ * - `navigation`：品牌 + 主入口图标栏（`components/AppNav.tsx`），由 `App.tsx` 渲染后传入；
+  * - `context`：左侧上下文区（今日写作列表 / Ritual 当前模板），可为空；
+  * - `children`：主区域正文（Dashboard、Writing、Ritual、Insight 等页面）；
+- * - `aside`：右侧补充区（评论侧栏），可为空。
++ * - `aside`：右侧补充区（评论侧栏），可为空；
++ * - `shortcuts`：页面右下角快捷入口（搜索 / 设置 / 回收箱），可为空。
+  *
+  * 只在 `context` / `aside` 非空时才占用对应列，空壳不会留下多余留白。
+  */
+@@ -45,6 +47,7 @@ export type AppShellProps = {
+   context: ReactNode | null
+   children: ReactNode
+   aside: ReactNode | null
++  shortcuts?: ReactNode
+ }
+ 
+ /** 读取一次浏览器存储；无 `window`（非浏览器环境）时返回 null，由主题工具回落默认值。 */
+@@ -58,7 +61,7 @@ function browserStorage(): Storage | null {
+   }
+ }
+ 
+-function AppShell({ navigation, context, children, aside }: AppShellProps) {
++function AppShell({ navigation, context, children, aside, shortcuts = null }: AppShellProps) {
+   const [preference, setPreference] = useState<ThemePreference>(() => readThemePreference(browserStorage()))
+   const [systemDark, setSystemDark] = useState(() => {
+     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+@@ -66,8 +69,12 @@ function AppShell({ navigation, context, children, aside }: AppShellProps) {
+   })
+   // 窄屏下上下文区默认收起：避免主区域被挤到首屏之外。
+   const [contextOpen, setContextOpen] = useState(false)
++  const [themeOpen, setThemeOpen] = useState(false)
+   const contextPanelId = useId()
+   const themeGroupName = useId()
++  const themePanelId = useId()
++  const themeWrap = useRef<HTMLDivElement>(null)
++  const themeTrigger = useRef<HTMLButtonElement>(null)
+ 
+   // 订阅系统外观变化：只有「跟随系统」时才会改变生效主题，但订阅本身无副作用。
+   // 初值已由 useState 的初始化函数读取，这里不再同步设置，避免多余的重渲染。
+@@ -84,6 +91,28 @@ function AppShell({ navigation, context, children, aside }: AppShellProps) {
+     writeThemePreference(browserStorage(), preference)
+   }, [preference])
+ 
++  // 外观面板：Esc 关闭、点击外部关闭，关闭后焦点回到图标按钮。
++  const closeTheme = useCallback(() => {
++    setThemeOpen(false)
++    themeTrigger.current?.focus()
++  }, [])
++
++  useEffect(() => {
++    if (!themeOpen) return
++    const onPointerDown = (event: PointerEvent) => {
++      if (themeWrap.current !== null && !themeWrap.current.contains(event.target as Node)) closeTheme()
++    }
++    const onKeyDown = (event: KeyboardEvent) => {
++      if (event.key === 'Escape') closeTheme()
++    }
++    document.addEventListener('pointerdown', onPointerDown)
++    document.addEventListener('keydown', onKeyDown)
++    return () => {
++      document.removeEventListener('pointerdown', onPointerDown)
++      document.removeEventListener('keydown', onKeyDown)
++    }
++  }, [themeOpen, closeTheme])
++
+   const theme = resolveTheme(preference, systemDark)
+   const themeClass = useMemo(
+     () => (theme === 'dark' ? 'sj-shell theme-dark' : 'sj-shell'),
+@@ -102,33 +131,51 @@ function AppShell({ navigation, context, children, aside }: AppShellProps) {
+       <aside className="sj-shell__sidebar">
+         <div className="sj-shell__nav">{navigation}</div>
+ 
+-        <fieldset className="sj-shell__theme">
+-          <legend className="sj-shell__theme-legend">外观</legend>
+-          <div className="sj-shell__theme-options">
+-            {THEME_OPTIONS.map((option) => (
+-              <label
+-                key={option.value}
+-                className="sj-shell__theme-option"
+-                data-active={preference === option.value ? 'true' : 'false'}
+-                title={option.hint}
+-              >
+-                <input
+-                  type="radio"
+-                  name={themeGroupName}
+-                  value={option.value}
+-                  checked={preference === option.value}
+-                  onChange={() => setPreference(option.value)}
+-                />
+-                <span>{option.label}</span>
+-              </label>
+-            ))}
+-          </div>
+-          {preference === 'system' && (
+-            <p className="sj-shell__theme-hint" role="status">
+-              系统当前：{theme === 'dark' ? '深色' : '浅色'}
+-            </p>
++        <div className="sj-shell__theme" ref={themeWrap}>
++          <button
++            ref={themeTrigger}
++            type="button"
++            className="sj-nav__item"
++            data-tip="外观"
++            aria-label="外观"
++            aria-haspopup="true"
++            aria-expanded={themeOpen}
++            aria-controls={themePanelId}
++            data-active={themeOpen ? 'true' : 'false'}
++            onClick={() => setThemeOpen((open) => !open)}
++          >
++            <NavIcon name="theme" />
++          </button>
++
++          {themeOpen && (
++            <div className="sj-shell__theme-panel" id={themePanelId} role="group" aria-label="外观">
++              <p className="sj-shell__theme-title">外观</p>
++              <div className="sj-shell__theme-options">
++                {THEME_OPTIONS.map((option) => (
++                  <label
++                    key={option.value}
++                    className="sj-shell__theme-option"
++                    data-active={preference === option.value ? 'true' : 'false'}
++                    title={option.hint}
++                  >
++                    <input
++                      type="radio"
++                      name={themeGroupName}
++                      value={option.value}
++                      checked={preference === option.value}
++                      onChange={() => setPreference(option.value)}
++                    />
++                    <span>{option.label}</span>
++                  </label>
++                ))}
++              </div>
++              <p className="sj-shell__theme-hint" role="status">
++                当前：{theme === 'dark' ? '深色' : '浅色'}
++                {preference === 'system' ? '（跟随系统）' : ''}
++              </p>
++            </div>
+           )}
+-        </fieldset>
++        </div>
+       </aside>
+ 
+       {context !== null && (
+@@ -161,6 +208,8 @@ function AppShell({ navigation, context, children, aside }: AppShellProps) {
+           {aside}
+         </aside>
+       )}
++
++      {shortcuts !== null && <div className="sj-shell__shortcuts">{shortcuts}</div>}
+     </div>
+   )
+ }
+diff --git a/frontend/src/hooks/useEditSession.ts b/frontend/src/hooks/useEditSession.ts
+index d42eec4..aba77c5 100644
+--- a/frontend/src/hooks/useEditSession.ts
++++ b/frontend/src/hooks/useEditSession.ts
+@@ -15,6 +15,7 @@
+ 
+ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+ import {
++  draftHasContent,
+   editSessionStore,
+   type DocumentDraft,
+   type EditSession,
+@@ -175,30 +176,19 @@ function toRecord(
+ 
+ /** 仅供 `toRecord` 使用的必填化类型。 */
+ 
+-/**
+- * 文档里有没有任何用户可见文字（只看 `type: 'text'` 的 `text`）。
+- *
+- * 不能直接遍历所有字符串：段落的 `attrs.id` 也是字符串，会把空文档判成有内容。
+- */
+-function documentHasText(node: unknown): boolean {
+-  if (typeof node !== 'object' || node === null) return false
+-  const record = node as Record<string, unknown>
+-  if (record.type === 'text') return typeof record.text === 'string' && record.text.trim() !== ''
+-  if (Array.isArray(record.content)) return record.content.some(documentHasText)
+-  return false
+-}
+-
+ /**
+  * 空草稿（无标题、无正文、也没有已发出的创建请求）不写本地记录。
+  *
+  * 编辑器挂载时会把初始文档同步进会话（`system` 来源），这会推进输入序号；
+  * 若照写不误，每次打开写作页都会留下一份「空的本机草稿」，
+  * 恢复面板会把它们当成待恢复内容，用户也不知道该恢复什么。
++ *
++ * 「空白」与 `planWrite` 使用同一个判定（`draftHasContent`），
++ * 两处口径必须一致：否则要么留下空记录，要么把空白误报成保存失败。
+  */
+ function isEmptyDraft(session: EditSession): boolean {
+   if (session.firstRequest !== null) return false
+-  if (session.draft.title.trim() !== '') return false
+-  return !documentHasText(session.draft.content_doc)
++  return !draftHasContent(session.draft)
+ }
+ /**
+  * 把会话草稿镜像到浏览器本地。
+diff --git a/frontend/src/hooks/useTodayOverview.ts b/frontend/src/hooks/useTodayOverview.ts
+index 7b0d4a0..62415dc 100644
+--- a/frontend/src/hooks/useTodayOverview.ts
++++ b/frontend/src/hooks/useTodayOverview.ts
+@@ -29,6 +29,28 @@ export interface TodayOverviewState {
+   reload: () => void
+ }
+ 
++/**
++ * 把异常转成用户能看懂的失败原因。
++ *
++ * 浏览器在网络层失败时只抛 `Failed to fetch` 这类原文（后端未启动、连接被拒），
++ * 直接显示在首页上既不像中文提示、也说不清该怎么办；这里只替换这一类网络错误，
++ * HTTP 状态错误（如「读取失败（HTTP 503）」）与业务错误保持原样，避免掩盖真实原因。
++ */
++function readableError(cause: unknown): string {
++  if (cause instanceof Error) {
++    const message = cause.message
++    if (
++      message === 'Failed to fetch'
++      || message === 'Load failed'
++      || message === 'NetworkError when attempting to fetch resource.'
++    ) {
++      return '连不上服务端，今天的记录暂时无法读取。请确认后端已启动后再重新读取。'
++    }
++    if (message !== '') return message
++  }
++  return '读取今天的记录失败，请稍后重试。'
++}
++
+ export function useTodayOverview(): TodayOverviewState {
+   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
+   const [today, setToday] = useState<TodayOverviewView | null>(null)
+@@ -60,9 +82,7 @@ export function useTodayOverview(): TodayOverviewState {
+       } catch (cause: unknown) {
+         if (controller.signal.aborted) return
+         setToday(null)
+-        setError(cause instanceof Error && cause.message !== ''
+-          ? cause.message
+-          : '读取今天的记录失败，请稍后重试。')
++        setError(readableError(cause))
+         setStatus('error')
+       }
+     })()
+diff --git a/frontend/src/pages/DashboardPage.css b/frontend/src/pages/DashboardPage.css
+index 8c9b07c..1ed5068 100644
+--- a/frontend/src/pages/DashboardPage.css
++++ b/frontend/src/pages/DashboardPage.css
+@@ -1,276 +1,349 @@
+ /*
+- * 今日概览样式（Stage 4 / S04-T05）。
++ * 首页 / 今日样式（Stage 4 / S04-T05，UI 调整第一轮改版）。
+  *
+- * 颜色全部取自 AppShell 的 `--sj-*` 设计变量，并带浅色兜底值：
+- * 概览放在外壳里时跟随主题；即使将来单独预览也不会变成无样式黑字。
+- * 不引入 UI 框架，不使用图片/图标字体。
++ * 参考用户提供的图 3：大面积留白、内容居中、白色背景；
++ * 上方一块醒目的蓝色「速记」入口，下方蓝色渐变主卡片（卡内左计划、右复盘）。
++ *
++ * 颜色策略：
++ *   - 卡片与速记条是本页唯一的高饱和蓝色区域，用固定值（不跟随主题反转），
++ *     深色主题下同样是这块蓝色卡片，只由页面底色变化提供对比；
++ *   - 其余文字、错误面板、说明文字取外壳的 `--sj-*` 变量，自动跟随主题。
+  */
+ 
+ .dash {
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  /* 外壳 main 上下 padding 合计 116px：减去后正好在视口里垂直居中偏上一点 */
++  min-height: calc(100dvh - 150px);
++  padding: 4px 0 24px;
++}
++
++.dash-stack {
+   display: flex;
+   flex-direction: column;
+-  gap: 24px;
++  gap: 14px;
++  width: 100%;
++  max-width: 620px;
+   min-width: 0;
+ }
+ 
+-/* ---------------- 标题区 ---------------- */
++/* ---------------- 速记入口 ---------------- */
+ 
+-.dash-head {
++.dash .dash-quick {
+   display: flex;
+-  flex-direction: column;
+-  gap: 6px;
+-}
+-.dash-eyebrow {
+-  margin: 0;
+-  color: var(--sj-text-muted, #6b6375);
+-  font-size: 13px;
+-  letter-spacing: 0.12em;
+-  text-transform: uppercase;
++  align-items: center;
++  justify-content: space-between;
++  gap: 14px;
++  width: 100%;
++  min-height: 58px;
++  padding: 0 16px 0 22px;
++  border: 0;
++  border-radius: 16px;
++  background: linear-gradient(135deg, #5563e6 0%, #4a56d8 100%);
++  color: #ffffff;
++  font: inherit;
++  text-align: left;
++  cursor: pointer;
++  box-shadow: 0 14px 28px -18px rgb(70 84 216 / 85%);
++  transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+ }
+-.dash-title {
+-  margin: 0;
+-  color: var(--sj-text, #202124);
+-  font: 400 30px/1.25 Georgia, 'Songti SC', serif;
+-  letter-spacing: -0.4px;
++
++.dash .dash-quick:hover:not(:disabled) {
++  filter: brightness(1.05);
++  transform: translateY(-1px);
++  box-shadow: 0 18px 32px -18px rgb(70 84 216 / 90%);
+ }
+-.dash-sub {
+-  margin: 0;
+-  color: var(--sj-text-soft, #767080);
+-  font-size: 13px;
++
++.dash .dash-quick:active:not(:disabled) {
++  transform: translateY(0);
+ }
+ 
+-/* ---------------- 状态块 ---------------- */
++.dash .dash-quick:disabled {
++  cursor: not-allowed;
++  opacity: 0.6;
++}
+ 
+-.dash-panel {
++.dash .dash-quick-text {
+   display: flex;
+-  flex-direction: column;
+-  align-items: flex-start;
++  align-items: baseline;
+   gap: 10px;
+-  padding: 20px;
+-  border: 1px solid var(--sj-border, #e5e2ea);
+-  border-radius: 16px;
+-  background: var(--sj-surface-muted, #faf9fc);
+   min-width: 0;
+ }
+-.dash-loading-text {
+-  margin: 0;
+-  color: var(--sj-text-muted, #6b6375);
+-  font-size: 14px;
++
++.dash .dash-quick-label {
++  font-size: 17px;
++  font-weight: 650;
++  letter-spacing: 0.01em;
+ }
+-.dash-skeleton {
++
++.dash .dash-quick-hint {
++  color: rgb(255 255 255 / 70%);
++  font-size: 13px;
++}
++
++.dash .dash-quick-icon {
++  display: inline-flex;
++  flex: none;
++  align-items: center;
++  justify-content: center;
++  width: 34px;
++  height: 34px;
++  border-radius: 11px;
++  background: rgb(255 255 255 / 15%);
++}
++
++/* ---------------- 蓝色渐变主卡片 ---------------- */
++
++.dash-hero {
++  position: relative;
++  isolation: isolate;
++  overflow: hidden;
+   display: flex;
+   flex-direction: column;
+-  gap: 10px;
+-  width: 100%;
+-  margin: 0;
+-  padding: 0;
+-  list-style: none;
+-}
+-.dash-skeleton-row {
+-  height: 14px;
+-  border-radius: 999px;
+-  background: var(--sj-border, #e5e2ea);
+-  animation: dash-pulse 1.6s ease-in-out infinite;
++  gap: 8px;
++  padding: 32px 32px 28px;
++  border-radius: 22px;
++  color: #ffffff;
++  background:
++    radial-gradient(122% 128% at 90% 104%, rgb(255 255 255 / 50%) 0%, rgb(255 255 255 / 0%) 58%),
++    linear-gradient(135deg, #6371ea 0%, #7c8af3 52%, #99a6fb 100%);
++  box-shadow: 0 26px 50px -34px rgb(84 98 226 / 55%);
+ }
+-.dash-skeleton-row:nth-child(1) { width: 62%; }
+-.dash-skeleton-row:nth-child(2) { width: 88%; }
+-.dash-skeleton-row:nth-child(3) { width: 44%; }
+ 
+-@keyframes dash-pulse {
+-  0%, 100% { opacity: 0.55; }
+-  50% { opacity: 1; }
++/* 右下角的大圆形高光，对应参考图里的白色弧形 */
++.dash-hero::after {
++  content: '';
++  position: absolute;
++  z-index: 0;
++  right: -80px;
++  bottom: -140px;
++  width: 360px;
++  height: 360px;
++  border-radius: 50%;
++  background: rgb(255 255 255 / 20%);
++  pointer-events: none;
+ }
+ 
+-.dash-error {
+-  border-color: var(--sj-danger-border, #e3b7b7);
+-  background: var(--sj-danger-bg, #fdf4f4);
++.dash-hero > * {
++  position: relative;
++  z-index: 1;
+ }
+-.dash-error-text {
++
++.dash-hero-eyebrow {
+   margin: 0;
+-  color: var(--sj-danger, #8a2f2f);
+-  font-size: 14px;
+-  overflow-wrap: anywhere;
++  color: rgb(255 255 255 / 82%);
++  font-size: 12.5px;
++  font-weight: 500;
++  letter-spacing: 0.1em;
+ }
+-.dash-error-hint {
++
++.dash-hero-title {
+   margin: 0;
+-  color: var(--sj-text-muted, #6b6375);
+-  font-size: 13px;
++  font-size: 30px;
++  font-weight: 700;
++  line-height: 1.24;
++  letter-spacing: -0.4px;
+ }
+ 
+-.dash-empty-all {
++.dash-hero-sub {
+   margin: 0;
+-  padding: 16px 18px;
+-  border: 1px dashed var(--sj-border-strong, #cfc9d6);
+-  border-radius: 16px;
+-  color: var(--sj-text-muted, #6b6375);
+-  font-size: 14px;
+-  overflow-wrap: anywhere;
++  max-width: 34ch;
++  color: rgb(255 255 255 / 86%);
++  font-size: 15px;
++  line-height: 1.62;
+ }
+ 
+-/* ---------------- 入口卡片 ---------------- */
++.dash-hero-note {
++  margin: 2px 0 0;
++  color: rgb(255 255 255 / 78%);
++  font-size: 13px;
++  line-height: 1.5;
++}
+ 
+-.dash-cards {
+-  display: flex;
+-  flex-direction: column;
+-  gap: 16px;
+-  min-width: 0;
++/* ---------------- 卡内按钮：左计划、右复盘 ---------------- */
++
++.dash .dash-actions {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: 12px;
++  margin-top: 14px;
+ }
+-.dash-card {
+-  display: flex;
+-  flex-direction: column;
+-  gap: 10px;
+-  padding: 22px;
+-  border: 1px solid var(--sj-border, #e5e2ea);
+-  border-radius: 18px;
+-  background: var(--sj-surface, #ffffff);
+-  box-shadow: var(--sj-shadow, 0 1px 2px rgb(32 33 36 / 6%));
+-  min-width: 0;
++
++.dash .dash-action {
++  min-height: 46px;
++  padding: 0 18px;
++  border: 0;
++  border-radius: 999px;
++  background: #ffffff;
++  color: #4a56d8;
++  font: inherit;
++  font-size: 15px;
++  font-weight: 650;
++  cursor: pointer;
++  transition: background-color 130ms ease, transform 130ms ease, opacity 130ms ease;
+ }
+-.dash-card-head {
+-  display: flex;
+-  flex-wrap: wrap;
+-  align-items: baseline;
+-  justify-content: space-between;
+-  gap: 8px;
++
++.dash .dash-action:hover:not(:disabled) {
++  background: #f2f3ff;
+ }
+-.dash-card-title {
+-  margin: 0;
+-  color: var(--sj-text, #202124);
+-  font-size: 18px;
+-  font-weight: 600;
++
++.dash .dash-action:active:not(:disabled) {
++  transform: scale(0.99);
+ }
+-.dash-card-meta {
+-  margin: 0;
+-  color: var(--sj-text-soft, #767080);
+-  font-size: 13px;
+-  overflow-wrap: anywhere;
++
++/* 禁用：浅白底 + 半透明蓝字，既明显变淡又仍然可读。
++   `opacity: 1` 是必需的：`.app button:disabled` 会再叠一层 0.5，叠加后几乎看不见按钮。 */
++.dash .dash-action--muted:disabled {
++  background: rgb(255 255 255 / 56%);
++  color: rgb(74 86 216 / 82%);
++  opacity: 1;
++  cursor: not-allowed;
+ }
+-.dash-card-desc {
+-  margin: 0;
+-  color: var(--sj-text-muted, #6b6375);
+-  font-size: 14px;
++
++.dash .dash-action--solo {
++  justify-self: start;
+ }
+-.dash-card-empty {
+-  margin: 0;
+-  padding: 12px 14px;
+-  border: 1px dashed var(--sj-border-strong, #cfc9d6);
+-  border-radius: 12px;
+-  color: var(--sj-text-soft, #767080);
+-  font-size: 13px;
++
++/* ---------------- 加载 ---------------- */
++
++.dash-hero--loading {
++  gap: 12px;
+ }
+-.dash-card-preview {
++
++.dash-hero-status {
+   margin: 0;
+-  color: var(--sj-text-muted, #6b6375);
+-  font-size: 13px;
+-  white-space: pre-wrap;
+-  overflow-wrap: anywhere;
+-  display: -webkit-box;
+-  -webkit-line-clamp: 2;
+-  -webkit-box-orient: vertical;
+-  overflow: hidden;
++  color: rgb(255 255 255 / 88%);
++  font-size: 13.5px;
+ }
+ 
+-/* 今日写作列表 */
+-.dash-list {
++.dash-skeleton {
+   display: flex;
+   flex-direction: column;
+-  gap: 8px;
++  gap: 10px;
++  width: 100%;
+   margin: 0;
+   padding: 0;
+   list-style: none;
+-  min-width: 0;
+-}
+-.dash-list-item {
+-  min-width: 0;
+-}
+-.dash-list-open {
+-  display: flex;
+-  flex-direction: column;
+-  gap: 4px;
+-  width: 100%;
+-  padding: 12px 14px;
+-  border: 1px solid var(--sj-border, #e5e2ea);
+-  border-radius: 12px;
+-  background: var(--sj-surface-muted, #faf9fc);
+-  color: inherit;
+-  font: inherit;
+-  text-align: left;
+-  cursor: pointer;
+ }
+-.dash-list-open:hover:not(:disabled) {
+-  border-color: var(--sj-border-strong, #cfc9d6);
+-  background: var(--sj-bg-soft, #f7f6f8);
++
++.dash-skeleton-row {
++  height: 14px;
++  border-radius: 999px;
++  background: rgb(255 255 255 / 32%);
++  animation: dash-pulse 1.6s ease-in-out infinite;
+ }
+-.dash-list-open:disabled {
+-  cursor: not-allowed;
+-  opacity: 0.6;
++
++.dash-skeleton-row:nth-child(1) { width: 46%; }
++.dash-skeleton-row:nth-child(2) { width: 74%; }
++.dash-skeleton-row--short { width: 30%; }
++
++@keyframes dash-pulse {
++  0%, 100% { opacity: 0.5; }
++  50% { opacity: 1; }
+ }
+-.dash-list-title {
++
++/* ---------------- 失败 ---------------- */
++
++.dash-hero--error {
++  border: 1px solid var(--sj-danger-border, #e3b7b7);
++  background: var(--sj-danger-bg, #fdf4f4);
+   color: var(--sj-text, #202124);
+-  font-size: 15px;
+-  font-weight: 600;
+-  white-space: nowrap;
+-  overflow: hidden;
+-  text-overflow: ellipsis;
++  box-shadow: none;
+ }
+-.dash-list-preview {
+-  color: var(--sj-text-muted, #6b6375);
+-  font-size: 13px;
+-  white-space: pre-wrap;
+-  overflow-wrap: anywhere;
+-  display: -webkit-box;
+-  -webkit-line-clamp: 2;
+-  -webkit-box-orient: vertical;
+-  overflow: hidden;
++
++.dash-hero--error::after {
++  display: none;
+ }
+ 
+-/* 按钮 */
+-.dash-card-actions {
+-  display: flex;
+-  flex-wrap: wrap;
+-  align-items: center;
+-  gap: 10px;
++.dash-hero--error .dash-hero-eyebrow {
++  color: var(--sj-text-muted, #6b6375);
+ }
+-.dash-button {
+-  padding: 9px 18px;
+-  border: 1px solid var(--sj-border-strong, #cfc9d6);
+-  border-radius: 999px;
+-  background: var(--sj-surface, #ffffff);
++
++.dash-hero--error .dash-hero-title {
+   color: var(--sj-text, #202124);
+-  font: inherit;
++  font-size: 24px;
++}
++
++.dash-hero--error .dash-hero-sub {
++  max-width: 46ch;
++  color: var(--sj-danger, #8a2f2f);
+   font-size: 14px;
+-  cursor: pointer;
+ }
+-.dash-button--primary {
+-  border-color: var(--sj-inverse-bg, #202124);
++
++.dash-hero--error .dash-hero-note {
++  color: var(--sj-text-muted, #6b6375);
++}
++
++.dash-hero--error .dash-action {
+   background: var(--sj-inverse-bg, #202124);
+   color: var(--sj-inverse-text, #ffffff);
+ }
+-.dash-button:hover:not(:disabled) {
++
++.dash-hero--error .dash-action:hover:not(:disabled) {
++  background: var(--sj-inverse-bg, #202124);
+   opacity: 0.9;
+ }
+-.dash-button:disabled {
+-  cursor: not-allowed;
+-  opacity: 0.55;
++
++/* ---------------- 卡片下方说明 ---------------- */
++
++.dash-meta {
++  margin: 0;
++  color: var(--sj-text-soft, #767080);
++  font-size: 12.5px;
++  text-align: center;
++}
++
++.dash-meta-sep {
++  margin: 0 6px;
++  opacity: 0.7;
+ }
+ 
+-/* 手机宽度：卡片内边距与字号略收紧，保持可点面积 */
+-@media (max-width: 480px) {
++/* ---------------- 窄屏 ---------------- */
++
++@media (max-width: 860px) {
+   .dash {
+-    gap: 18px;
++    min-height: calc(100dvh - 210px);
++    padding: 12px 0 20px;
++  }
++}
++
++@media (max-width: 520px) {
++  .dash-stack {
++    gap: 12px;
++  }
++  .dash .dash-quick {
++    min-height: 54px;
++    padding: 0 12px 0 18px;
++  }
++  .dash .dash-quick-hint {
++    display: none;
+   }
+-  .dash-title {
+-    font-size: 26px;
++  .dash-hero {
++    padding: 22px 20px 20px;
++    border-radius: 20px;
+   }
+-  .dash-card {
+-    padding: 16px;
+-    border-radius: 16px;
++  .dash-hero-title {
++    font-size: 24px;
+   }
+-  .dash-panel {
+-    padding: 16px;
++  .dash-hero-sub {
++    font-size: 14px;
++  }
++  .dash .dash-actions {
++    gap: 10px;
++  }
++  .dash .dash-action {
++    min-height: 44px;
++    font-size: 14.5px;
++  }
++}
++
++@media (prefers-reduced-motion: reduce) {
++  .dash-quick,
++  .dash .dash-action {
++    transition: none;
+   }
+-  .dash-button {
+-    width: 100%;
+-    text-align: center;
++  .dash-skeleton-row {
++    animation: none;
+   }
+ }
+diff --git a/frontend/src/pages/DashboardPage.tsx b/frontend/src/pages/DashboardPage.tsx
+index 6b3e75d..f7128bd 100644
+--- a/frontend/src/pages/DashboardPage.tsx
++++ b/frontend/src/pages/DashboardPage.tsx
+@@ -1,20 +1,20 @@
+ /**
+- * 今日概览（Stage 4 / S04-T05）。
++ * 首页 / 今日（Stage 4 / S04-T05，UI 调整第一轮改版）。
+  *
+  * 产品边界（`docs/stage4.md` §4）：
+- * - 按当前**业务日期**动态展示今天的普通写作、开始今天、结束今天；
+- * - 「开始今天 / 结束今天」提供进入或继续入口，写作提供开始/继续入口；
+- * - 概览是动态列表，**不自动创建**「今日汇总」文件、复盘或其他记录；
+- * - 仅打开页面不得产生任何写入。
++ * - 按当前**业务日期**展示今天的入口，业务日期由服务端按 Asia/Shanghai 04:00 计算，
++ *   前端不拿浏览器本地日期替代；
++ * - 「速记 / 计划 / 复盘」只是入口：**打开页面不创建任何文件**，
++ *   当天已有记录时进入的是同一份记录（同业务日 Ritual 唯一约束不被突破）；
++ * - 首页是入口集合，不自动生成「今日汇总」或其他文件；
++ * - 重新读取只重新 GET，不产生写入。
+  *
+- * 因此本组件是一个**纯展示组件**：
+- * - 不收发 HTTP，不 import 任何 `api/*`，不在 `useEffect` 里读取数据；
+- * - 数据（`today`）与状态（`status`）由上层接线者传入；
+- * - 所有会写库的动作只能来自用户点击，并交回上层回调执行。
+- * 这样「进入概览零创建」是由组件结构保证的，而不是靠调用顺序约定。
++ * 因此本组件是一个**纯展示组件**：不收发 HTTP，数据与状态由 `useTodayOverview`
++ * 与 `App.tsx` 传入，所有会写库的动作只能来自用户点击并交回上层回调。
+  *
+- * 本轮不接线到 `App.tsx`（T02 正在改 App）。真实数据读取的验收门禁见
+- * `docs/stage4-tasks.md` §3.6：等 T01 后端、隔离库与公共入口就绪后再验。
++ * 视觉（用户提供的参考图 3）：大面积留白、内容居中、白色背景；
++ * 上方醒目的「速记」入口，下方一块蓝色渐变主卡片，卡内左「计划」右「复盘」，
++ * 两者是白色按钮；当天没有有效计划时「复盘」为浅白禁用态并给出简短原因。
+  */
+ 
+ import './DashboardPage.css'
+@@ -22,8 +22,7 @@ import './DashboardPage.css'
+ /** Ritual 类型：原样对应 `journal_kind=set|end`，仅内部使用，界面不显示英文缩写。 */
+ export type DashboardRitualKind = 'set' | 'end'
+ 
+-
+-/** 今日普通写作文件（`journal_kind=writing` 的列表项字段子集）。 */
++/** 今日普通速记文件（`journal_kind=writing` 的列表项字段子集）。 */
+ export type DashboardWritingItem = {
+   id: number
+   title: string
+@@ -37,7 +36,7 @@ export type DashboardWritingItem = {
+  * 某一种 Ritual 的今日状态。
+  *
+  * `absent` 表示今天还没有有效文件——此时**不得**为了展示而创建草稿；
+- * 用户点「开始今天 / 结束今天」后由上层的创建流程决定是否落库。
++ * 用户点「计划 / 复盘」后由上层的 Ritual 页面决定是否落库（首次有效正文才创建）。
+  */
+ export type DashboardRitualSlot =
+   | { state: 'absent' }
+@@ -66,14 +65,12 @@ export type DashboardPageProps = {
+   disabled?: boolean
+   /** 失败后重试读取；只重新 GET，不创建任何文件。 */
+   onRetry: () => void
+-  /** Writing 入口：进入今天的普通写作（首次进入打开未落库草稿）。 */
+-  onNewWriting: () => void
+-  /** 打开今天已有的某篇普通写作。 */
+-  onOpenWriting: (id: number) => void
+-  /** 今天还没有该 Ritual：进入创建流程（是否落库由上层决定）。 */
+-  onStartRitual: (kind: DashboardRitualKind) => void
+-  /** 今天已有该 Ritual：打开继续编辑。 */
+-  onOpenRitual: (kind: DashboardRitualKind, id: number) => void
++  /** 速记入口：进入今天的速记（复用已有草稿/记录，不新建空记录）。 */
++  onQuickNote: () => void
++  /** 计划入口：进入今天的计划；今天已有计划时进入的是同一份记录。 */
++  onOpenPlan: () => void
++  /** 复盘入口：进入今天的复盘；今天已有复盘时继续同一份记录。 */
++  onOpenReview: () => void
+ }
+ 
+ const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+@@ -99,10 +96,22 @@ function formatBusinessDate(value: string): string {
+   return `${year}年${month}月${day}日 ${WEEKDAYS[date.getDay()]}`
+ }
+ 
+-/** 标题为空时的兜底显示，不伪造内容。 */
+-function displayTitle(title: string): string {
+-  const trimmed = title.trim()
+-  return trimmed === '' ? '（无标题）' : trimmed
++/** 速记入口右侧的铅笔图标（内联 SVG，不引入图标库）。 */
++function PencilIcon() {
++  return (
++    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"
++      fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
++      <path d="M4.2 19.9l4.3-1 9.2-9.2a2.1 2.1 0 0 0 0-3l-.4-.4a2.1 2.1 0 0 0-3 0l-9.2 9.2-1 4.4z" />
++      <path d="M14.2 7.1l2.8 2.8" />
++    </svg>
++  )
++}
++
++/** 卡片内的一句状态说明：既是可见原因，也是禁用按钮的 `aria-describedby` 目标。 */
++function ritualNote(setExists: boolean, endExists: boolean): string {
++  if (endExists) return '今天已经复盘过了，可以随时回来继续。'
++  if (setExists) return '计划已记录，今晚可以回来复盘。'
++  return '今天还没有计划，完成计划后即可复盘。'
+ }
+ 
+ function DashboardPage({
+@@ -111,171 +120,113 @@ function DashboardPage({
+   error,
+   disabled = false,
+   onRetry,
+-  onNewWriting,
+-  onOpenWriting,
+-  onStartRitual,
+-  onOpenRitual,
++  onQuickNote,
++  onOpenPlan,
++  onOpenReview,
+ }: DashboardPageProps) {
+-  const writings = today === null ? [] : today.writings
+-  const setSlot: DashboardRitualSlot = today === null ? { state: 'absent' } : today.rituals.set
+-  const endSlot: DashboardRitualSlot = today === null ? { state: 'absent' } : today.rituals.end
+-  const allEmpty = writings.length === 0 && setSlot.state === 'absent' && endSlot.state === 'absent'
++  const view = today
++  const writingsCount = view === null ? 0 : view.writings.length
++  const setExists = view !== null && view.rituals.set.state === 'exists'
++  const endExists = view !== null && view.rituals.end.state === 'exists'
++
++  /*
++   * 「先计划后复盘」在本轮只作用于首页入口：没有有效计划时复盘按钮为禁用。
++   * 例外是今天已经存在复盘记录——历史复盘（含从回收箱恢复的）必须仍然可读可继续，
++   * 否则等于用入口禁用删掉了已有内容的访问路径。此处不涉及后端强制限制。
++   */
++  const reviewAllowed = setExists || endExists
++  const note = ritualNote(setExists, endExists)
++
++  const dateLabel = view === null ? '今天' : formatBusinessDate(view.businessDate)
++  const shiftLabel = view === null
++    ? ''
++    : `${view.timezone} · 每日 ${String(view.dayStartHour).padStart(2, '0')}:00 换日`
+ 
+   return (
+     <div className="dash">
+-      <header className="dash-head">
+-        <p className="dash-eyebrow">今日概览</p>
+-        <h2 className="dash-title">{today === null ? '今天' : formatBusinessDate(today.businessDate)}</h2>
+-        <p className="dash-sub">
+-          {today === null
+-            ? '按服务端业务日期读取今天的记录'
+-            : `${today.timezone} · 每日 ${String(today.dayStartHour).padStart(2, '0')}:00 换日`}
+-        </p>
+-      </header>
+-
+-      {status === 'loading' && (
+-        <section className="dash-panel dash-loading" role="status" aria-live="polite">
+-          <p className="dash-loading-text">正在读取今天的记录……</p>
+-          <ul className="dash-skeleton" aria-hidden="true">
+-            <li className="dash-skeleton-row" />
+-            <li className="dash-skeleton-row" />
+-            <li className="dash-skeleton-row" />
+-          </ul>
+-        </section>
+-      )}
+-
+-      {status === 'error' && (
+-        <section className="dash-panel dash-error" role="alert">
+-          <p className="dash-error-text">{error && error.trim() !== '' ? error : '今天的记录加载失败，请稍后重试。'}</p>
+-          <p className="dash-error-hint">概览只读取数据，重试不会创建任何文件。</p>
+-          <button type="button" className="dash-button dash-button--primary" onClick={onRetry}>
+-            重新读取
+-          </button>
+-        </section>
+-      )}
+-
+-      {status === 'success' && (
+-        <>
+-          {allEmpty && (
+-            <p className="dash-empty-all">
+-              今天还没有任何记录。可以从写作或开始今天开始，概览本身不会生成汇总文件。
++      <div className="dash-stack">
++        <button type="button" className="dash-quick" disabled={disabled} onClick={onQuickNote}>
++          <span className="dash-quick-text">
++            <span className="dash-quick-label">速记</span>
++            <span className="dash-quick-hint">写下此刻的想法</span>
++          </span>
++          <span className="dash-quick-icon" aria-hidden="true"><PencilIcon /></span>
++        </button>
++
++        {status === 'loading' && (
++          <section className="dash-hero dash-hero--loading" aria-busy="true" aria-live="polite">
++            <p className="dash-hero-status">正在读取今天的记录……</p>
++            <ul className="dash-skeleton" aria-hidden="true">
++              <li className="dash-skeleton-row" />
++              <li className="dash-skeleton-row" />
++              <li className="dash-skeleton-row dash-skeleton-row--short" />
++            </ul>
++          </section>
++        )}
++
++        {status === 'error' && (
++          <section className="dash-hero dash-hero--error" role="alert">
++            <p className="dash-hero-eyebrow">今天的记录</p>
++            <h1 className="dash-hero-title">暂时读不到今天的状态</h1>
++            <p className="dash-hero-sub">
++              {error !== undefined && error.trim() !== '' ? error : '读取今天的记录失败，请稍后重试。'}
+             </p>
+-          )}
+-
+-          <div className="dash-cards">
+-            <section className="dash-card" aria-labelledby="dash-writing-heading">
+-              <div className="dash-card-head">
+-                <h3 className="dash-card-title" id="dash-writing-heading">写作</h3>
+-                <p className="dash-card-meta">
+-                  {writings.length === 0 ? '今天还没有写作' : `今天 ${writings.length} 篇`}
+-                </p>
+-              </div>
+-              <p className="dash-card-desc">普通日记，不限篇数；写作入口默认打开今天的草稿。</p>
+-
+-              {writings.length === 0 ? (
+-                <p className="dash-card-empty">今天还没有写作记录。</p>
+-              ) : (
+-                <ul className="dash-list">
+-                  {writings.map((item) => (
+-                    <li className="dash-list-item" key={item.id}>
+-                      <button
+-                        type="button"
+-                        className="dash-list-open"
+-                        disabled={disabled}
+-                        onClick={() => onOpenWriting(item.id)}
+-                      >
+-                        <span className="dash-list-title">{displayTitle(item.title)}</span>
+-                        {item.preview.trim() !== '' && (
+-                          <span className="dash-list-preview">{item.preview}</span>
+-                        )}
+-                      </button>
+-                    </li>
+-                  ))}
+-                </ul>
+-              )}
+-
+-              <div className="dash-card-actions">
++            <p className="dash-hero-note">重新读取只会再次查询，不会创建任何文件。</p>
++            <div className="dash-actions">
++              <button type="button" className="dash-action dash-action--solo" onClick={onRetry}>
++                重新读取
++              </button>
++            </div>
++          </section>
++        )}
++
++        {status === 'success' && view === null && (
++          <section className="dash-hero dash-hero--error" role="alert">
++            <p className="dash-hero-eyebrow">今天的记录</p>
++            <h1 className="dash-hero-title">今天的数据不完整</h1>
++            <p className="dash-hero-sub">服务端返回的今日数据不完整，暂时无法给出计划与复盘入口。</p>
++            <p className="dash-hero-note">重新读取只会再次查询，不会创建任何文件。</p>
++            <div className="dash-actions">
++              <button type="button" className="dash-action dash-action--solo" onClick={onRetry}>
++                重新读取
++              </button>
++            </div>
++          </section>
++        )}
++
++        {status === 'success' && view !== null && (
++          <>
++            <section className="dash-hero" aria-labelledby="dash-hero-title">
++              <p className="dash-hero-eyebrow">{dateLabel}</p>
++              <h1 className="dash-hero-title" id="dash-hero-title">先计划，再复盘</h1>
++              <p className="dash-hero-sub">用几句话写下今天想完成的事，晚上再回来收个尾。</p>
++
++              <div className="dash-actions">
++                <button type="button" className="dash-action" disabled={disabled} onClick={onOpenPlan}>
++                  计划
++                </button>
+                 <button
+                   type="button"
+-                  className="dash-button dash-button--primary"
+-                  disabled={disabled}
+-                  onClick={onNewWriting}
++                  className="dash-action dash-action--muted"
++                  disabled={disabled || !reviewAllowed}
++                  aria-describedby="dash-hero-note"
++                  onClick={onOpenReview}
+                 >
+-                  开始写作
++                  复盘
+                 </button>
+               </div>
+-            </section>
+ 
+-            <section className="dash-card" aria-labelledby="dash-set-heading">
+-              <div className="dash-card-head">
+-                <h3 className="dash-card-title" id="dash-set-heading">开始今天</h3>
+-                <p className="dash-card-meta">
+-                  {setSlot.state === 'exists' ? `今天已有记录 · ${displayTitle(setSlot.title)}` : '今天还没有开始今天'}
+-                </p>
+-              </div>
+-              <p className="dash-card-desc">日初 Ritual：写下今天想完成的目标，并可以从这里进入正文。</p>
+-              {setSlot.state === 'exists' && setSlot.preview !== undefined && setSlot.preview.trim() !== '' && (
+-                <p className="dash-card-preview">{setSlot.preview}</p>
+-              )}
+-              <div className="dash-card-actions">
+-                {setSlot.state === 'exists' ? (
+-                  <button
+-                    type="button"
+-                    className="dash-button dash-button--primary"
+-                    disabled={disabled}
+-                    onClick={() => onOpenRitual('set', setSlot.id)}
+-                  >
+-                    继续开始今天
+-                  </button>
+-                ) : (
+-                  <button
+-                    type="button"
+-                    className="dash-button dash-button--primary"
+-                    disabled={disabled}
+-                    onClick={() => onStartRitual('set')}
+-                  >
+-                    开始今天
+-                  </button>
+-                )}
+-              </div>
++              <p className="dash-hero-note" id="dash-hero-note">{note}</p>
+             </section>
+ 
+-            <section className="dash-card" aria-labelledby="dash-end-heading">
+-              <div className="dash-card-head">
+-                <h3 className="dash-card-title" id="dash-end-heading">结束今天</h3>
+-                <p className="dash-card-meta">
+-                  {endSlot.state === 'exists' ? `今天已有记录 · ${displayTitle(endSlot.title)}` : '今天还没有结束今天'}
+-                </p>
+-              </div>
+-              <p className="dash-card-desc">日终 Ritual：回顾今天的目标与感受，已有记录可继续编辑。</p>
+-              {endSlot.state === 'exists' && endSlot.preview !== undefined && endSlot.preview.trim() !== '' && (
+-                <p className="dash-card-preview">{endSlot.preview}</p>
+-              )}
+-              <div className="dash-card-actions">
+-                {endSlot.state === 'exists' ? (
+-                  <button
+-                    type="button"
+-                    className="dash-button dash-button--primary"
+-                    disabled={disabled}
+-                    onClick={() => onOpenRitual('end', endSlot.id)}
+-                  >
+-                    继续结束今天
+-                  </button>
+-                ) : (
+-                  <button
+-                    type="button"
+-                    className="dash-button dash-button--primary"
+-                    disabled={disabled}
+-                    onClick={() => onStartRitual('end')}
+-                  >
+-                    结束今天
+-                  </button>
+-                )}
+-              </div>
+-            </section>
+-          </div>
+-        </>
+-      )}
++            <p className="dash-meta">
++              {shiftLabel}
++              <span className="dash-meta-sep" aria-hidden="true">·</span>
++              {writingsCount === 0 ? '今天还没有速记' : `今天 ${writingsCount} 篇速记`}
++            </p>
++          </>
++        )}
++      </div>
+     </div>
+   )
+ }
+diff --git a/frontend/src/pages/ReviewPage.tsx b/frontend/src/pages/ReviewPage.tsx
+index 63936ee..b08477f 100644
+--- a/frontend/src/pages/ReviewPage.tsx
++++ b/frontend/src/pages/ReviewPage.tsx
+@@ -637,9 +637,9 @@ function ReviewPage({
+   }
+ 
+   return (
+-    <section className="review-page" aria-label="复盘模块">
++    <section className="review-page" aria-label="AI 复盘模块">
+       <div className="detail-header">
+-        <h2>完整复盘</h2>
++        <h2>AI 复盘</h2>
+         <span className={`ai-phase ai-phase-${phase}`} role="status">{reviewPhaseLabel(phase)}</span>
+       </div>
+       <p className="detail-hint">
+diff --git a/frontend/src/pages/WritingPage.tsx b/frontend/src/pages/WritingPage.tsx
+index d6e2e19..d5fd5bb 100644
+--- a/frontend/src/pages/WritingPage.tsx
++++ b/frontend/src/pages/WritingPage.tsx
+@@ -799,10 +799,10 @@ function WritingPage({
+   const draftUserText = session === null ? '' : userTextOf(session.draft.content_doc)
+ 
+   return (
+-    <section className="writing-page" aria-label="写作">
++    <section className="writing-page" aria-label="速记">
+       <header className="writing-head">
+         <div>
+-          <p className="writing-eyebrow">写作</p>
++          <p className="writing-eyebrow">速记</p>
+           <h2 className="writing-title">
+             {businessDate === '' ? '今天' : formatBusinessDateLabel(businessDate)}
+           </h2>
+diff --git a/frontend/src/state/editSessions.test.ts b/frontend/src/state/editSessions.test.ts
+index 178eae6..5fbaa02 100644
+--- a/frontend/src/state/editSessions.test.ts
++++ b/frontend/src/state/editSessions.test.ts
+@@ -90,6 +90,15 @@ function doc(text = ''): unknown {
+   }
+ }
+ 
++/** 与速记页 `writingSavable` 同口径的最小替身：正文里有没有可见文字。 */
++function hasUserText(value: unknown): boolean {
++  const node = value as { type?: unknown; text?: unknown; content?: unknown } | null
++  if (node === null || typeof node !== 'object') return false
++  if (node.type === 'text') return typeof node.text === 'string' && node.text.trim() !== ''
++  if (Array.isArray(node.content)) return node.content.some(hasUserText)
++  return false
++}
++
+ function draft(overrides: Partial<DocumentDraft> = {}): DocumentDraft {
+   return { title: '', content_doc: doc(''), date: '2026-10-30', folder_id: null, ...overrides }
+ }
+@@ -592,6 +601,69 @@ async function testRunFileCommand(): Promise<void> {
+   expectEqual(calls.length, 0, '不可提交时零请求')
+ }
+ 
++/**
++ * 第一轮独立测试缺陷 1 的判定层回归。
++ *
++ * 全新速记会话的基线是 `content_doc: null`；编辑器挂载后会把空文档规范化成
++ * `{type:'doc', content:[…]}`（结构不同、文字仍为空）。若把它当成「有改动但不合法」
++ * 就会返回 `blocked/invalid`，上层按保存失败处理 → 离开被「最新改动还没保存成功」拦截。
++ * 真正空白 ≠ 保存失败：必须判 `idle`，但**不得**放宽有内容 / 已失败 / 有在途创建的情况。
++ */
++{
++  const { transport, calls } = manualTransport()
++  const store = createEditSessionStore()
++  store.openSession({
++    sessionId: 'blank', type: 'journal', tabId: 'tab-1',
++    draft: { ...draft(), content_doc: null },
++    transport, isSavable: (value) => hasUserText(value.content_doc),
++  })
++  // 编辑器挂载：规范化后的空文档，只有空段落与 ID，没有任何文字。
++  store.changeSession('blank', { ...draft(), content_doc: doc('') }, 'user_input')
++  const session = store.getSession('blank')
++  check(session !== null, '空白会话已建立')
++  expectEqual(planWrite(session!), { kind: 'idle' }, '空白新草稿判为无需保存')
++  expectEqual(await store.saveToSequence('blank'), { kind: 'clean' }, '空白新草稿不阻断离开')
++  expectEqual(calls.length, 0, '空白新草稿零请求')
++}
++
++{
++  // 同一口径下不能误放：只有标题仍是「有输入但不可保存」，必须阻断并保留内容。
++  const { transport, calls } = manualTransport()
++  const store = createEditSessionStore()
++  store.openSession({
++    sessionId: 'title-only', type: 'journal', tabId: 'tab-1',
++    draft: { ...draft(), content_doc: null },
++    transport, isSavable: (value) => hasUserText(value.content_doc),
++  })
++  store.changeSession('title-only', { ...draft({ title: '只有标题' }), content_doc: doc('') }, 'user_input')
++  expectEqual(await store.saveToSequence('title-only'), { kind: 'blocked', reason: 'invalid' },
++    '只有标题的新草稿仍阻断离开（不静默丢弃输入）')
++  expectEqual(calls.length, 0, '不可保存时不发请求')
++}
++
++{
++  // 已冻结的首次创建请求优先于「现在看起来是空白」：重放才能取回丢失的 ID。
++  const replayKey = '11111111-2222-4333-8444-555555555555'
++  const { transport } = manualTransport()
++  const store = createEditSessionStore()
++  store.openSession({
++    sessionId: 'replay', type: 'journal', tabId: 'tab-1',
++    draft: { ...draft(), content_doc: null },
++    transport, isSavable: (value) => hasUserText(value.content_doc),
++    firstRequest: {
++      client_create_id: replayKey,
++      draft: draft({ content_doc: doc('先写了内容') }),
++      extras: null,
++      seq: 1,
++    },
++    resumedInputSeq: 1,
++  })
++  store.changeSession('replay', { ...draft(), content_doc: doc('') }, 'user_input')
++  const decision = planWrite(store.getSession('replay')!)
++  check(decision.kind === 'create' && decision.request.client_create_id === replayKey,
++    '空白外观下仍重放已冻结的创建请求，不退化成 idle')
++}
++
+ {
+   // IME 组合期间不提交半个拼音。
+   const { transport, calls } = manualTransport()
+diff --git a/frontend/src/state/editSessions.ts b/frontend/src/state/editSessions.ts
+index 005447d..2b648de 100644
+--- a/frontend/src/state/editSessions.ts
++++ b/frontend/src/state/editSessions.ts
+@@ -255,6 +255,28 @@ export function draftHasChanges(draft: DocumentDraft, baseline: DocumentDraft):
+   return !draftEquals(draft, baseline)
+ }
+ 
++/**
++ * 草稿里有没有用户真正填过的内容（标题文字或正文文字）。
++ *
++ * 「空白」只看**文字**：编辑器挂载会把 `content_doc: null` 规范化成带空段落、
++ * 带节点 ID 的空文档。结构不同但一个字也没有，这不是用户输入，也不该被当成
++ * 「有改动但保存失败」——否则全新草稿离开时会被误拦（第一轮独立测试缺陷 1）。
++ *
++ * 不能把所有字符串都当内容：段落 `attrs.id` 也是字符串，会把空文档判成有内容。
++ */
++export function draftHasContent(draft: DocumentDraft): boolean {
++  if (draft.title.trim() !== '') return true
++  return documentHasText(draft.content_doc)
++}
++
++function documentHasText(node: unknown): boolean {
++  if (typeof node !== 'object' || node === null) return false
++  const record = node as Record<string, unknown>
++  if (record.type === 'text') return typeof record.text === 'string' && record.text.trim() !== ''
++  if (Array.isArray(record.content)) return record.content.some(documentHasText)
++  return false
++}
++
+ /** 只包含真实变化的补丁；空标题提交为 null（清空）。 */
+ export function draftPatch(draft: DocumentDraft, baseline: DocumentDraft): DraftPatch {
+   const patch: DraftPatch = {}
+@@ -505,6 +527,10 @@ export function planWrite(session: EditSession): WriteDecision {
+       }
+     }
+     if (draftEquals(session.draft, session.baseline)) return { kind: 'idle' }
++    // 新会话还没写过任何字：判 `idle`（无需保存），不是 `invalid`。
++    // 这里**只**覆盖「文字为空」这一种情况；有标题/正文但不可保存、保存失败、
++    // 409 冲突、写入在途仍由上面的状态判断与下面的 `isSavable` 拦截。
++    if (!draftHasContent(session.draft)) return { kind: 'idle' }
+     if (session.isSavable !== null && !session.isSavable(session.draft)) {
+       return { kind: 'blocked', reason: 'invalid' }
+     }
+diff --git a/frontend/src/utils/ritualView.test.ts b/frontend/src/utils/ritualView.test.ts
+index 91cf973..df2d010 100644
+--- a/frontend/src/utils/ritualView.test.ts
++++ b/frontend/src/utils/ritualView.test.ts
+@@ -80,8 +80,8 @@ equal(applyBusinessDay(captured, nextDay).journalDate, '2026-10-30', '跨日后
+ equal(applyBusinessDay(captured, nextDay).draftStartedAt, day.server_time, '跨日后不重写捕获时刻')
+ equal(applyBusinessDay(null, nextDay).journalDate, '2026-10-31', '首次打开才新建捕获')
+ 
+-equal(displayTitle('set', '2026-10-30', null), '开始今天 2026-10-30', '空标题显示开始今天')
+-equal(displayTitle('end', '2026-10-30', '  '), '结束今天 2026-10-30', '空白标题同类兜底')
++equal(displayTitle('set', '2026-10-30', null), '计划 2026-10-30', '空标题回退为「计划 + 日期」')
++equal(displayTitle('end', '2026-10-30', '  '), '复盘 2026-10-30', '空白标题同类兜底为「复盘 + 日期」')
+ equal(displayTitle('set', '2026-10-30', '今天'), '今天', '有标题时用标题')
+ 
+ /* --------------------------------------------------- 2. 模板 0/4/5 问 */
+diff --git a/frontend/src/utils/ritualView.ts b/frontend/src/utils/ritualView.ts
+index cf8edc6..43242fd 100644
+--- a/frontend/src/utils/ritualView.ts
++++ b/frontend/src/utils/ritualView.ts
+@@ -36,10 +36,16 @@ export const TEMPLATE_CAPACITY = 4
+ /** 单个问题正文上限，与 `backend/app/ritual/schemas.py` 的 500 一致。 */
+ export const QUESTION_TEXT_LIMIT = 500
+ 
+-/** 管理端展示名：界面只用中文，不显示 set/end 缩写（产品 §2）。 */
++/**
++ * 管理端展示名：界面只用中文，不显示 set/end 缩写（产品 §2）。
++ *
++ * 第一轮 UI 统一命名（2026-11-02）：Set → 计划，End → 复盘。
++ * 这些名字同时用于页面标题、默认显示标题与恢复对照文案，改一处即全部跟随；
++ * 「AI 复盘」（多篇源复盘）是另一个功能，不要复用这里的「复盘」。
++ */
+ export const KIND_LABEL: Record<RitualKind, string> = {
+-  set: '开始今天',
+-  end: '结束今天',
++  set: '计划',
++  end: '复盘',
+ }
+ 
+ /** 支持「块内文字范围」选择的块类型；其余块只能整块选择（API §5）。 */
+diff --git a/frontend/src/utils/writingSession.test.ts b/frontend/src/utils/writingSession.test.ts
+index 901fc5e..a964c6e 100644
+--- a/frontend/src/utils/writingSession.test.ts
++++ b/frontend/src/utils/writingSession.test.ts
+@@ -424,8 +424,8 @@ const store = createEditSessionStore()
+     '冲突两侧标题带版本',
+   )
+   check(planLabel({ kind: 'conflict', localRevision: 1, serverRevision: 2 }).includes('选择'), '冲突文案要求用户选择')
+-  expectEqual(candidateOriginLabel(candidate(), 'tab-a'), '本标签 · 写作', '本标签候选标注来源')
+-  expectEqual(candidateOriginLabel(candidate({ tab_id: 'tab-b' }), 'tab-a'), '其他标签 · 写作', '其他标签候选单独标注')
++  expectEqual(candidateOriginLabel(candidate(), 'tab-a'), '本标签 · 速记', '本标签候选标注来源')
++  expectEqual(candidateOriginLabel(candidate({ tab_id: 'tab-b' }), 'tab-a'), '其他标签 · 速记', '其他标签候选单独标注')
+   check(candidateMeta(candidate()).includes('未落库草稿'), '候选副标题说明是否已落库')
+   check(candidateMeta(candidate({ file_id: 12 })).includes('#12'), '候选副标题给出服务器文件身份')
+   expectEqual(formatLocalStamp('坏值'), '坏值', '时间戳非法时原样返回')
+diff --git a/frontend/src/utils/writingSession.ts b/frontend/src/utils/writingSession.ts
+index 8c033ac..855ef43 100644
+--- a/frontend/src/utils/writingSession.ts
++++ b/frontend/src/utils/writingSession.ts
+@@ -392,7 +392,7 @@ export function planCandidate(record: LocalJournalDraft, probe: ServerDraftProbe
+ /** 候选来源标签：同一标签与「其他标签」要区分，避免误以为自己刚写的东西消失了。 */
+ export function candidateOriginLabel(candidate: DraftCandidate, currentTabId: string): string {
+   const own = candidate.tab_id === currentTabId ? '本标签' : '其他标签'
+-  const kindLabel = candidate.journal_kind === 'writing' ? '写作' : candidate.journal_kind === 'set' ? '开始今天' : '结束今天'
++  const kindLabel = candidate.journal_kind === 'writing' ? '速记' : candidate.journal_kind === 'set' ? '计划' : '复盘'
+   return `${own} · ${kindLabel}`
+ }
+ 

@@ -1,0 +1,415 @@
+{
+  "startedAt": "2026-11-02T03:03:18.931Z",
+  "scenarios": {
+    "empty": {
+      "bodyBg": "rgba(0, 0, 0, 0)",
+      "dateLabel": "2026年11月1日 周日",
+      "title": "先计划，再复盘",
+      "note": "今天还没有计划，完成计划后即可复盘。",
+      "meta": "Asia/Shanghai · 每日 04:00 换日·今天还没有速记",
+      "buttons": [
+        {
+          "text": "计划",
+          "disabled": false,
+          "describedBy": null,
+          "bg": "rgb(255, 255, 255)",
+          "color": "rgb(74, 86, 216)",
+          "opacity": "1"
+        },
+        {
+          "text": "复盘",
+          "disabled": true,
+          "describedBy": "dash-hero-note",
+          "bg": "rgba(255, 255, 255, 0.56)",
+          "color": "rgba(74, 86, 216, 0.82)",
+          "opacity": "1"
+        }
+      ],
+      "quick": "速记写下此刻的想法",
+      "navCount": 4,
+      "sidebar": "76px",
+      "requests": [
+        "GET /api/business-day",
+        "GET /api/journals",
+        "GET /api/rituals"
+      ]
+    },
+    "plan": {
+      "note": "计划已记录，今晚可以回来复盘。",
+      "buttons": [
+        {
+          "text": "计划",
+          "disabled": false
+        },
+        {
+          "text": "复盘",
+          "disabled": false
+        }
+      ],
+      "requests": [
+        "GET /api/business-day",
+        "GET /api/journals",
+        "GET /api/rituals"
+      ]
+    },
+    "end": {
+      "note": "今天已经复盘过了，可以随时回来继续。",
+      "buttons": [
+        {
+          "text": "计划",
+          "disabled": false
+        },
+        {
+          "text": "复盘",
+          "disabled": false
+        }
+      ]
+    },
+    "writings": "Asia/Shanghai · 每日 04:00 换日·今天 2 篇速记",
+    "error": {
+      "role": "alert",
+      "kind": "dash-hero dash-hero--error",
+      "title": "暂时读不到今天的状态",
+      "sub": "读取失败（HTTP 503）",
+      "note": "重新读取只会再次查询，不会创建任何文件。",
+      "retry": "重新读取",
+      "requestsOnError": [
+        "GET /api/business-day"
+      ],
+      "requestsOnRetry": [
+        "GET /api/business-day",
+        "GET /api/journals",
+        "GET /api/rituals"
+      ],
+      "afterRetryTitle": "先计划，再复盘"
+    },
+    "loading": {
+      "busy": "true",
+      "live": "polite",
+      "text": "正在读取今天的记录……",
+      "skeletons": 3
+    },
+    "flow": {
+      "plan": {
+        "text": "开始今天 · 业务日 2026-11-01 今天的计划 上海时间每日 04:00 换日；本页的日期在打开草稿时固定，不会因为跨过 04:00 自动跳转。 服务器已保存 当前问题模板 开始今天 2026-11-01 · 0 / 4 点击「插入正文」才会把当时的文字写进正文；之后修改模板不会改动已插入内容。 还没有问题。可以添加最多 4 个问题，模板为空时不会自动生成问题。 添加问题 今天的目标 保存后，正文中的纯文字清单会自动成为目标；含格式或嵌套的条目需先调整。 标题 类型与业务日期不可修改；标题、Folder 与",
+        "current": [],
+        "hasExistingBody": true,
+        "requests": [
+          "GET /api/business-day",
+          "GET /api/rituals",
+          "GET /api/ritual-templates",
+          "GET /api/trash"
+        ]
+      },
+      "back": {
+        "title": "先计划，再复盘",
+        "current": [
+          "概览"
+        ],
+        "requests": [
+          "GET /api/business-day",
+          "GET /api/journals",
+          "GET /api/rituals"
+        ]
+      },
+      "end": {
+        "hasExistingBody": true,
+        "text": "结束今天 · 业务日 2026-11-01 今天的复盘 上海时间每日 04:00 换日；本页的日期在打开草稿时固定，不会因为跨过 04:00 自动跳转。 服务器已保存 当前问题模板 结束今天 2026-11-01 · 0 / 4 点击「插入正文」才会把当时的文字写进正文；之后修改模板不会改动已插入内容。 还没有问题。可以添加最多 4 个问题，模板为空时不会自动生成问题。 添加问题 目标回顾 还没有",
+        "requests": [
+          "GET /api/business-day",
+          "GET /api/rituals",
+          "GET /api/ritual-templates",
+          "GET /api/trash"
+        ]
+      }
+    },
+    "narrow": {
+      "sidebarWidth": 500,
+      "sidebarHeight": 61,
+      "sidebarTop": 0,
+      "navDirection": "row",
+      "navItems": [
+        "概览",
+        "速记",
+        "记录",
+        "洞察"
+      ],
+      "overflowX": false
+    },
+    "narrowPlan": {
+      "buttons": [
+        {
+          "text": "计划",
+          "disabled": false,
+          "w": 205
+        },
+        {
+          "text": "复盘",
+          "disabled": false,
+          "w": 205
+        }
+      ]
+    },
+    "leaveOnEmptyDraft": {
+      "early": {
+        "dialogOpen": true,
+        "dialogTitle": "最新改动还没保存成功，确定离开？",
+        "current": [
+          "速记"
+        ],
+        "requests": [
+          "GET /api/ai/settings",
+          "GET /api/business-day",
+          "GET /api/journals",
+          "GET /api/folders"
+        ]
+      },
+      "before": {
+        "mirror": true,
+        "text": "写作 2026年11月1日 周日 普通日记，不限篇数 · 每天 04:00 换日（Asia/Shanghai） 新建一篇 本地草稿（1） 本机还有 1 份未提交的草稿（不含服务器已保存的内容）。 可以打开列表选择恢复、稍后处理或明确丢弃；不做选择时不会有任何自动写入。 查看本地草",
+        "idb": null,
+        "requestsDuringWait": [
+          "GET /api/ai/settings",
+          "GET /api/business-day",
+          "GET /api/journals",
+          "GET /api/folders"
+        ]
+      },
+      "blocked": {
+        "dialogOpen": true,
+        "dialogTitle": "最新改动还没保存成功，确定离开？",
+        "dialogBody": "自动保存失败或出现版本冲突，最新输入还没有提交到后端。确认离开会丢弃这些未保存的改动。",
+        "current": [
+          "速记"
+        ],
+        "requests": []
+      },
+      "brandBack": {
+        "dialogOpen": true,
+        "dialogTitle": "最新改动还没保存成功，确定离开？",
+        "current": [
+          "速记"
+        ],
+        "text": "写作 2026年11月1日 周日 普通日记，不限篇数 · 每天 04:00 换日（Asia/Shanghai） 新建一篇",
+        "requests": []
+      }
+    },
+    "typedThenLeave": {
+      "typed": {
+        "editorText": "测试速记内容",
+        "requests": [
+          "GET /api/ai/settings",
+          "GET /api/business-day",
+          "GET /api/journals",
+          "GET /api/folders",
+          "POST /api/journals",
+          "GET /api/journals/501/comments",
+          "GET /api/journals"
+        ],
+        "writeCount": 1
+      },
+      "afterLeave": {
+        "dialogOpen": false,
+        "dialogTitle": "当前内容尚未保存，确定离开？",
+        "current": [
+          "记录"
+        ],
+        "requests": [
+          "GET /api/journals"
+        ]
+      }
+    }
+  },
+  "nav": {
+    "steps": [
+      {
+        "click": "速记",
+        "current": [
+          "速记"
+        ],
+        "heading": "2026年11月1日 周日",
+        "text": "写作 2026年11月1日 周日 普通日记，不限篇数 · 每天 04:00 换日（Asia/Shanghai） 新建一篇 本地草稿（1） 本机还有 1 份未提交的草稿（不含服务器已保存的内容）。 可以打开列表选择恢复、稍后处理或明确丢弃；不",
+        "dialogOpen": false,
+        "requests": [
+          "GET /api/ai/settings",
+          "GET /api/business-day",
+          "GET /api/journals",
+          "GET /api/folders"
+        ]
+      },
+      {
+        "click": "记录",
+        "current": [
+          "记录"
+        ],
+        "heading": "记录",
+        "text": "记录 0 篇记录 搜索记录标题和正文 搜索 新建记录 按日期查看 清除筛选 还没有日记。点击「新建记录」，写下今天的第一句话。 上一页 第 1 / 1 页 · 共 0 篇 下一页",
+        "dialogOpen": false,
+        "requests": [
+          "GET /api/journals"
+        ]
+      },
+      {
+        "click": "洞察",
+        "current": [
+          "洞察"
+        ],
+        "heading": "当前内容尚未保存，确定离开？",
+        "text": "新建 Insight Insight 列表 还没有任何 Insight 记录。 上一页 第 1 / 1 页 · 共 0 篇 下一页",
+        "dialogOpen": false,
+        "requests": [
+          "GET /api/insights"
+        ]
+      },
+      {
+        "click": "概览",
+        "current": [
+          "概览"
+        ],
+        "heading": "先计划，再复盘",
+        "text": "速记 写下此刻的想法 2026年11月1日 周日 先计划，再复盘 用几句话写下今天想完成的事，晚上再回来收个尾。 计划 复盘 计划已记录，今晚可以回来复盘。 Asia/Shanghai · 每日 04:00 换日·今天还没有速记",
+        "dialogOpen": false,
+        "requests": []
+      },
+      {
+        "click": "更多>日程",
+        "current": [],
+        "overflowActive": "true",
+        "text": "日程 独立日程 日程与「开始今天」的 Set 目标相互独立：这里的创建、完成、删除都不会自动改动 Set 或目标关联。 时间按 Asia/Shanghai 显示。 新建日程 第 1 页 上一页 下一页 还没有日程。日程独",
+        "requests": [
+          "GET /api/schedules"
+        ]
+      },
+      {
+        "click": "更多>AI 复盘",
+        "current": [],
+        "overflowActive": "true",
+        "text": "完整复盘 未开始 选择 1～15 个 Journal（最多 7 个不同业务日期，非连续也可以， 同一天多篇不重复占名额）。生成只创建可编辑预览，**不会**改动任何原文件；确认保存只会有一次。 Journal 刷新列表 ",
+        "requests": [
+          "GET /api/journals"
+        ]
+      },
+      {
+        "click": "更多>历史收件箱",
+        "current": [],
+        "overflowActive": "true",
+        "text": "历史 Inbox 列表 按日期查看 清除筛选 还没有任何 Inbox 记录。 上一页 第 1 / 1 页 · 共 0 篇 下一页",
+        "requests": [
+          "GET /api/inboxes",
+          "GET /api/inboxes/daily"
+        ]
+      },
+      {
+        "click": "更多>文件夹",
+        "current": [],
+        "overflowActive": "true",
+        "text": "新建 Folder 创建 Folder（0） 还没有任何 Folder，先创建一个。 内容 从左侧选择一个 Folder 查看其中的文件。",
+        "requests": [
+          "GET /api/folders"
+        ]
+      },
+      {
+        "click": "快捷>搜索",
+        "current": [
+          "搜索"
+        ],
+        "text": "关键词 文件类型 全部 Journal 历史 Inbox Insight 重新搜索 请输入关键词，搜索标题和正文。",
+        "requests": []
+      },
+      {
+        "click": "快捷>设置",
+        "current": [
+          "设置"
+        ],
+        "text": "AI 设置 重新读取 配置状态 模型 未配置（服务端进程环境缺少模型 Key） 联网搜索 未配置（不会联网，可在后端配置搜索 Key） 本次生效的联网 关闭 设置版本 revision 1 模型 Ke",
+        "requests": [
+          "GET /api/ai/settings",
+          "GET /api/ai/usage"
+        ]
+      },
+      {
+        "click": "快捷>回收箱",
+        "current": [
+          "回收箱"
+        ],
+        "text": "全部 Journal Insight 只显示已删除的 Journal / Insight；Inbox 是永久删除，不会出现在回收箱。 回收箱是空的。 上一页 第 1 / 1 页 · 共 0 篇 下一页",
+        "requests": [
+          "GET /api/trash"
+        ]
+      }
+    ],
+    "overflow": {
+      "expanded": "true",
+      "items": [
+        "日程",
+        "AI 复盘",
+        "历史收件箱",
+        "文件夹"
+      ],
+      "focused": "日程",
+      "focusedLabel": null
+    },
+    "shortcuts": {
+      "exists": true,
+      "items": [
+        "搜索",
+        "设置",
+        "回收箱"
+      ],
+      "right": 22,
+      "bottom": 22,
+      "vertical": [
+        743,
+        787,
+        831
+      ]
+    }
+  },
+  "requests": {
+    "nav": "见各 step.requests"
+  },
+  "console": [
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+  ],
+  "skippedInterceptions": 3,
+  "keyboard": {
+    "tabOrder": [
+      "跳到正文",
+      "SeekJournal · 回到概览",
+      "概览",
+      "速记",
+      "记录",
+      "洞察",
+      "更多",
+      "外观",
+      "速记写下此刻的想法",
+      "计划",
+      "复盘",
+      "搜索",
+      "设置",
+      "回收箱"
+    ],
+    "focusStyle": {
+      "outlineStyle": "solid",
+      "outlineWidth": "3px",
+      "boxShadow": "none",
+      "tip": "速记",
+      "tipVisible": {
+        "content": "\"速记\"",
+        "opacity": "0.860707"
+      }
+    },
+    "enterResult": {
+      "current": [
+        "速记"
+      ],
+      "text": "写作 2026年11月1日 周日 普通日记，不限篇数 · 每天 04:00 换日（Asia/Shanghai） 新建一篇 本地草稿（1） 本机还有 1 份未提交"
+    }
+  },
+  "allRequests": [
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/api/journals?page=1"
+    }
+  ]
+}

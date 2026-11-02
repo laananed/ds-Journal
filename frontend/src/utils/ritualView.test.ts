@@ -80,8 +80,8 @@ equal(applyBusinessDay(captured, nextDay).journalDate, '2026-10-30', '跨日后�
 equal(applyBusinessDay(captured, nextDay).draftStartedAt, day.server_time, '跨日后不重写捕获时刻')
 equal(applyBusinessDay(null, nextDay).journalDate, '2026-10-31', '首次打开才新建捕获')
 
-equal(displayTitle('set', '2026-10-30', null), '开始今天 2026-10-30', '空标题显示开始今天')
-equal(displayTitle('end', '2026-10-30', '  '), '结束今天 2026-10-30', '空白标题同类兜底')
+equal(displayTitle('set', '2026-10-30', null), '计划 2026-10-30', '空标题回退为「计划 + 日期」')
+equal(displayTitle('end', '2026-10-30', '  '), '复盘 2026-10-30', '空白标题同类兜底为「复盘 + 日期」')
 equal(displayTitle('set', '2026-10-30', '今天'), '今天', '有标题时用标题')
 
 /* --------------------------------------------------- 2. 模板 0/4/5 问 */

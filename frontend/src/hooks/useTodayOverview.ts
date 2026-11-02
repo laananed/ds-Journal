@@ -29,6 +29,28 @@ export interface TodayOverviewState {
   reload: () => void
 }
 
+/**
+ * 把异常转成用户能看懂的失败原因。
+ *
+ * 浏览器在网络层失败时只抛 `Failed to fetch` 这类原文（后端未启动、连接被拒），
+ * 直接显示在首页上既不像中文提示、也说不清该怎么办；这里只替换这一类网络错误，
+ * HTTP 状态错误（如「读取失败（HTTP 503）」）与业务错误保持原样，避免掩盖真实原因。
+ */
+function readableError(cause: unknown): string {
+  if (cause instanceof Error) {
+    const message = cause.message
+    if (
+      message === 'Failed to fetch'
+      || message === 'Load failed'
+      || message === 'NetworkError when attempting to fetch resource.'
+    ) {
+      return '连不上服务端，今天的记录暂时无法读取。请确认后端已启动后再重新读取。'
+    }
+    if (message !== '') return message
+  }
+  return '读取今天的记录失败，请稍后重试。'
+}
+
 export function useTodayOverview(): TodayOverviewState {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [today, setToday] = useState<TodayOverviewView | null>(null)
@@ -60,9 +82,7 @@ export function useTodayOverview(): TodayOverviewState {
       } catch (cause: unknown) {
         if (controller.signal.aborted) return
         setToday(null)
-        setError(cause instanceof Error && cause.message !== ''
-          ? cause.message
-          : '读取今天的记录失败，请稍后重试。')
+        setError(readableError(cause))
         setStatus('error')
       }
     })()

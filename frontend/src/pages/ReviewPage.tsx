@@ -637,9 +637,9 @@ function ReviewPage({
   }
 
   return (
-    <section className="review-page" aria-label="复盘模块">
+    <section className="review-page" aria-label="AI 复盘模块">
       <div className="detail-header">
-        <h2>完整复盘</h2>
+        <h2>AI 复盘</h2>
         <span className={`ai-phase ai-phase-${phase}`} role="status">{reviewPhaseLabel(phase)}</span>
       </div>
       <p className="detail-hint">

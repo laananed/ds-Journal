@@ -1,0 +1,94 @@
+[LOG] Failed to load resource: the server responded with a status of 503 (Service Unavailable)
+{
+  "empty": {
+    "bodyBg": "rgba(0, 0, 0, 0)",
+    "dateLabel": "2026年11月1日 周日",
+    "title": "先计划，再复盘",
+    "note": "今天还没有计划，完成计划后即可复盘。",
+    "meta": "Asia/Shanghai · 每日 04:00 换日·今天还没有速记",
+    "buttons": [
+      {
+        "text": "计划",
+        "disabled": false,
+        "describedBy": null,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(74, 86, 216)",
+        "opacity": "1"
+      },
+      {
+        "text": "复盘",
+        "disabled": true,
+        "describedBy": "dash-hero-note",
+        "bg": "rgba(255, 255, 255, 0.56)",
+        "color": "rgba(74, 86, 216, 0.82)",
+        "opacity": "1"
+      }
+    ],
+    "quick": "速记写下此刻的想法",
+    "navCount": 4,
+    "sidebar": "76px",
+    "requests": [
+      "GET /api/business-day",
+      "GET /api/journals",
+      "GET /api/rituals"
+    ]
+  },
+  "plan": {
+    "note": "计划已记录，今晚可以回来复盘。",
+    "buttons": [
+      {
+        "text": "计划",
+        "disabled": false
+      },
+      {
+        "text": "复盘",
+        "disabled": false
+      }
+    ],
+    "requests": [
+      "GET /api/business-day",
+      "GET /api/journals",
+      "GET /api/rituals"
+    ]
+  },
+  "error": {
+    "role": "alert",
+    "kind": "dash-hero dash-hero--error",
+    "title": "暂时读不到今天的状态",
+    "sub": "读取失败（HTTP 503）",
+    "note": "重新读取只会再次查询，不会创建任何文件。",
+    "retry": "重新读取",
+    "requestsOnError": [
+      "GET /api/business-day"
+    ],
+    "requestsOnRetry": [
+      "GET /api/business-day",
+      "GET /api/journals",
+      "GET /api/rituals"
+    ],
+    "afterRetryTitle": "先计划，再复盘"
+  },
+  "loading": {
+    "busy": "true",
+    "live": "polite",
+    "text": "正在读取今天的记录……",
+    "skeletons": 3
+  },
+  "narrow": {
+    "sidebarWidth": 500,
+    "sidebarHeight": 61,
+    "sidebarTop": 0,
+    "navDirection": "row",
+    "navItems": [
+      "概览",
+      "速记",
+      "记录",
+      "洞察"
+    ],
+    "overflowX": false
+  }
+}
+NAV_STEPS 11 SHORTCUTS {"exists":true,"items":["搜索","设置","回收箱"],"right":22,"bottom":22,"vertical":[743,787,831]}
+OVERFLOW {"expanded":"true","items":["日程","AI 复盘","历史收件箱","文件夹"],"focused":"日程","focusedLabel":null}
+KEYBOARD {"tabOrder":["跳到正文","SeekJournal · 回到概览","概览","速记","记录","洞察","更多","外观","速记写下此刻的想法","计划","复盘","搜索","设置","回收箱"],"focusStyle":{"outlineStyle":"solid","outlineWidth":"3px","boxShadow":"none","tip":"速记","tipVisible":{"content":"\"速记\"","opacity":"0.860707"}},"enterResult":{"current":["速记"],"text":"写作 2026年11月1日 周日 普通日记，不限篇数 · 每天 04:00 换日（Asia/Shanghai） 新建一篇 本地草稿（1） 本机还有 1 份未提交"}}
+CONSOLE ["Failed to load resource: the server responded with a status of 503 (Service Unavailable)"]
