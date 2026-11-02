@@ -15,6 +15,7 @@ import { useTodayOverview } from './hooks/useTodayOverview'
 import JournalDetail from './components/JournalDetail'
 import JournalEditor from './components/JournalEditor'
 import JournalList from './components/JournalList'
+import RecordsTimeline from './pages/RecordsTimeline'
 import Pagination from './components/Pagination'
 import LinkCandidates from './components/LinkCandidates'
 import FolderPage from './pages/FolderPage'
@@ -136,6 +137,7 @@ function App() {
   const [panel, setPanel] = useState<Panel>({ kind: 'list' })
   const [editorKey, setEditorKey] = useState(0)
   const [filterDate, setFilterDate] = useState('')
+  const [legacyList, setLegacyList] = useState(false)
   const [page, setPage] = useState(1)
   const [result, setResult] = useState<JournalPage | null>(null)
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
@@ -501,13 +503,14 @@ function App() {
               onDirtyChange={setDirty}
               onFlushReady={registerFlush}
               onOpenLegacy={openLegacyJournal}
+              onBack={() => changeModule('dashboard')}
             />
           )}
 
           {(module === 'set' || module === 'end') && (
             <RitualPage key={module} kind={module} disabled={uiLocked}
               onDirtyChange={setDirty} onBusyChange={setWriting} onFlushReady={registerFlush}
-              onOpenTrash={() => changeModule('trash')} />
+              onOpenTrash={() => changeModule('trash')} onBack={() => changeModule('dashboard')} />
           )}
           {module === 'schedule' && (
             <SchedulePage client={schedulesClient} disabled={uiLocked}
@@ -564,7 +567,8 @@ function App() {
                 {homeQuery && <button className="clear-search" type="button" onClick={() => { setHomeQuery(''); setHomeInput(''); setHomePage(1) }}>清除搜索</button>}
               </>}
               {/* 图标导航收窄后，「新建记录」从导航栏移到列表工具条，功能不变 */}
-              {panel.kind === 'list' && !homeQuery && <section className="app-toolbar" aria-label="记录列表工具">
+              {panel.kind === 'list' && !homeQuery && <button type="button" onClick={() => setLegacyList((value) => !value)}>{legacyList ? '返回时间线' : '传统列表与日期筛选'}</button>}
+              {panel.kind === 'list' && !homeQuery && legacyList && <section className="app-toolbar" aria-label="记录列表工具">
                 <button className="home-new" type="button" disabled={uiLocked} onClick={() => newJournal()}>新建记录</button>
                 <label className="app-filter">
                   <span>按日期查看</span>
@@ -601,7 +605,8 @@ function App() {
                   <Pagination page={homeResult.page} total={homeResult.total} hasNext={homeResult.has_next} onPageChange={setHomePage} disabled={uiLocked} label="搜索结果分页" />
                 </>}
               </section>}
-              {panel.kind === 'list' && !homeQuery && <section className="journal-results" aria-label="日记列表">
+              {panel.kind === 'list' && !homeQuery && !legacyList && <RecordsTimeline disabled={uiLocked} onOpenJournal={openJournal} />}
+              {panel.kind === 'list' && !homeQuery && legacyList && <section className="journal-results" aria-label="日记列表">
                 {status === 'loading' && <p className="app-state" role="status">加载中……</p>}
                 {status === 'error' && (
                   <div className="app-state app-state-error" role="alert">
