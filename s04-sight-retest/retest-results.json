@@ -1,0 +1,384 @@
+{
+  "generatedAt": "2026-10-31T12:39:15.503Z",
+  "base": "http://127.0.0.1:4194/",
+  "results": [
+    {
+      "id": "R1-WIN-100",
+      "name": "新建：输入后 100ms 刷新",
+      "status": "ok",
+      "data": {
+        "waitMs": 100,
+        "postBeforeReload": 0,
+        "bannerVisible": true,
+        "bannerText": "发现 1 份未提交的 Insight 草稿（只存在本机，恢复后仍需保存才会写入服务器）： | 标题-R1 · 新建 · 2026-10-31 20:34 恢复丢弃",
+        "postBeforeRestore": 0,
+        "restoredTitle": "标题-R1",
+        "titleOk": true,
+        "bodyOk": true,
+        "POST": 1,
+        "createdOnServer": true,
+        "serverHasBody": true,
+        "draftKeysLeft": []
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R2-WIN-450",
+      "name": "新建：输入后 450ms 刷新",
+      "status": "ok",
+      "data": {
+        "waitMs": 450,
+        "postBeforeReload": 0,
+        "bannerVisible": true,
+        "bannerText": "发现 1 份未提交的 Insight 草稿（只存在本机，恢复后仍需保存才会写入服务器）： | 标题-R2 · 新建 · 2026-10-31 20:35 恢复丢弃",
+        "postBeforeRestore": 0,
+        "restoredTitle": "标题-R2",
+        "titleOk": true,
+        "bodyOk": true,
+        "POST": 1,
+        "createdOnServer": true,
+        "serverHasBody": true,
+        "draftKeysLeft": []
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R3-WIN-750",
+      "name": "新建：输入后 750ms 刷新",
+      "status": "ok",
+      "data": {
+        "waitMs": 750,
+        "postBeforeReload": 0,
+        "bannerVisible": true,
+        "bannerText": "发现 1 份未提交的 Insight 草稿（只存在本机，恢复后仍需保存才会写入服务器）： | 标题-R3 · 新建 · 2026-10-31 20:35 恢复丢弃",
+        "postBeforeRestore": 0,
+        "restoredTitle": "标题-R3",
+        "titleOk": true,
+        "bodyOk": true,
+        "POST": 1,
+        "createdOnServer": true,
+        "serverHasBody": true,
+        "draftKeysLeft": []
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R4-SAVED-NO-BANNER",
+      "name": "新建：等过自动保存后刷新 → 无草稿、无提示",
+      "status": "ok",
+      "data": {
+        "dialogs": [],
+        "postBefore": 1,
+        "bannerVisible": false,
+        "listedOnList": true,
+        "serverHasBody": true,
+        "draftKeysLeft": []
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R5-EDIT-DETAIL-RECOVER",
+      "name": "已有记录：追加后立即刷新 → 提示后由用户恢复",
+      "status": "ok",
+      "data": {
+        "patchBeforeReload": 0,
+        "promptVisible": true,
+        "promptText": "发现上次未提交的草稿（保存于 2026-10-31 20:35）。恢复后仍需保存才会写入服务器。 | 丢弃本机草稿 | 恢复草稿",
+        "patchBeforeChoice": 0,
+        "serverUntouchedBeforeChoice": true,
+        "restored": true,
+        "editorHasMarker": true,
+        "PATCH": 1,
+        "serverHasMarker": true,
+        "draftKeysLeft": []
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R6-CONFLICT-VISIBLE",
+      "name": "冲突：提示双方版本，选择前零 PATCH",
+      "status": "ok",
+      "data": {
+        "text": "发现本机未提交的草稿（保存于 2026-10-31 20:33），它基于 v1，服务器当前是 v2。恢复会以服务器当前版本为基线继续保存，可能覆盖较新的正文。 | 使用服务器版本 | 恢复我的草稿",
+        "mentionsV1": true,
+        "mentionsV2": true,
+        "PATCHafter1200": 0,
+        "serverStillV2": true,
+        "serverRevision": 2
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R7-CONFLICT-KEEP-SERVER",
+      "name": "冲突：选择服务器版本 → 草稿删除、零 PATCH",
+      "status": "ok",
+      "data": {
+        "PATCH": 0,
+        "serverStillV2": true,
+        "draftKeysLeft": [],
+        "title": "已有洞察"
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R8-CONFLICT-RESTORE-THEN-SAVE",
+      "name": "冲突：恢复本机草稿 → 用哪个版本基线、服务器较新正文是否保留",
+      "status": "ok",
+      "data": {
+        "PATCH": 1,
+        "patchExpectedRevision": [
+          2
+        ],
+        "serverRevision": 3,
+        "serverHasOldDraft": true,
+        "serverStillHasV2": false,
+        "serverContent": "OLD-DRAFT-CONTENT"
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R9-CANCEL-EMPTY",
+      "name": "空内容取消：直接关闭、零 POST、无对话",
+      "status": "ok",
+      "data": {
+        "inPanelConfirm": false,
+        "appLeaveDialog": false,
+        "panelClosed": true,
+        "POST": 0,
+        "serverCount": 1,
+        "textAfter": false
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R10-CANCEL-TITLE-WAIT",
+      "name": "仅标题取消：确认后等 2000ms 不得 POST",
+      "status": "ok",
+      "data": {
+        "withBody": false,
+        "waitMs": 2000,
+        "confirmVisible": true,
+        "confirmText": "放弃这条未保存的 Insight？放弃后输入不会保留，也不会创建记录。 | 继续编辑 | 放弃并关闭",
+        "postAtConfirm": 0,
+        "postWhileWaiting": 0,
+        "panelClosed": true,
+        "POST": 0,
+        "serverCount": 1,
+        "draftKeysLeft": []
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R11-CANCEL-BODY-WAIT",
+      "name": "有正文取消：等 2000ms 不得 POST，放弃后关闭",
+      "status": "ok",
+      "data": {
+        "withBody": true,
+        "waitMs": 2000,
+        "confirmVisible": true,
+        "confirmText": "放弃这条未保存的 Insight？放弃后输入不会保留，也不会创建记录。 | 继续编辑 | 放弃并关闭",
+        "postAtConfirm": 0,
+        "postWhileWaiting": 0,
+        "panelClosed": true,
+        "POST": 0,
+        "serverCount": 1,
+        "draftKeysLeft": []
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R11B-CANCEL-CONTINUE",
+      "name": "取消确认点“继续编辑”：自动保存应恢复工作",
+      "status": "ok",
+      "data": {
+        "withBody": true,
+        "waitMs": 900,
+        "confirmVisible": true,
+        "confirmText": "放弃这条未保存的 Insight？放弃后输入不会保留，也不会创建记录。 | 继续编辑 | 放弃并关闭",
+        "postAtConfirm": 0,
+        "postWhileWaiting": 0,
+        "afterContinue": {
+          "confirmGone": true,
+          "editorStillOpen": true,
+          "POST": 1,
+          "serverHasBody": true
+        }
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R12-SCHED-DIRTY-UNLOAD",
+      "name": "日程改标题后刷新：有提示、零 PATCH",
+      "status": "ok",
+      "data": {
+        "dialogs": [
+          "beforeunload"
+        ],
+        "beforeUnloadFired": true,
+        "PATCH": 0,
+        "serverTitles": [
+          "与导师讨论提纲",
+          "跑步"
+        ]
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R13-SCHED-CLEAN-NO-PROMPT",
+      "name": "干净表单刷新：无提示（新建空表 / 编辑未改动）",
+      "status": "ok",
+      "data": {
+        "dialogsBefore1": [],
+        "dialogsAfterEmptyCreateForm": [],
+        "emptyCreatePrompted": false,
+        "dialogsAfterEditUntouched": [],
+        "editUntouchedPrompted": false,
+        "POST": 0,
+        "PATCH": 0
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R14-SCHED-SAVED-NO-PROMPT",
+      "name": "已保存表单刷新：无提示、内容保留、不重复创建",
+      "status": "ok",
+      "data": {
+        "dialogsBefore": [],
+        "promptedOnReload": false,
+        "POST": 1,
+        "serverTitles": [
+          "与导师讨论提纲",
+          "跑步",
+          "已保存-R14"
+        ],
+        "listTitles": [
+          "与导师讨论提纲",
+          "跑步",
+          "已保存-R14"
+        ]
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R15-SCHED-LISTFAIL",
+      "name": "创建成功 + 列表刷新失败：新条目/提示可见，重试不重复创建",
+      "status": "ok",
+      "data": {
+        "serverCount": 3,
+        "listShowsCreated": true,
+        "listTitles": [
+          "与导师讨论提纲",
+          "跑步",
+          "刷新失败-R15"
+        ],
+        "notice": "已创建「刷新失败-R15」（不影响 Set 目标）。",
+        "bannerText": "日程列表刷新失败：internal error | 下面显示的是最近一次成功读取的列表，可能还没有刚创建或刚修改的日程；如果刚保存过，先点「重新读取」确认，避免重复创建；这里不会重复发送保存或删除。 | 重新读取",
+        "bannerMentionsReload": true,
+        "bannerMentionsDuplicate": true,
+        "postBeforeRetry": 1,
+        "POSTafterRetry": 1,
+        "afterRetryTitles": [
+          "与导师讨论提纲",
+          "跑步",
+          "刷新失败-R15"
+        ],
+        "afterRetryBannerGone": true
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R16-REG-INSIGHT",
+      "name": "回归：创建→自动保存→列表→重开内容一致→编辑保存",
+      "status": "ok",
+      "data": {
+        "listed": true,
+        "reopenedTitle": "标题-R16",
+        "POST": 1,
+        "PATCH": 1,
+        "serverHasBoth": true,
+        "draftKeysLeft": []
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R17-REG-SCHEDULE",
+      "name": "回归：编辑/完成/删除/409 冲突保留输入",
+      "status": "ok",
+      "data": {
+        "editedTitle": "编辑后-R17",
+        "completedBefore": true,
+        "completedAfter": false,
+        "patchCount": 3,
+        "deleteCount": 1,
+        "afterDelete": [
+          1
+        ],
+        "conflict": {
+          "formStill": true,
+          "inputValue": "冲突-R17",
+          "mentionsConflict": true
+        }
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R18-STORAGE-BLOCKED",
+      "name": "localStorage 不可访问：页面可用、不宣称草稿已保存",
+      "status": "ok",
+      "data": {
+        "dialogs": [
+          "beforeunload"
+        ],
+        "pageErrors": [],
+        "bannerVisible": false,
+        "claimsDraftSaved": false,
+        "claimsListed": false
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R19-STORAGE-WRITE-FAIL",
+      "name": "localStorage 写入抛配额错误：编辑与服务器保存不受影响、不宣称草稿已保存",
+      "status": "ok",
+      "data": {
+        "pageErrors": [],
+        "POST": 1,
+        "serverHasBody": true,
+        "claimsDraftSaved": false,
+        "claimsSaveFailed": false
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R20-CLOSE-REOPEN",
+      "name": "新建：输入后直接关闭标签页，重开仍可恢复",
+      "status": "ok",
+      "data": {
+        "dialogsOnClose": [
+          "beforeunload"
+        ],
+        "bannerVisible": true,
+        "postBefore": 0,
+        "bodyOk": true,
+        "POST": 1,
+        "serverHasBody": true,
+        "draftKeysLeft": []
+      },
+      "pageErrors": []
+    },
+    {
+      "id": "R22-DOUBLE-RELOAD",
+      "name": "恢复后再刷新（保存前）：草稿不能提前丢失",
+      "status": "ok",
+      "data": {
+        "firstVisible": true,
+        "stillVisible": true,
+        "bodyOk": true,
+        "POST": 1,
+        "serverHasBody": true,
+        "draftKeysLeft": []
+      },
+      "pageErrors": []
+    }
+  ]
+}
