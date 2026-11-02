@@ -11,12 +11,34 @@
   flex-direction: column;
   gap: 12px;
   min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--sj-border, #e5e2ea);
+  padding: 0;
+  border: 0;
   border-radius: 12px;
   background: var(--sj-surface, #ffffff);
   color: var(--sj-text, #202124);
 }
+
+.writing-ai-compact-actions { display: flex; align-items: center; gap: 10px; }
+.app .writing-ai .writing-ai-compact-primary {
+  padding: 10px 19px; border: 0; border-radius: 999px;
+  background: var(--sj-inverse-bg); color: var(--sj-inverse-text); font-size: 13px; font-weight: 600;
+}
+.writing-ai-menu { position: relative; }
+.writing-ai-menu summary {
+  display: grid; place-items: center; list-style: none; width: 40px; height: 40px;
+  border-radius: 50%; background: var(--sj-bg-soft); cursor: pointer; font-size: 20px;
+}
+.writing-ai-menu summary::-webkit-details-marker { display: none; }
+.writing-ai-menu-content {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 10; display: grid; width: 190px;
+  padding: 6px; border: 1px solid var(--sj-border); border-radius: 14px;
+  background: var(--sj-surface); box-shadow: var(--sj-shadow);
+}
+.app .writing-ai .writing-ai-menu-content button {
+  text-align: left; border: 0; border-radius: 8px; background: transparent; color: var(--sj-text);
+  font-size: 13px; padding: 10px;
+}
+.app .writing-ai .writing-ai-menu-content button:hover { background: var(--sj-bg-soft); }
 
 .writing-ai-head {
   display: flex;

@@ -467,5 +467,20 @@ def validate_author_changes(old, new):
         elif kind == 'legacyText' and previous['attrs']['author'] == 'user':
             if current['attrs']['author'] != 'user' or previous['attrs']['id'] != current['attrs']['id']:
                 raise DocumentError('protected source changed')
+        elif kind == 'aiReply':
+            # Older replies have no paragraph IDs. The editor assigns them on
+            # load; permit only that one-time addition, not changes to IDs
+            # already stored, text, formatting, or the reply's own identity.
+            comparable = deepcopy(current)
+            for old_paragraph, new_paragraph in zip(previous.get('content', []), comparable.get('content', [])):
+                if 'id' not in old_paragraph.get('attrs', {}):
+                    attrs = new_paragraph.get('attrs', {})
+                    attrs.pop('id', None)
+                    if not attrs:
+                        new_paragraph.pop('attrs', None)
+                    if old_paragraph.get('attrs') == {}:
+                        new_paragraph['attrs'] = {}
+            if previous != comparable:
+                raise DocumentError('protected node changed')
         elif previous != current:
             raise DocumentError('protected node changed')

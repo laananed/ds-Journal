@@ -1305,6 +1305,7 @@ function RitualPage({
       onPointerMove={chrome.reveal}
       onKeyDown={chrome.onKeyDown}
     >
+      <details className="sj-editor-tools"><summary>更多</summary>
       <header className="sj-ritual__bar" onFocus={chrome.hold} onBlur={chrome.release}>
         <div className="sj-ritual__ident">
           {onBack !== undefined && (
@@ -1322,6 +1323,7 @@ function RitualPage({
           </button>
         </div>
       </header>
+      </details>
 
       {draftNotice !== '' && <p className="ritual-notice" role="status">{draftNotice}</p>}
 

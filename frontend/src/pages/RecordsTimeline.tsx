@@ -5,13 +5,11 @@ import { defaultJournalDate } from '../utils/journalDate'
 import { nearestValidPage } from '../utils/pagination'
 import {
   dateInRange,
-  formatGroupLabel,
-  formatRangeLabel,
+  formatAbsoluteGroupLabel,
   groupJournalsByDate,
   kindLabel,
   kindModifier,
   rangeForPeriod,
-  shiftPeriod,
   summarizeContent,
   type JournalDateGroup,
   type RecordsPeriod,
@@ -36,7 +34,7 @@ import type { Journal } from '../types/journal'
  *
  * 分页限制（已记录，待 Codex 评估）：`GET /api/journals` 只支持
  * `journal_date` 精确筛选 + 固定 20 条分页（`docs/stage2-api.md`），没有范围查询。
- * 因此「日」视图用精确筛选；「周 / 月 / 年」视图按页累积读取、前端按范围筛选，
+ * 「日」视图按页连续展示全部日期；「周 / 月 / 年」视图按页累积读取、前端按范围筛选，
  * 并明确显示「已加载 X / 共 Y 篇」，`has_next` 时提供「加载更多」继续取后续页，
  * 不把第一页冒充全部数据。
  */
@@ -69,8 +67,6 @@ function RecordsTimeline({ disabled = false, onOpenJournal }: RecordsTimelinePro
   // 重试计数：只 bump 它触发重发，不改动其他状态。
   const [revision, setRevision] = useState(0)
 
-  const businessToday = defaultJournalDate()
-
   /** 切换粒度 / 参考日期：从头加载第 1 页。 */
   function changeRange(nextPeriod: RecordsPeriod, nextDate: string) {
     if (nextPeriod === period && nextDate === refDate) return
@@ -86,9 +82,8 @@ function RecordsTimeline({ disabled = false, onOpenJournal }: RecordsTimelinePro
 
   useEffect(() => {
     const controller = new AbortController()
-    // 「日」用服务端精确筛选；其余粒度目前没有范围查询，读取后前端按范围筛。
-    const journalDate = period === 'day' ? refDate : undefined
-    listJournals(journalDate, page, controller.signal).then((data) => {
+    // 真实分页不传日期：日视图连续展示，其他粒度在客户端按范围筛选。
+    listJournals(undefined, page, controller.signal).then((data) => {
       if (controller.signal.aborted) return
       const validPage = nearestValidPage(data.page, data.total)
       if (validPage !== data.page) {
@@ -121,8 +116,6 @@ function RecordsTimeline({ disabled = false, onOpenJournal }: RecordsTimelinePro
     return groupJournalsByDate(visible)
   }, [items, period, range])
 
-  const rangeLabel = formatRangeLabel(period, range)
-  const isCurrent = refDate === businessToday
   const initialLoading = status === 'loading' && items.length === 0
 
   return (
@@ -136,20 +129,6 @@ function RecordsTimeline({ disabled = false, onOpenJournal }: RecordsTimelinePro
             {tab.label}
           </button>
         ))}
-      </div>
-
-      <div className="rt-rangebar">
-        <button type="button" className="rt-range-step" disabled={disabled}
-          aria-label={`上一个${PERIOD_TABS.find((tab) => tab.id === period)?.label ?? ''}`}
-          onClick={() => changeRange(period, shiftPeriod(period, refDate, -1))}>‹</button>
-        <span className="rt-range-label">{rangeLabel}</span>
-        <button type="button" className="rt-range-step" disabled={disabled}
-          aria-label={`下一个${PERIOD_TABS.find((tab) => tab.id === period)?.label ?? ''}`}
-          onClick={() => changeRange(period, shiftPeriod(period, refDate, 1))}>›</button>
-        {!isCurrent && (
-          <button type="button" className="rt-range-today" disabled={disabled}
-            onClick={() => changeRange(period, businessToday)}>回到今天</button>
-        )}
       </div>
 
       {initialLoading && (
@@ -176,7 +155,7 @@ function RecordsTimeline({ disabled = false, onOpenJournal }: RecordsTimelinePro
             <li key={group.date} className="rt-group">
               <div className="rt-node">
                 <span className="rt-dot" aria-hidden="true" />
-                <h3 className="rt-date">{formatGroupLabel(group.date, businessToday)}</h3>
+                <h3 className="rt-date">{formatAbsoluteGroupLabel(group.date)}</h3>
               </div>
               <ul className="rt-cards">
                 {group.items.map((item) => (
@@ -185,11 +164,11 @@ function RecordsTimeline({ disabled = false, onOpenJournal }: RecordsTimelinePro
                       disabled={disabled}
                       aria-label={`打开${kindLabel(item.journal_kind)}：${summarizeContent(item.content, 40) || item.display_title}`}
                       onClick={() => onOpenJournal(item.id)}>
+                      <span className="rt-card-summary">
+                        {summarizeContent(item.content, 300) || item.display_title}
+                      </span>
                       <span className={`rt-tag rt-tag--${kindModifier(item.journal_kind)}`}>
                         {kindLabel(item.journal_kind)}
-                      </span>
-                      <span className="rt-card-summary">
-                        {summarizeContent(item.content) || item.display_title}
                       </span>
                     </button>
                   </li>
@@ -207,7 +186,7 @@ function RecordsTimeline({ disabled = false, onOpenJournal }: RecordsTimelinePro
       )}
       {status === 'success' && period === 'day' && (
         <p className="rt-count" role="status">
-          {hasNext ? `本日已加载 ${items.length} / 共 ${total} 篇。` : `本日共 ${total} 篇。`}
+          {hasNext ? `已加载 ${items.length} / 共 ${total} 篇，可继续加载更早的记录。` : `已加载全部 ${total} 篇。`}
         </p>
       )}
 

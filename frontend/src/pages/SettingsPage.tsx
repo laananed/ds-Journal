@@ -20,6 +20,7 @@ import type { AISettings, MindPresetId } from '../types/ai'
 export interface SettingsPageProps {
   /** 父级写入中时禁止保存，避免与自动保存等操作竞争。 */
   disabled?: boolean
+  onBack?: () => void
 }
 
 const CUSTOM_PROMPT_MAX_CODE_POINTS = 4_000
@@ -40,7 +41,7 @@ function searchText(settings: AISettings): string {
   return settings.web_enabled ? '已启用且已配置' : '已配置但当前关闭'
 }
 
-function SettingsPage({ disabled = false }: SettingsPageProps) {
+function SettingsPage({ disabled = false, onBack }: SettingsPageProps) {
   const [settings, setSettings] = useState<AISettings | null>(null)
   const [prompt, setPrompt] = useState('')
   const [webEnabled, setWebEnabled] = useState(true)
@@ -166,6 +167,9 @@ function SettingsPage({ disabled = false }: SettingsPageProps) {
   return (
     <section className="settings-page" aria-label="AI 设置模块">
       <header className="settings-header">
+        {onBack && <button type="button" disabled={busy} onClick={() => {
+          if (!dirty || window.confirm('设置有未保存的修改，确定返回吗？')) onBack()
+        }}>← 返回</button>}
         <h2>AI 设置</h2>
         <button type="button" onClick={reload} disabled={busy || status === 'loading'}>重新读取</button>
       </header>

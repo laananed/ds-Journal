@@ -43,7 +43,7 @@
   display: grid;
   grid-template-columns: var(--sj-nav-width) minmax(0, 1fr);
   width: 100%;
-  max-width: 1520px;
+  max-width: none;
   min-height: 100vh;
   min-height: 100dvh;
   margin: 0 auto;
@@ -280,6 +280,15 @@
   max-width: 760px;
   margin: 0 auto;
 }
+
+/* 编辑区默认只显示正文；工具可展开，异常状态不隐藏。 */
+.sj-editor-tools { order: 5; align-self: flex-end; color: var(--sj-text-muted); font-size: 12px; }
+.sj-editor-tools summary { cursor: pointer; }
+.sj-write__title, .sj-ritual .sj-ritual__title,
+.sj-write__quiet, .sj-ritual__quiet,
+.sj-write__status:not(.is-critical), .sj-ritual__status:not(.is-critical) { display: none; }
+.sj-write:not(:has(.sj-editor-tools[open])) .s4-toolbar,
+.sj-ritual:not(:has(.sj-editor-tools[open])) .s4-toolbar { display: none; }
 .sj-shell__main:focus {
   outline: none;
 }

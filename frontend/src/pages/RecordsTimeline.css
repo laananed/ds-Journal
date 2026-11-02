@@ -26,15 +26,15 @@
 .rt-switch {
   display: inline-flex;
   gap: 4px;
-  align-self: center;
-  padding: 4px;
-  border: 1px solid var(--sj-border);
+  align-self: flex-start;
+  padding: 6px;
+  border: 0;
   border-radius: 999px;
   background: var(--sj-bg-soft);
 }
 
 .rt-switch-tab {
-  padding: 7px 22px;
+  padding: 10px 25px;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -154,15 +154,15 @@
   transform: translateY(-50%);
   border-radius: 50%;
   background: #5563e6;
-  /* 白色外圈把节点从时间线上托出来 */
-  box-shadow: 0 0 0 3px var(--sj-bg);
+  border: 3px solid var(--sj-bg);
+  box-shadow: 0 0 0 1px #cfd4f4;
 }
 
 .rt-date {
   margin: 0;
   color: var(--sj-text);
   font-size: 13.5px;
-  font-weight: 650;
+  font-weight: 500;
   letter-spacing: 0.01em;
 }
 
@@ -184,8 +184,8 @@
   gap: 10px;
   width: 100%;
   padding: 18px 22px 20px;
-  border: 1px solid var(--sj-border);
-  border-radius: 16px;
+  border: 1px solid transparent;
+  border-radius: 19px;
   background: var(--sj-bg-soft);
   color: var(--sj-text);
   font: inherit;
@@ -214,6 +214,28 @@
   line-height: 1.66;
   overflow-wrap: anywhere;
 }
+
+/* App 的旧版通用按钮样式优先级较高；限定到时间线以保留圆角卡片。 */
+.app .rt .rt-switch-tab {
+  padding: 10px 25px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sj-text-muted);
+}
+.app .rt .rt-switch-tab[aria-pressed='true'] {
+  background: var(--sj-surface);
+  color: var(--sj-text);
+}
+.app .rt .rt-card {
+  padding: 18px 22px 20px;
+  border: 1px solid transparent;
+  border-radius: 19px;
+  background: var(--sj-bg-soft);
+  color: var(--sj-text);
+}
+.app .rt .rt-card:hover:not(:disabled) { border-color: var(--sj-border-strong); }
+.app .rt .rt-range-step { padding: 0 0 3px; border-radius: 50%; }
 
 /* ---------------- 类型标识 ---------------- */
 

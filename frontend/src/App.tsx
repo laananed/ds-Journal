@@ -2,8 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import './components/JournalPage.css'
 import { listJournals } from './api/journals'
-import { searchFiles } from './api/search'
-import { journalSearchConditions } from './utils/homeSearch'
 import AppShell from './components/AppShell'
 import AppNav, { PageShortcuts, type AppNavItem } from './components/AppNav'
 import DashboardPage from './pages/DashboardPage'
@@ -27,7 +25,7 @@ import TrashPage from './pages/TrashPage'
 import SearchPage from './pages/SearchPage'
 import type { FileIdentity } from './types/file'
 import type { JournalPage } from './types/journal'
-import type { SearchConditions, SearchPageData } from './types/search'
+import type { SearchConditions } from './types/search'
 import type { FlushResult } from './hooks/useAutosave'
 import type { ReviewSource } from './utils/reviewSelection'
 import { nearestValidPage } from './utils/pagination'
@@ -63,6 +61,7 @@ type Module =
   | 'folder'
   | 'review'
   | 'settings'
+  | 'writing-recovery'
 type Panel = { kind: 'list' } | { kind: 'create'; key: number } | { kind: 'detail'; file: FileIdentity; key: number }
 
 /**
@@ -76,7 +75,6 @@ type Panel = { kind: 'list' } | { kind: 'create'; key: number } | { kind: 'detai
  */
 const navItems: ReadonlyArray<AppNavItem<Module>> = [
   { id: 'dashboard', label: '概览', icon: 'overview' },
-  { id: 'writing', label: '速记', icon: 'quick' },
   { id: 'journal', label: '记录', icon: 'records' },
   { id: 'insight', label: '洞察', icon: 'insight' },
 ]
@@ -86,6 +84,7 @@ const overflowItems: ReadonlyArray<AppNavItem<Module>> = [
   { id: 'review', label: 'AI 复盘', icon: 'review' },
   { id: 'inbox', label: '历史收件箱', icon: 'inbox' },
   { id: 'folder', label: '文件夹', icon: 'folder' },
+  { id: 'writing-recovery', label: '恢复速记草稿', icon: 'quick' },
 ]
 
 const shortcutItems: ReadonlyArray<AppNavItem<Module>> = [
@@ -127,13 +126,8 @@ function DashboardModule(props: {
 
 function App() {
   const [module, setModule] = useState<Module>('dashboard')
-  const [homeInput, setHomeInput] = useState('')
-  const [homeQuery, setHomeQuery] = useState('')
-  const [homePage, setHomePage] = useState(1)
-  const [homeResult, setHomeResult] = useState<SearchPageData | null>(null)
-  const [homeStatus, setHomeStatus] = useState<'loading' | 'success' | 'error'>('loading')
-  const [homeError, setHomeError] = useState('')
-  const [homeRevision, setHomeRevision] = useState(0)
+  const settingsReturnModule = useRef<Module>('dashboard')
+  const [writingRecoveryRequest, setWritingRecoveryRequest] = useState(0)
   const [panel, setPanel] = useState<Panel>({ kind: 'list' })
   const [editorKey, setEditorKey] = useState(0)
   const [filterDate, setFilterDate] = useState('')
@@ -197,26 +191,6 @@ function App() {
     })
     return () => controller.abort()
   }, [module, filterDate, page, dataRevision])
-
-  useEffect(() => {
-    const conditions = journalSearchConditions(homeQuery, homePage)
-    if (module !== 'journal' || !conditions) return
-    const controller = new AbortController()
-    setHomeStatus('loading')
-    searchFiles(conditions, controller.signal).then((data) => {
-      if (controller.signal.aborted) return
-      const valid = nearestValidPage(data.page, data.total)
-      if (valid !== data.page) { setHomePage(valid); return }
-      setHomeResult(data)
-      setHomeStatus('success')
-    }).catch((error: unknown) => {
-      if (controller.signal.aborted) return
-      setHomeResult(null)
-      setHomeError(error instanceof Error ? error.message : '搜索失败，请稍后重试')
-      setHomeStatus('error')
-    })
-    return () => controller.abort()
-  }, [module, homeQuery, homePage, homeRevision, dataRevision])
 
   useEffect(() => {
     const dialog = confirmDialog.current
@@ -301,7 +275,13 @@ function App() {
     navigate(() => {
       showList()
       setNotice('')
+      if (value === 'writing-recovery') {
+        setModule('writing')
+        setWritingRecoveryRequest((current) => current + 1)
+        return
+      }
       if (value !== module) {
+        if (value === 'settings') settingsReturnModule.current = module
         if (value === 'journal') beginLoading()
         setModule(value)
       }
@@ -459,11 +439,10 @@ function App() {
       items={navItems}
       overflow={overflowItems}
       overflowLabel="更多"
-      active={module}
+      active={module === 'writing' || module === 'set' || module === 'end' ? 'dashboard' : module}
       overflowActive={overflowIds.includes(module)}
       disabled={uiLocked}
       onSelect={changeModule}
-      onHome={() => changeModule('dashboard')}
     />
   )
 
@@ -503,7 +482,9 @@ function App() {
               onDirtyChange={setDirty}
               onFlushReady={registerFlush}
               onOpenLegacy={openLegacyJournal}
+              onOpenAiSettings={() => changeModule('settings')}
               onBack={() => changeModule('dashboard')}
+              recoveryRequest={writingRecoveryRequest}
             />
           )}
 
@@ -528,7 +509,7 @@ function App() {
             <FolderPage onDirtyChange={setDirty} onBusyChange={setWriting}
               onNavigate={navigate} onOpenFile={openFile} />
           )}
-          {module === 'settings' && <SettingsPage disabled={uiLocked} />}
+          {module === 'settings' && <SettingsPage disabled={uiLocked} onBack={() => changeModule(settingsReturnModule.current)} />}
           {module === 'review' && (
             <ReviewPage
               initialSource={reviewSeed?.source ?? null}
@@ -557,18 +538,9 @@ function App() {
           )}
           {module === 'journal' && (
             <>
-              {panel.kind === 'list' && <>
-                <div className="home-heading"><h2>{homeQuery ? '搜索结果' : '记录'}</h2><span>{homeQuery ? (homeStatus === 'success' ? `${homeResult?.total ?? 0} 条匹配` : '') : (status === 'success' ? `${result?.total ?? 0} 篇记录` : '')}</span></div>
-                <form className="home-search" onSubmit={(event) => { event.preventDefault(); const value = homeInput.trim(); setHomePage(1); setHomeQuery(value); if (value === homeQuery && value) setHomeRevision((v) => v + 1) }}>
-                  <label className="sr-only" htmlFor="home-search">搜索记录标题和正文</label>
-                  <input id="home-search" type="search" value={homeInput} onChange={(event) => setHomeInput(event.target.value)} placeholder="搜索记录标题和正文" />
-                  <button type="submit">搜索</button>
-                </form>
-                {homeQuery && <button className="clear-search" type="button" onClick={() => { setHomeQuery(''); setHomeInput(''); setHomePage(1) }}>清除搜索</button>}
-              </>}
               {/* 图标导航收窄后，「新建记录」从导航栏移到列表工具条，功能不变 */}
-              {panel.kind === 'list' && !homeQuery && <button type="button" onClick={() => setLegacyList((value) => !value)}>{legacyList ? '返回时间线' : '传统列表与日期筛选'}</button>}
-              {panel.kind === 'list' && !homeQuery && legacyList && <section className="app-toolbar" aria-label="记录列表工具">
+              {panel.kind === 'list' && legacyList && <button className="records-other" type="button" onClick={() => setLegacyList(false)}>返回时间线</button>}
+              {panel.kind === 'list' && legacyList && <section className="app-toolbar" aria-label="记录列表工具">
                 <button className="home-new" type="button" disabled={uiLocked} onClick={() => newJournal()}>新建记录</button>
                 <label className="app-filter">
                   <span>按日期查看</span>
@@ -597,16 +569,9 @@ function App() {
                     refreshData()
                   }} />
               )}
-              {panel.kind === 'list' && homeQuery && <section className="journal-results" aria-label="搜索结果">
-                {homeStatus === 'loading' && <p className="app-state" role="status">正在搜索……</p>}
-                {homeStatus === 'error' && <div className="app-state app-state-error" role="alert"><p>{homeError}</p><button type="button" onClick={() => setHomeRevision((v) => v + 1)}>重试</button></div>}
-                {homeStatus === 'success' && homeResult && <>
-                  {homeResult.items.length === 0 ? <p className="app-state">没有找到匹配的日记，请尝试其他关键词。</p> : <JournalList journals={homeResult.items.filter((item): item is import('./types/journal').Journal => item.type === 'journal')} onOpen={openJournal} openDisabled={uiLocked} />}
-                  <Pagination page={homeResult.page} total={homeResult.total} hasNext={homeResult.has_next} onPageChange={setHomePage} disabled={uiLocked} label="搜索结果分页" />
-                </>}
-              </section>}
-              {panel.kind === 'list' && !homeQuery && !legacyList && <RecordsTimeline disabled={uiLocked} onOpenJournal={openJournal} />}
-              {panel.kind === 'list' && !homeQuery && legacyList && <section className="journal-results" aria-label="日记列表">
+              {panel.kind === 'list' && !legacyList && <RecordsTimeline disabled={uiLocked} onOpenJournal={openJournal} />}
+              {panel.kind === 'list' && !legacyList && <button className="records-other" type="button" onClick={() => setLegacyList(true)}>传统列表与日期筛选</button>}
+              {panel.kind === 'list' && legacyList && <section className="journal-results" aria-label="日记列表">
                 {status === 'loading' && <p className="app-state" role="status">加载中……</p>}
                 {status === 'error' && (
                   <div className="app-state app-state-error" role="alert">

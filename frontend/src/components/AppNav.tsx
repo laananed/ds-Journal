@@ -192,8 +192,6 @@ export type AppNavProps<T extends string> = {
   overflowActive?: boolean
   disabled?: boolean
   onSelect: (id: T) => void
-  /** 品牌标识回到概览。 */
-  onHome: () => void
 }
 
 /** 按下 Esc、点击面板外部时关闭；返回容器 ref 供定位判定。 */
@@ -225,7 +223,6 @@ function AppNav<T extends string>({
   overflowActive = false,
   disabled = false,
   onSelect,
-  onHome,
 }: AppNavProps<T>) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuId = useId()
@@ -259,17 +256,6 @@ function AppNav<T extends string>({
 
   return (
     <div className="sj-nav">
-      <button
-        type="button"
-        className="sj-nav__brand"
-        aria-label="SeekJournal · 回到概览"
-        data-tip="SeekJournal"
-        disabled={disabled}
-        onClick={onHome}
-      >
-        <NavBrandMark />
-      </button>
-
       <nav className="sj-nav__main" aria-label="主导航">
         {items.map((item) => (
           <button

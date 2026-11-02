@@ -712,7 +712,7 @@
   gap: 0;
 }
 .sj-write .s4-editor-content {
-  min-height: 48vh;
+  min-height: 3em;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -848,3 +848,14 @@
     transition: none;
   }
 }
+.app .sj-write .sj-write__ai-trigger {
+  margin-top: 16px;
+  padding: 10px 19px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sj-inverse-bg);
+  color: var(--sj-inverse-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.app .sj-write .sj-write__ai-trigger:hover { opacity: .85; }

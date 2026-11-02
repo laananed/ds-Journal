@@ -172,6 +172,13 @@ export function formatGroupLabel(dateStr: string, businessToday: string): string
   return `${parts.year}年${parts.month}月${parts.day}日 ${weekday}`
 }
 
+/** 每个时间线节点显示实际业务日期，日期本身作为分组标识。 */
+export function formatAbsoluteGroupLabel(dateStr: string): string {
+  const parts = parseDateParts(dateStr)
+  if (parts === null) return dateStr
+  return `${parts.year}年${parts.month}月${parts.day}日 ${WEEKDAYS[partsToDate(dateStr).getDay()]}`
+}
+
 /** 时间范围条的文案：day 完整日期；week 显示起止；month / year 显示年月 / 年。 */
 export function formatRangeLabel(period: RecordsPeriod, range: DateRange): string {
   const start = parseDateParts(range.start)
@@ -182,6 +189,30 @@ export function formatRangeLabel(period: RecordsPeriod, range: DateRange): strin
   if (end === null) return `${range.start} ~ ${range.end}`
   if (period === 'month') return `${start.year}年${start.month}月`
   return `${start.year}年${start.month}月${start.day}日 – ${end.year}年${end.month}月${end.day}日`
+}
+
+/** 相对业务日期显示所选范围，不以浏览器本地时区解释日期。 */
+export function formatRelativeRangeLabel(period: RecordsPeriod, date: string, today: string): string {
+  const a = parseDateParts(date)
+  const b = parseDateParts(today)
+  if (a === null || b === null) return '日期不可用'
+  const epoch = (p: { year: number; month: number; day: number }) => Date.UTC(p.year, p.month - 1, p.day) / 86400000
+  let offset: number
+  if (period === 'day') offset = epoch(a) - epoch(b)
+  else if (period === 'week') {
+    const first = parseDateParts(rangeForPeriod('week', date).start)!
+    const current = parseDateParts(rangeForPeriod('week', today).start)!
+    offset = (epoch(first) - epoch(current)) / 7
+  } else if (period === 'month') offset = (a.year - b.year) * 12 + a.month - b.month
+  else offset = a.year - b.year
+  const current = { day: '今天', week: '本周', month: '本月', year: '今年' }[period]
+  const previous = { day: '昨天', week: '上周', month: '上个月', year: '去年' }[period]
+  const next = { day: '明天', week: '下周', month: '下个月', year: '明年' }[period]
+  if (offset === 0) return current
+  if (offset === -1) return previous
+  if (offset === 1) return next
+  const unit = { day: '天', week: '周', month: '个月', year: '年' }[period]
+  return `${Math.abs(offset)} ${unit}${offset < 0 ? '前' : '后'}`
 }
 
 /**

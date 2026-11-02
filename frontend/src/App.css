@@ -503,3 +503,13 @@
 }
 [data-theme='dark'] .app.app-embedded .home-new { background: #eee; color: #202124; border-color: #eee; }
 [data-theme='dark'] .app.app-embedded .clear-search { color: #eee; }
+.app .records-other {
+  display: block;
+  margin: 10px auto 36px;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--sj-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}

@@ -42,7 +42,6 @@ import {
   decideRecovery,
   defaultMessage,
   mergeWritingDetail,
-  phaseLabel,
   readWritingIndex,
   removeWritingEntry,
   writeWritingIndex,
@@ -93,6 +92,7 @@ export interface WritingAiPanelProps {
   onNotice?: (message: string) => void
   /** 重新读取设置（用户刚在设置页改了开关时用）。 */
   onReloadSettings?: () => void
+  onOpenSettings?: () => void
   storage?: StorageLike | null
   /** 页面可见性（默认读 document.visibilityState）。 */
   visible?: boolean
@@ -144,6 +144,7 @@ function WritingAiPanel({
   store = editSessionStore,
   onNotice,
   onReloadSettings,
+  onOpenSettings,
   storage,
   visible,
 }: WritingAiPanelProps) {
@@ -155,6 +156,9 @@ function WritingAiPanel({
   const [commentsTotal, setCommentsTotal] = useState(0)
   const [commentsHasNext, setCommentsHasNext] = useState(false)
   const [question, setQuestion] = useState('')
+  const [showQuestion, setShowQuestion] = useState(false)
+  const [showMinds, setShowMinds] = useState(false)
+  const menuRef = useRef<HTMLDetailsElement>(null)
   const [questionError, setQuestionError] = useState('')
   const [presets, setPresets] = useState<MindPresetId[]>(settings?.mind_preset_ids ?? ['gentle_reflection'])
   const [notice, setNotice] = useState('')
@@ -358,6 +362,11 @@ function WritingAiPanel({
       return
     }
     if (busyRef.current) return
+    if (record !== null && (record.phase === 'unknown' || record.phase === 'ready'
+      || (record.phase === 'failed' && record.mayHaveCharged))) {
+      notify('上一次 AI 请求尚需处理，请先查询或处理已有结果。')
+      return
+    }
     const rawQuestion = question.trim()
     if (input.kind === 'go_deeper' && input.trigger === 'manual'
       && Array.from(rawQuestion).length > 2000) {
@@ -689,6 +698,8 @@ function WritingAiPanel({
 
   const available = sessionId !== null && fileId !== null
   const running = record !== null && record.phase === 'running'
+  const needsRecovery = record !== null && (record.phase === 'unknown' || record.phase === 'ready'
+    || (record.phase === 'failed' && record.mayHaveCharged))
   const scopeLabel = useMemo(() => {
     if (selection === null || selection.length === 0) return '整篇'
     return `已选 ${selection.length} 段（${selection.map((range) => `${range.start}-${range.end}`).join('、')}）`
@@ -700,14 +711,23 @@ function WritingAiPanel({
 
   return (
     <section className="writing-ai" aria-label="AI 写作">
-      <header className="writing-ai-head">
-        <h3>AI 写作</h3>
-        <span className="writing-ai-phase" role="status">
-          {record === null ? '未调用' : phaseLabel(record.phase)}
-        </span>
-      </header>
-
-      {!available && (
+      <div className="writing-ai-compact-actions">
+        <button type="button" className="writing-ai-compact-primary" disabled={disabled || running || needsRecovery}
+          onClick={() => { void runWriting({ kind: 'go_deeper', trigger: 'manual' }) }}>
+          {running ? 'AI 正在处理……' : '✧ AI 写作'}
+        </button>
+        <details className="writing-ai-menu" ref={menuRef} onKeyDown={(event) => {
+          if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus() }
+        }}>
+          <summary aria-label="更多 AI 功能">＋</summary>
+          <div className="writing-ai-menu-content">
+            <button type="button" aria-label="Minds 评论" onClick={() => { setShowMinds((value) => !value); if (menuRef.current) menuRef.current.open = false }}>Minds 评论</button>
+            <button type="button" aria-label="自定义提问" onClick={() => { setShowQuestion((value) => !value); if (menuRef.current) menuRef.current.open = false }}>自定义提问</button>
+            {onOpenSettings !== undefined && <button type="button" aria-label="AI 设置" onClick={onOpenSettings}>AI 设置</button>}
+          </div>
+        </details>
+      </div>
+      {!available && (showQuestion || showMinds) && (
         <p className="writing-ai-hint">
           这篇还没有服务器版本：先写下有效正文并保存成功，AI 才能读取它。这里不会用空文件占位。
         </p>
@@ -715,7 +735,7 @@ function WritingAiPanel({
 
       {available && (
         <>
-          <div className="writing-ai-row">
+          {showQuestion && <div className="writing-ai-row">
             <label className="writing-ai-question">
               <span>Go Deeper（可选：单独问一句，不写进正文）</span>
               <textarea rows={2} value={question} disabled={disabled || running}
@@ -723,15 +743,8 @@ function WritingAiPanel({
                 onChange={(event) => setQuestion(event.target.value)} />
             </label>
             {questionError !== '' && <p className="writing-ai-error" role="alert">{questionError}</p>}
-            <div className="writing-ai-buttons">
-              <button type="button" className="writing-ai-primary"
-                disabled={disabled || running}
-                onClick={() => { void runWriting({ kind: 'go_deeper', trigger: 'manual' }) }}>
-                {running ? 'AI 正在处理……' : 'Go Deeper（手动）'}
-              </button>
-              <span className="writing-ai-note">处理期间可以继续写、可以切页；结果回来会原位附着。</span>
-            </div>
-          </div>
+            <p className="writing-ai-note">填写后点击上方 AI 写作，问题不会写入正文。</p>
+          </div>}
 
           {record !== null && record.message !== '' && (
             <p className={`writing-ai-status writing-ai-status-${record.phase}`} role="status">{record.message}</p>
@@ -769,7 +782,7 @@ function WritingAiPanel({
         </>
       )}
 
-      {available && (
+      {available && showMinds && (
         <MindsSidebar
           comments={comments}
           loading={commentsLoading}
@@ -800,7 +813,7 @@ function WritingAiPanel({
         <p className="writing-ai-note" role="status">{notice}</p>
       )}
 
-      {settings !== null && (
+      {showMinds && settings !== null && (
         <p className="writing-ai-auto">
           自动开关：Go Deeper {settings.auto_go_deeper ? '已开启' : '关闭'}，
           Minds 评论 {settings.auto_minds_comments ? '已开启' : '关闭'}。
@@ -814,7 +827,7 @@ function WritingAiPanel({
           )}
         </p>
       )}
-      {settings === null && onReloadSettings !== undefined && (
+      {showMinds && settings === null && onReloadSettings !== undefined && (
         <p className="writing-ai-auto">
           还没读到 AI 设置：自动 AI 状态未知（手动调用不受影响）。
           <button type="button" className="writing-ai-link" onClick={onReloadSettings}>

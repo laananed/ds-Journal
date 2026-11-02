@@ -107,6 +107,8 @@ export interface WritingPageProps {
    * 未接线时不渲染按钮（避免出现一个点了没反应的入口）。
    */
   onBack?: () => void
+  onOpenAiSettings?: () => void
+  recoveryRequest?: number
 }
 
 /** 当前正在编辑的草稿身份（切页返回时按它取回同一个会话）。 */
@@ -145,6 +147,8 @@ function WritingPage({
   initialFile = null,
   onInitialFileConsumed,
   onBack,
+  onOpenAiSettings,
+  recoveryRequest = 0,
 }: WritingPageProps) {
   const store = editSessionStore
   const chrome = useImmersiveChrome()
@@ -182,7 +186,6 @@ function WritingPage({
   /** 沉浸式布局的按需面板：今天列表 / 属性（日期与文件夹）/ AI 写作。 */
   const [listOpen, setListOpen] = useState(false)
   const [metaOpen, setMetaOpen] = useState(false)
-  const [aiOpen, setAiOpen] = useState(false)
   const [plans, setPlans] = useState<Record<string, CandidatePlan>>({})
   const [busyKeys, setBusyKeys] = useState<string[]>([])
   const serverCache = useRef(new Map<number, Journal>())
@@ -806,10 +809,11 @@ function WritingPage({
    * 拿它当「还有未提交的草稿」等于每隔几秒在正文上方弹一次卡片。
    * 草稿入口（顶栏按钮 + 面板）仍然包含它，不会丢可发现性。
    */
-  const otherWritingDrafts = useMemo(() => {
-    const currentDraftId = active?.draftId ?? ''
-    return writingCandidates.filter((item) => item.draft_id !== currentDraftId)
-  }, [writingCandidates, active])
+  useEffect(() => {
+    if (recoveryRequest === 0) return
+    setRecoveryOpen(true)
+    void reloadDrafts()
+  }, [recoveryRequest, reloadDrafts])
   /**
    * 未取得服务器身份的记录**不需要探测**就能定性（`planCandidate` 只看记录本身）。
    * 这里预置它们的计划，让「创建未确认」的草稿一打开面板就显示「恢复原请求」，
@@ -853,6 +857,7 @@ function WritingPage({
       onPointerMove={chrome.reveal}
       onKeyDown={chrome.onKeyDown}
     >
+      <details className="sj-editor-tools" hidden><summary>更多</summary>
       <header className="sj-write__bar" onFocus={chrome.hold} onBlur={chrome.release}>
         <div className="sj-write__ident">
           {onBack !== undefined && (
@@ -866,10 +871,6 @@ function WritingPage({
           <button type="button" className="sj-write__ghost" aria-expanded={listOpen}
             onClick={() => setListOpen((open) => !open)}>
             今天 {today.total} 篇
-          </button>
-          <button type="button" className="sj-write__ghost" aria-expanded={aiOpen}
-            disabled={session === null} onClick={() => setAiOpen((open) => !open)}>
-            AI 写作
           </button>
           <button type="button" className="sj-write__ghost" aria-expanded={recoveryOpen} onClick={() => {
             setRecoveryOpen((open) => !open)
@@ -891,18 +892,9 @@ function WritingPage({
           </button>
         </div>
       </header>
+      </details>
 
       {notice !== '' && <p className="writing-notice" role="status">{notice}</p>}
-
-      {!recoveryOpen && otherWritingDrafts.length > 0 && (
-        <div className="writing-recovery-callout" role="status">
-          <p>本机还有 {otherWritingDrafts.length} 份未提交的草稿（不含服务器已保存的内容）。</p>
-          <p className="writing-hint">可以打开列表选择恢复、稍后处理或明确丢弃；不做选择时不会有任何自动写入。</p>
-          <button type="button" onClick={() => { setRecoveryOpen(true); void reloadDrafts() }}>
-            查看本地草稿
-          </button>
-        </div>
-      )}
 
       {recoveryOpen && (
         <LocalDraftPanel
@@ -1137,7 +1129,7 @@ function WritingPage({
                 AI 写作面板：只在需要时展开，但始终挂载——在途请求与结果不因收起而丢。
                 这里不传 `locked`（含本页 busy），只有页面级写锁 `disabled` 会禁用入口。
               */}
-              <div className={`sj-write__ai${aiOpen ? '' : ' is-collapsed'}`} aria-hidden={!aiOpen}>
+              <div id="writing-ai-panel" className="sj-write__ai">
                 <WritingAiPanel
                   sessionId={sessionId}
                   fileId={session.fileId}
@@ -1151,6 +1143,7 @@ function WritingPage({
                   disabled={disabled}
                   store={store}
                   onNotice={setNotice}
+                  onOpenSettings={onOpenAiSettings}
                   onReloadSettings={() => setAiSettingsToken((value) => value + 1)}
                 />
               </div>

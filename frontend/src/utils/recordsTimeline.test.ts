@@ -4,7 +4,9 @@
 import {
   dateInRange,
   formatGroupLabel,
+  formatAbsoluteGroupLabel,
   formatRangeLabel,
+  formatRelativeRangeLabel,
   groupJournalsByDate,
   kindLabel,
   kindModifier,
@@ -109,6 +111,9 @@ equal(kindModifier(undefined), 'writing', 'missing kind modifier')
 
 // ---------- formatGroupLabel ----------
 
+equal(formatAbsoluteGroupLabel('2026-11-02'), '2026年11月2日 周一', 'date label includes date for today')
+equal(formatAbsoluteGroupLabel('2026-11-01'), '2026年11月1日 周日', 'date label distinguishes previous date')
+
 // 业务「今天」= 2026-11-02（周一）
 equal(formatGroupLabel('2026-11-02', '2026-11-02'), '今天', 'today label')
 equal(formatGroupLabel('2026-11-01', '2026-11-02'), '昨天', 'yesterday label')
@@ -128,6 +133,12 @@ equal(formatRangeLabel('month', { start: '2026-11-01', end: '2026-11-30' }), '20
 equal(formatRangeLabel('year', { start: '2026-01-01', end: '2026-12-31' }), '2026年', 'year label')
 
 // ---------- summarizeContent ----------
+
+equal(formatRelativeRangeLabel('day', '2026-11-02', '2026-11-02'), '今天', 'current day')
+equal(formatRelativeRangeLabel('day', '2026-11-01', '2026-11-02'), '昨天', 'previous day')
+equal(formatRelativeRangeLabel('day', '2026-10-29', '2026-11-02'), '4 天前', 'older day')
+equal(formatRelativeRangeLabel('week', '2026-10-26', '2026-11-02'), '上周', 'previous week')
+equal(formatRelativeRangeLabel('month', '2027-01-01', '2026-11-02'), '2 个月后', 'future month across year')
 
 equal(summarizeContent('  第一行\n\n第二行  '), '第一行 第二行', 'whitespace collapsed')
 equal(summarizeContent('短'), '短', 'short content unchanged')
