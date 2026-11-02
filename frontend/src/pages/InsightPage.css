@@ -1,0 +1,416 @@
+/*
+ * 洞察页样式（Stage 4 / wb/ui-4 视觉重做）。
+ *
+ * 参考图 9（Mindsera Insights）：顶部蓝色介绍区、分类入口、分析卡片；
+ * 参考图 3 / 第一轮首页：充足留白、清晰文字层级、细腻圆角与间距。
+ *
+ * 边界：
+ *   - 全部选择器收敛在 `.insight-page` 命名空间内，只影响洞察页；
+ *   - 蓝色视觉区用固定色值（与首页 DashboardPage.css 的蓝色卡片同一策略，
+ *     不随主题反转），其余颜色取外壳 `--sj-*` 变量，自动跟随浅 / 深主题；
+ *   - 不修改 App.css、AppShell.css、FileCard 等共享样式。
+ */
+
+.insight-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+/* ---------------- 顶部蓝色视觉区 ---------------- */
+
+.insight-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 36px 36px 32px;
+  border-radius: 22px;
+  color: #ffffff;
+  background:
+    radial-gradient(122% 130% at 92% 106%, rgb(255 255 255 / 46%) 0%, rgb(255 255 255 / 0%) 56%),
+    linear-gradient(135deg, #6371ea 0%, #7c8af3 52%, #99a6fb 100%);
+  box-shadow: 0 26px 50px -34px rgb(84 98 226 / 55%);
+}
+
+/* 右下角大圆形高光：与首页蓝色主卡片同一手法，保持整体风格一致 */
+.insight-hero::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  right: -90px;
+  bottom: -150px;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 20%);
+  pointer-events: none;
+}
+
+.insight-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.insight-hero-eyebrow {
+  margin: 0;
+  color: rgb(255 255 255 / 82%);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+
+.insight-hero-title {
+  margin: 0;
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.28;
+  letter-spacing: -0.4px;
+}
+
+.insight-hero-sub {
+  margin: 0;
+  max-width: 40ch;
+  color: rgb(255 255 255 / 86%);
+  font-size: 14.5px;
+  line-height: 1.65;
+}
+
+.insight-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* 深底上的主按钮：白底蓝字（与首页卡内按钮同款），需要盖过 `.app button` 默认白底灰边 */
+.insight-page .insight-hero-new {
+  min-height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #4a56d8;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 130ms ease, transform 130ms ease;
+}
+
+.insight-page .insight-hero-new:hover:not(:disabled) {
+  background: #f2f3ff;
+}
+
+.insight-page .insight-hero-new:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+/* ---------------- 分类入口（既有 Folder） ---------------- */
+
+.insight-cats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.insight-page .insight-cat {
+  padding: 7px 16px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 999px;
+  background: var(--sj-surface, #fff);
+  color: var(--sj-text-muted, #6b6375);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.insight-page .insight-cat:hover:not(:disabled) {
+  border-color: var(--sj-border-strong, #cfc9d6);
+  color: var(--sj-text, #202124);
+}
+
+.insight-page .insight-cat[aria-pressed='true'] {
+  border-color: #4a56d8;
+  background: #4a56d8;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* ---------------- 长期分析占位卡（尚未生成） ---------------- */
+
+.insight-analysis-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.insight-analysis-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  border: 1px dashed var(--sj-border-strong, #cfc9d6);
+  border-radius: 18px;
+  background: var(--sj-surface-muted, #faf9fc);
+}
+
+.insight-analysis-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.insight-analysis-name {
+  color: var(--sj-text, #202124);
+  font-size: 15.5px;
+  font-weight: 650;
+}
+
+.insight-analysis-badge {
+  flex: none;
+  padding: 2px 10px;
+  border: 1px solid var(--sj-border-strong, #cfc9d6);
+  border-radius: 999px;
+  color: var(--sj-text-soft, #767080);
+  font-size: 12px;
+}
+
+.insight-analysis-desc {
+  margin: 0;
+  color: var(--sj-text-soft, #767080);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ---------------- 本机未提交草稿 ---------------- */
+
+.insight-local-drafts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1px solid #e6d9b8;
+  border-left: 4px solid #b58a2f;
+  border-radius: 14px;
+  background: #fffaf0;
+  color: #6b5320;
+}
+
+.insight-local-drafts-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 650;
+  color: #6b5320;
+}
+
+.insight-local-drafts-hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: #8a7340;
+}
+
+.insight-local-drafts ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.insight-local-drafts li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.insight-local-draft-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.insight-local-draft-meta {
+  font-size: 12.5px;
+  color: #8a7340;
+}
+
+.insight-local-drafts li button {
+  padding: 3px 12px;
+  font-size: 13px;
+  border-radius: 999px;
+}
+
+/* 深色主题：警示底色跟随外壳变量，文字用外壳文本色保证对比 */
+[data-theme='dark'] .insight-local-drafts {
+  border-color: var(--sj-warn, #e6cf9c);
+  border-left-color: var(--sj-warn, #e6cf9c);
+  background: var(--sj-surface-muted, #212427);
+  color: var(--sj-text, #eceef0);
+}
+
+[data-theme='dark'] .insight-local-drafts-title {
+  color: var(--sj-text, #eceef0);
+}
+
+[data-theme='dark'] .insight-local-drafts-hint,
+[data-theme='dark'] .insight-local-draft-meta {
+  color: var(--sj-text-soft, #98a1a9);
+}
+
+/* ---------------- 列表头部与卡片 ---------------- */
+
+.insight-list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.insight-list-title {
+  margin: 0;
+  color: var(--sj-text, #202124);
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+}
+
+.insight-list-count {
+  color: var(--sj-text-soft, #767080);
+  font-size: 13px;
+}
+
+/* 列表卡片：在共享 FileCard 结构上做页面级外观（不改共享文件） */
+.insight-page .journal-results {
+  gap: 14px;
+}
+
+.insight-page .journal-list {
+  gap: 14px;
+}
+
+.insight-page .journal-results .file-card {
+  padding: 22px 24px;
+  border: 1px solid var(--sj-border, #e5e2ea);
+  border-radius: 18px;
+  background: var(--sj-surface, #fff);
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+.insight-page .journal-results .file-card:hover:not(:disabled) {
+  border-color: #8996e0;
+  box-shadow: 0 14px 30px -24px rgb(74 86 216 / 55%);
+  transform: translateY(-1px);
+}
+
+.insight-page .journal-results .file-card[aria-current='true'] {
+  border-color: #4a56d8;
+  box-shadow: 0 0 0 1px #4a56d8 inset;
+}
+
+.insight-page .journal-results .journal-item-title {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+}
+
+.insight-page .journal-results .journal-item-date {
+  margin-top: 6px;
+  font-size: 12.5px;
+}
+
+.insight-page .journal-results .journal-item-content {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.62;
+  -webkit-line-clamp: 2;
+}
+
+.insight-page .journal-results .journal-item-open {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #4a56d8;
+}
+
+/* ---------------- 详情 / 编辑面板（功能不变，仅外观贴合整页） ---------------- */
+
+.insight-page .journal-editor {
+  gap: 14px;
+  padding: 24px;
+  border-color: var(--sj-border, #e5e2ea);
+  border-radius: 18px;
+  background: var(--sj-surface, #fff);
+}
+
+.insight-page .detail-header h2 {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+}
+
+.insight-page .detail-header button,
+.insight-page .detail-actions button,
+.insight-page .detail-confirm-actions button,
+.insight-page .editor-actions button {
+  border-radius: 999px;
+  padding: 8px 18px;
+}
+
+.insight-page .detail-title {
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.3px;
+}
+
+/* ---------------- 窄屏 ---------------- */
+
+@media (max-width: 640px) {
+  .insight-page {
+    gap: 14px;
+  }
+  .insight-hero {
+    padding: 24px 20px 22px;
+    border-radius: 18px;
+  }
+  .insight-hero-title {
+    font-size: 22px;
+  }
+  .insight-hero-sub {
+    font-size: 14px;
+  }
+  .insight-analysis-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .insight-analysis-card {
+    padding: 16px;
+    border-radius: 14px;
+  }
+  .insight-page .journal-results .file-card {
+    padding: 16px 18px;
+  }
+  .insight-page .journal-editor {
+    padding: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .insight-page .insight-hero-new,
+  .insight-page .insight-cat,
+  .insight-page .journal-results .file-card {
+    transition: none;
+  }
+}
