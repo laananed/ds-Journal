@@ -7,7 +7,6 @@ import {
   updateInsight,
 } from '../api/insights'
 import FileCard from '../components/FileCard'
-import FolderSelect from '../components/FolderSelect'
 import InsightDrafts from '../components/InsightDrafts'
 import MarkdownContent from '../components/MarkdownContent'
 import Pagination from '../components/Pagination'
@@ -163,7 +162,6 @@ interface InsightPanelProps {
   onBusyChange: (busy: boolean) => void
   onFlushReady?: (flush: (() => Promise<FlushResult>) | null) => void
   onResolveLink: (title: string) => void
-  onNavigate: (action: () => void) => void
   onCreated: (id: number) => void
   onChanged: () => void
   onDeleted: () => void
@@ -171,7 +169,7 @@ interface InsightPanelProps {
 }
 
 function InsightPanel({
-  panel, onDirtyChange, onBusyChange, onFlushReady, onResolveLink, onNavigate, onCreated, onChanged, onDeleted, onClose,
+  panel, onDirtyChange, onBusyChange, onFlushReady, onResolveLink, onCreated, onChanged, onDeleted, onClose,
 }: InsightPanelProps) {
   const insightId = panel.kind === 'detail' ? panel.id : null
   // T10：来自 AI 草稿的首次创建；种子只用于初始化编辑内容与创建键。
@@ -293,6 +291,8 @@ function InsightPanel({
           record: candidate,
           conflict: insightRecoveryDecision(candidate, data.revision) === 'conflict',
         })
+      } else {
+        setMode('edit')
       }
       setStatus('ready')
     }).catch((error: unknown) => {
@@ -452,24 +452,8 @@ function InsightPanel({
     setNotice('')
     setMode('edit')
   }
-  function exitEditing() {
-    setDeleteStage('idle')
-    setWriteError('')
-    setNotice('')
-    // 先让 App 的导航 flush 把最新草稿落库，再切回只读视图。
-    onNavigate(() => {
-      void (async () => {
-        await saveRef.current()
-        if (lastSaved !== null && lastSaved.id === file?.id) setFile(lastSaved)
-        setMode('view')
-      })()
-    })
-  }
   function changeTitle(value: string) {
     actions.change({ ...draft, title: value })
-  }
-  function changeFolder(folderId: number | null) {
-    actions.change({ ...draft, folder_id: folderId })
   }
   function changeContent(document: ContentDocument) {
     actions.change({ ...draft, content_doc: document })
@@ -482,14 +466,6 @@ function InsightPanel({
    * 有内容则先给出明确选择，确认后才丢弃。丢弃前关闭会话并清掉本机草稿，
    * 导航前的 flush 因此拿不到会话，不会再偷偷 POST 一条记录。
    */
-  function requestDiscard(): void {
-    const current = editSessionStore.getSession(sessionId)
-    if (current === null || !draftHasUserInput(current.draft)) {
-      discardAndClose()
-      return
-    }
-    setDiscardConfirm(true)
-  }
   function discardAndClose(): void {
     if (storage !== null) {
       removeInsightDraft(storage, localDraftKey())
@@ -513,6 +489,7 @@ function InsightPanel({
     if (recoveryPrompt === null) return
     if (storage !== null) removeInsightDraft(storage, recoveryPrompt.record.record_key)
     setRecoveryPrompt(null)
+    setMode('edit')
     setNotice('已丢弃本机草稿，继续使用服务器版本。')
   }
 
@@ -645,11 +622,7 @@ function InsightPanel({
   )
 
   return (
-    <section className="journal-editor" aria-label={isCreate ? '新建 Insight' : 'Insight 详情'}>
-      <div className="detail-header">
-        <h2>{isCreate ? (seed ? '添加 AI 草稿为 Insight' : '新建 Insight') : 'Insight 详情'}</h2>
-        <button type="button" onClick={onClose} disabled={busy}>返回列表</button>
-      </div>
+    <section className="journal-editor insight-create" aria-label={isCreate ? '新建 Insight' : '编辑 Insight'}>
 
       {recoveryPrompt !== null && status === 'ready' && mode === 'view' && (
         <div className="detail-confirm" role="alert">
@@ -671,17 +644,7 @@ function InsightPanel({
 
       {mode === 'edit' && status === 'ready' && (
         <>
-          <p className="detail-hint">
-            Insight 没有所属日期，也不需要来源或 AI 信息；正文以统一富文本 JSON 保存。
-            正文里的 <code>[[标题]]</code> 在阅读态可直接点击；编辑时按住 Ctrl（⌘）再点击。
-          </p>
-          {seed && (
-            <p className="detail-hint" role="status">
-              这份内容来自复盘的 AI 草稿，只包含一个观点和它的依据。你可以先改观点、补事实、换 Folder，
-              也可以直接放弃；只有第一次有效内容保存成功后才会创建文件。
-            </p>
-          )}
-          {statusBanner}
+          {(saveStatus === 'failed' || saveStatus === 'conflict' || saveStatus === 'missing') && statusBanner}
           {legacyLocked && (
             <div className="detail-confirm" role="status">
               <p>
@@ -697,32 +660,25 @@ function InsightPanel({
             </div>
           )}
           <form className="editor-form" onSubmit={(event) => { event.preventDefault(); void saveRef.current() }}>
-            <label className="editor-field"><span>标题（留空显示为“未命名 Insight”）</span>
-              <input type="text" value={draft.title} disabled={busy}
+            <label className="editor-field">
+              <input type="text" value={draft.title} disabled={busy} aria-label="Insight 标题" placeholder="标题"
                 onChange={(event) => changeTitle(event.target.value)} />
             </label>
+            <hr className="insight-create-divider" />
             {!legacyLocked && (
-              <div className="editor-field"><span>正文</span>
+              <div className="editor-field">
                 <RichTextEditor doc={draft.content_doc as ContentDocument} label="Insight 正文"
                   onUserChange={changeContent} onLink={onResolveLink} />
               </div>
             )}
             {legacyLocked && <MarkdownContent source={file?.content ?? ''} onLink={onResolveLink} disabled={busy} />}
-            <FolderSelect value={draft.folder_id} disabled={busy}
-              onChange={(folderId) => changeFolder(folderId)} />
-            {issue !== '' && (
+            {issue !== '' && (issue !== 'blank' || draftHasUserInput(draft)) && (
               <p className="detail-hint" role="status">
                 {issue === 'blank'
                   ? '空白输入不会提交，也不会创建空记录；内容保留在编辑器里。'
                   : '正文超过 50,000 个字符，暂不提交；内容保留在编辑器里。'}
               </p>
             )}
-            <div className="editor-actions">
-              <button type="submit" disabled={busy || issue !== ''}>立即保存</button>
-              <button type="button" onClick={() => (isCreate ? requestDiscard() : exitEditing())} disabled={busy}>
-                {isCreate ? (seed ? '放弃这份草稿' : '取消新建') : '返回查看'}
-              </button>
-            </div>
             {discardConfirm && (
               <div className="detail-confirm" role="alertdialog" aria-label="放弃未保存的 Insight">
                 <p>放弃这条未保存的 Insight？放弃后输入不会保留，也不会创建记录。</p>
@@ -752,7 +708,7 @@ function InsightPanel({
         </div>
       )}
 
-      {status === 'ready' && file && mode === 'view' && (
+      {status === 'ready' && file && mode === 'view' && recoveryPrompt === null && (
         <>
           <h3 className="detail-title">
             {session !== null && insightHasUnsavedInput(session) && draft.title.trim() !== ''
@@ -1024,14 +980,6 @@ function InsightPage({
         </section>
       )}
 
-      {/* 详情 / 编辑态：保留原工具条入口，便于直接切换。 */}
-      {panel.kind !== 'list' && (
-        <section className="app-toolbar" aria-label="Insight 工具">
-          <button type="button" onClick={newInsight} disabled={busy}>新建 Insight</button>
-          <button type="button" onClick={() => onNavigate(showList)} disabled={busy}>Insight 列表</button>
-        </section>
-      )}
-
       {notice && <p className="detail-success" role="status">{notice}</p>}
       {actionError && <p className="detail-error" role="alert">{actionError}</p>}
 
@@ -1111,14 +1059,14 @@ function InsightPage({
       {panel.kind === 'create' && (
         <InsightPanel key={`create-${panel.key}`} panel={panel}
           onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onFlushReady={onFlushReady}
-          onNavigate={onNavigate} onResolveLink={onResolveLink}
+          onResolveLink={onResolveLink}
           onCreated={handleCreated} onChanged={handleChanged} onDeleted={handleDeleted}
           onClose={() => onNavigate(showList)} />
       )}
       {panel.kind === 'detail' && (
         <InsightPanel key={`detail-${panel.key}`} panel={panel}
           onDirtyChange={onDirtyChange} onBusyChange={updateBusy} onFlushReady={onFlushReady}
-          onNavigate={onNavigate} onResolveLink={onResolveLink}
+          onResolveLink={onResolveLink}
           onCreated={handleCreated} onChanged={handleChanged} onDeleted={handleDeleted}
           onClose={() => onNavigate(showList)} />
       )}
@@ -1130,7 +1078,7 @@ function InsightPage({
         </div>
       )}
 
-      <section className="journal-results" aria-label="Insight 列表">
+      {panel.kind === 'list' && <section className="journal-results" aria-label="Insight 列表">
         {listStatus === 'loading' && <p className="app-state" role="status">加载中……</p>}
         {listStatus === 'error' && (
           <div className="app-state app-state-error" role="alert">
@@ -1148,8 +1096,7 @@ function InsightPage({
                 <ul className="journal-list">
                   {listResult.items.map((insight) => (
                     <li key={`${insight.type}:${insight.id}`}>
-                      <FileCard file={insight} onOpen={(value) => openInsight(value.id)}
-                        selected={(panel.kind === 'detail' && panel.id === insight.id) || (panel.kind === 'create' && panel.savedId === insight.id)} disabled={busy} />
+                      <FileCard file={insight} onOpen={(value) => openInsight(value.id)} disabled={busy} />
                     </li>
                   ))}
                 </ul>
@@ -1158,7 +1105,7 @@ function InsightPage({
               onPageChange={changePage} disabled={busy} label="Insight 列表分页" />
           </>
         )}
-      </section>
+      </section>}
     </section>
   )
 }

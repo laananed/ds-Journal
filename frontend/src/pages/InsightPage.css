@@ -347,6 +347,44 @@
 
 /* ---------------- 详情 / 编辑面板（功能不变，仅外观贴合整页） ---------------- */
 
+.insight-page .insight-create .editor-form {
+  gap: 0;
+}
+
+.insight-page .insight-create .editor-field input {
+  padding: 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--sj-text, #202124);
+  font-size: 22px;
+  font-weight: 650;
+}
+
+.insight-create-divider {
+  width: 100%;
+  margin: 12px 0 16px;
+  border: 0;
+  border-top: 1px solid var(--sj-border, #e5e2ea);
+}
+
+.insight-create .s4-toolbar {
+  display: none;
+}
+
+.insight-create .s4-editor-content {
+  min-height: 240px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.insight-create .s4-editor-content:focus-visible {
+  outline: 2px solid #8f97ff;
+  outline-offset: 4px;
+  box-shadow: none;
+}
+
 .insight-page .journal-editor {
   gap: 14px;
   padding: 24px;
