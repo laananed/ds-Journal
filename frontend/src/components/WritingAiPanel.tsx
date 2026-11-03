@@ -73,7 +73,7 @@ import type { Insight } from '../types/insight'
 
 export const NO_SERVER_VERSION_NOTICE = '这篇还没有服务器版本：先保存成功，AI 才能读取它。'
 
-export const NO_SERVER_VERSION_NOTICE = '这篇还没有服务器版本：先保存成功，AI 才能读取它。'
+
 
 export interface WritingAiPanelProps {
   fileType?: 'journal' | 'insight'
