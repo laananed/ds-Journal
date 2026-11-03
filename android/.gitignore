@@ -1,0 +1,9 @@
+# 本机路径与构建产物不入库
+local.properties
+.gradle/
+build/
+app/build/
+
+# 前端产物由 scripts/build-web.ps1 生成，不提交（可用基线重新构建）
+app/src/main/assets/www/*
+!app/src/main/assets/www/.gitkeep

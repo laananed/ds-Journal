@@ -1,0 +1,58 @@
+// app 模块：把前端构建产物（assets/www）打入 APK，用 WebView 以 https 虚拟域名加载。
+// 版本号与 API 基址不写在这里，统一来自 android/apk.properties。
+plugins {
+    id 'com.android.application'
+}
+
+def apkProps = new Properties()
+def apkPropsFile = rootProject.file('apk.properties')
+if (apkPropsFile.exists()) {
+    apkPropsFile.withInputStream { apkProps.load(it) }
+}
+// 先取成局部变量再赋值：Groovy 会把 "versionCode (expr).toInteger()" 解析成链式调用
+def appVersionCode = apkProps.getProperty('seekjournal.versionCode', '1').trim().toInteger()
+def appVersionName = apkProps.getProperty('seekjournal.versionName', '0.1.0-dev').trim()
+
+android {
+    namespace 'net.seekjournal.app'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'net.seekjournal.app'
+        // WebViewAssetLoader 与 WebView 相关 API 在 minSdk 24 上可用；更低版本无实际收益
+        minSdk 24
+        // 保持 34：不改动 edge-to-edge 的默认布局行为，软键盘 adjustResize 语义简单可预期
+        targetSdk 34
+        versionCode appVersionCode
+        versionName appVersionName
+    }
+
+    buildTypes {
+        debug {
+            // 开发包：debug 签名，可直接覆盖安装
+            minifyEnabled false
+        }
+        release {
+            // 当前没有正式签名素材，release 复用 debug 签名，仅用于内部验证，不是可发布包
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        // 外壳不需要 BuildConfig / ViewBinding / Compose
+        buildConfig false
+        viewBinding false
+    }
+}
+
+dependencies {
+    // 唯一依赖：仅为 WebViewAssetLoader，用来把 APK 内静态资源以 https 虚拟域名提供，
+    // 从而避免 file:// + setAllowFileAccess(true) 这类放宽文件访问的做法。
+    implementation 'androidx.webkit:webkit:1.12.1'
+}

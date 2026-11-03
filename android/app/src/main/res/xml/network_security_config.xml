@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 完全禁止明文 HTTP：所有后端请求必须是 HTTPS。
+     debug 包同样不放开，避免开发期用明文掩盖真实配置问题。 -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>
