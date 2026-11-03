@@ -127,6 +127,10 @@ function App() {
   const [module, setModule] = useState<Module>('dashboard')
   const settingsReturnModule = useRef<Module>('dashboard')
   const [writingRecoveryRequest, setWritingRecoveryRequest] = useState(0)
+  const [writingStartFresh, setWritingStartFresh] = useState(false)
+  const [writingInitialFile, setWritingInitialFile] = useState<{ id: number; key: number } | null>(null)
+  const consumeWritingFresh = useCallback(() => setWritingStartFresh(false), [])
+  const consumeWritingFile = useCallback(() => setWritingInitialFile(null), [])
   const [panel, setPanel] = useState<Panel>({ kind: 'list' })
   const [editorKey, setEditorKey] = useState(0)
   const [filterDate, setFilterDate] = useState('')
@@ -275,6 +279,8 @@ function App() {
       showList()
       setNotice('')
       if (value === 'writing-recovery') {
+        setWritingStartFresh(false)
+        setWritingInitialFile(null)
         setModule('writing')
         setWritingRecoveryRequest((current) => current + 1)
         return
@@ -304,7 +310,23 @@ function App() {
    * 只有真实用户正文才会首次 POST，点击入口本身不创建记录。
    */
   function openQuickNote() {
-    changeModule('writing')
+    navigate(() => {
+      showList()
+      setNotice('')
+      setWritingInitialFile(null)
+      setWritingStartFresh(true)
+      setModule('writing')
+    })
+  }
+
+  function editStructuredJournal(id: number) {
+    navigate(() => {
+      const key = editorKey + 1
+      setEditorKey(key)
+      setWritingStartFresh(false)
+      setWritingInitialFile({ id, key })
+      setModule('writing')
+    })
   }
 
   /**
@@ -481,6 +503,10 @@ function App() {
               onDirtyChange={setDirty}
               onFlushReady={registerFlush}
               onOpenLegacy={openLegacyJournal}
+              startFresh={writingStartFresh}
+              onFreshConsumed={consumeWritingFresh}
+              initialFile={writingInitialFile}
+              onInitialFileConsumed={consumeWritingFile}
               onOpenAiSettings={() => changeModule('settings')}
               onBack={() => changeModule('dashboard')}
               recoveryRequest={writingRecoveryRequest}
@@ -555,7 +581,7 @@ function App() {
                   onDirtyChange={setDirty} onFlushReady={registerFlush} onAiLockChange={registerAiLock} />
               )}
               {panel.kind === 'detail' && (
-                <JournalDetail key={`${panel.file.type}:${panel.file.id}:${panel.key}`} journalId={panel.file.id}
+                <JournalDetail key={`${panel.file.type}:${panel.file.id}:${panel.key}`} journalId={panel.file.id} onEditStructured={editStructuredJournal}
                   onResolveLink={resolveLink}
                   onBusyChange={setWriting} onDirtyChange={setDirty} onFlushReady={registerFlush}
                   onAiLockChange={registerAiLock}

@@ -97,6 +97,8 @@ export interface WritingPageProps {
    * 按 `key` 只消费一次：同一篇再次点击会带新 key，不会因为重渲染重复打开。
    */
   initialFile?: { id: number; key: number } | null
+  startFresh?: boolean
+  onFreshConsumed?: () => void
   onInitialFileConsumed?: () => void
   /**
    * 可访问的返回入口（第二轮 UI）。
@@ -145,6 +147,8 @@ function WritingPage({
   onFlushReady,
   onOpenLegacy,
   initialFile = null,
+  startFresh = false,
+  onFreshConsumed,
   onInitialFileConsumed,
   onBack,
   onOpenAiSettings,
@@ -280,13 +284,14 @@ function WritingPage({
   /** 首次进入：恢复本标签同一草稿；只有「新建一篇」才换身份。 */
   useEffect(() => {
     if (dayStatus !== 'success' || active !== null) return
-    const resumed = preferredWritingDraftId(resumableSessions(), tabId, businessDate, lastWritingDraftByTab.get(tabId))
+    const resumed = startFresh ? null : preferredWritingDraftId(resumableSessions(), tabId, businessDate, lastWritingDraftByTab.get(tabId))
     setActive({
       draftId: resumed ?? newDraftId(newLocalId),
       tabId,
       startedAt: nowStamp(),
     })
-  }, [active, businessDate, dayStatus, resumableSessions, tabId])
+    if (startFresh) onFreshConsumed?.()
+  }, [active, businessDate, dayStatus, onFreshConsumed, resumableSessions, startFresh, tabId])
 
   /** 打开（或取回）会话。已存在的会话原样返回：草稿、在途请求与创建键都不动。 */
   useEffect(() => {

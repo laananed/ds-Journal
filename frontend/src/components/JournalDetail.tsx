@@ -4,6 +4,8 @@ import { WritingApiError, deleteAiBlock } from '../api/writing'
 import AiWritingActions, { type AiPrepareResult } from './AiWritingActions'
 import WritingContent from './WritingContent'
 import WritingEditor from './WritingEditor'
+import RichTextEditor from '../editor/RichTextEditor'
+import { journalEditorRoute } from '../utils/journalEditorRoute'
 import { formatServerTimestamp } from '../utils/journalDetail'
 import { useAutosave, type AutosaveFile, type FlushResult } from '../hooks/useAutosave'
 import {
@@ -21,6 +23,7 @@ import type { Block } from '../types/writing'
 
 interface JournalDetailProps {
   journalId: number
+  onEditStructured: (id: number) => void
   onBusyChange: (busy: boolean) => void
   onDirtyChange: (dirty: boolean) => void
   /** T02：把 flush 交给 App，所有离开出口先落库再导航。 */
@@ -84,7 +87,7 @@ function toJournal(detail: AiFileDetail): Journal {
 }
 
 function JournalDetail({
-  journalId, onBusyChange, onDirtyChange, onFlushReady, onAiLockChange, onStartReview, onClose, onDataChanged, onDeleted, onResolveLink,
+  journalId, onEditStructured, onBusyChange, onDirtyChange, onFlushReady, onAiLockChange, onStartReview, onClose, onDataChanged, onDeleted, onResolveLink,
 }: JournalDetailProps) {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [detail, setDetail] = useState<Journal | null>(null)
@@ -166,6 +169,7 @@ function JournalDetail({
 
   function startEditing() {
     if (!detail) return
+    if (journalEditorRoute(detail) === 'structured') { onEditStructured(detail.id); return }
     // 只构造一次快照：草稿与基线必须共用同一批块 id。
     const snapshot = toSnapshot(detail)
     autosave.load({ id: detail.id, revision: detail.revision, draft: snapshot }, snapshot)
@@ -339,8 +343,9 @@ function JournalDetail({
           </dl>
           </details>
           {detail.content.trim() === '' && <p className="detail-state">这篇日记还没有正文。</p>}
-          <WritingContent blocks={detail.content_blocks} content={detail.content}
-            onLink={onResolveLink} disabled={busy} />
+          {detail.content_doc != null
+            ? <RichTextEditor doc={detail.content_doc} readOnly label="日记正文（只读）" onLink={onResolveLink} />
+            : <WritingContent blocks={detail.content_blocks} content={detail.content} onLink={onResolveLink} disabled={busy} />}
           <div className="detail-actions">
             <button className="journal-primary" type="button" onClick={startEditing} disabled={busy}>修改</button>
             {/* T09 单篇入口：进入完整复盘并把本篇作为预选源；先 flush 再导航（由 App 统一保护）。 */}
