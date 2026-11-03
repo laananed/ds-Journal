@@ -170,14 +170,17 @@
   width: 100%;
   box-sizing: border-box;
   font: inherit;
-  padding: 8px 10px;
-  border: 1px solid #cfc9d6;
-  border-radius: 6px;
-  background: #fff;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   line-height: 1.55;
   min-width: 0;
-  resize: vertical;
+  min-height: 1.55em;
+  resize: none;
+  overflow: hidden;
 }
+.app .writing-user-input:focus-visible { outline: none; }
 /* AI 段：蓝字 + 左侧蓝色竖线（与用户正文明确区分） */
 .app .writing-block-ai_reply,
 .app .writing-block-ai_summary {

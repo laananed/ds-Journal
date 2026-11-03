@@ -409,6 +409,7 @@ export interface EditorExtensionOptions {
   readOnly?: boolean
   onGoalTextChange?: (goalId: string, text: string) => void
   onGoalCursorChange?: (nodeId: string, offset: number) => void
+  onGoalCheckedChange?: (goalId: string, checked: boolean) => void
 }
 
 /**
@@ -417,7 +418,7 @@ export interface EditorExtensionOptions {
  * StarterKit 自带的 `underline` 在本项目 schema 中不存在，必须显式关闭，
  * 否则用户能造出服务端一定拒绝的 Mark。
  */
-export function buildExtensions({ readOnly = false, onGoalTextChange, onGoalCursorChange }: EditorExtensionOptions = {}): Extensions {
+export function buildExtensions({ readOnly = false, onGoalTextChange, onGoalCursorChange, onGoalCheckedChange }: EditorExtensionOptions = {}): Extensions {
   return [
     StarterKit.configure({
       underline: false,
@@ -445,7 +446,7 @@ export function buildExtensions({ readOnly = false, onGoalTextChange, onGoalCurs
     AiSummary,
     AiPlaceholder,
     RitualQuestion,
-    GoalItem.configure({ onGoalTextChange: readOnly ? null : (onGoalTextChange ?? null), onGoalCursorChange: readOnly ? null : (onGoalCursorChange ?? null) }),
+    GoalItem.configure({ onGoalTextChange: readOnly ? null : (onGoalTextChange ?? null), onGoalCursorChange: readOnly ? null : (onGoalCursorChange ?? null), onGoalCheckedChange: readOnly ? null : (onGoalCheckedChange ?? null) }),
     GoalReview,
     LegacyText,
     LegacyBlocks,

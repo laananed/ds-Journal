@@ -16,9 +16,14 @@ export const LegacyBlocks = Node.create({
         const blocks = current.attrs.blocks as Block[]
         blocks.forEach((block, index) => {
           const field = document.createElement(block.kind === 'user' || block.kind === 'ai_summary' ? 'textarea' : 'pre')
+          field.className = block.kind === 'user' ? 's4-legacy-block-user' : 's4-legacy-block-ai'
           field.setAttribute('aria-label', block.kind === 'user' ? '旧格式用户正文' : '旧格式 AI 正文')
           if (field instanceof HTMLTextAreaElement) {
             field.value = block.text
+            field.rows = 1
+            const resize = () => { field.style.height = 'auto'; field.style.height = `${field.scrollHeight}px` }
+            queueMicrotask(resize)
+            field.addEventListener('input', resize)
             field.readOnly = !editor.isEditable
             field.addEventListener('input', () => {
               const pos = typeof getPos === 'function' ? getPos() : undefined

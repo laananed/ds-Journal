@@ -80,7 +80,8 @@ function WritingEditor({
             <li key={block.id} className="writing-block writing-block-user">
               <textarea
                 className="writing-user-input"
-                rows={6}
+                ref={(element) => { if (element !== null) { element.style.height = 'auto'; element.style.height = `${element.scrollHeight}px` } }}
+                rows={1}
                 value={block.text}
                 aria-label="用户正文段"
                 disabled={readOnly}

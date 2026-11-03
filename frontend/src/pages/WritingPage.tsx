@@ -212,6 +212,7 @@ function WritingPage({
   /** 编辑器当前选区（块 ID + 码点区间）；`null` 表示整篇评论。 */
   const [aiSelection, setAiSelection] = useState<AutoRange[] | null>(null)
   const [aiCursor, setAiCursor] = useState<{ node_id: string; offset: number } | null>(null)
+  const [aiFocusRequest, setAiFocusRequest] = useState<string | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -1085,6 +1086,7 @@ function WritingPage({
                   chromeHidden={chrome.hidden}
                   label="速记正文"
                   onUserChange={(document) => change({ ...session.draft, content_doc: document })}
+                  focusAfterRequestId={aiFocusRequest}
                   onSelection={onEditorSelection}
                 />
               </div>
@@ -1153,6 +1155,7 @@ function WritingPage({
                   disabled={disabled}
                   store={store}
                   onNotice={setNotice}
+                  onResultApplied={setAiFocusRequest}
                   onOpenSettings={onOpenAiSettings}
                   onReloadSettings={() => setAiSettingsToken((value) => value + 1)}
                 />

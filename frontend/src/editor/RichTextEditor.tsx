@@ -51,6 +51,8 @@ export interface RichTextEditorProps {
   locked?: boolean
   onUserChange?: (document: ContentDocument, schemaVersion: number) => void
   onGoalTextChange?: (goalId: string, text: string) => void
+  onGoalCheckedChange?: (goalId: string, checked: boolean) => void
+  focusAfterRequestId?: string | null
   onSelection?: (selection: EditorSelectionInfo | null) => void
   /** 点击正文内部链接（`[[显示标题]]`）时上报标题；不传则不拦截任何点击。 */
   onLink?: (title: string) => void
@@ -271,7 +273,7 @@ function Toolbar({ editor, locked = false, onFocus, onBlur }: {
 }
 
 function RichTextEditor({
-  doc, readOnly = false, locked = false, onUserChange, onGoalTextChange, onSelection, onLink, label, className, chromeHidden = false,
+  doc, readOnly = false, locked = false, onUserChange, onGoalTextChange, onGoalCheckedChange, focusAfterRequestId = null, onSelection, onLink, label, className, chromeHidden = false,
 }: RichTextEditorProps) {
   const editableNow = !readOnly && !locked
   // 焦点进入工具栏时暂停淡出：否则键盘用户 Tab 过去会落在看不见的按钮上。
@@ -280,6 +282,8 @@ function RichTextEditor({
   const changeHandler = useRef(onUserChange)
   const selectionHandler = useRef(onSelection)
   const goalTextHandler = useRef(onGoalTextChange)
+  const goalCheckedHandler = useRef(onGoalCheckedChange)
+  goalCheckedHandler.current = onGoalCheckedChange
   goalTextHandler.current = onGoalTextChange
   useEffect(() => {
     changeHandler.current = onUserChange
@@ -308,7 +312,7 @@ function RichTextEditor({
   const editor = useEditor(
     {
       extensions: [
-        ...buildExtensions({ readOnly, ...(onGoalTextChange === undefined ? {} : { onGoalTextChange: (goalId, text) => goalTextHandler.current?.(goalId, text), onGoalCursorChange: (nodeId, offset) => selectionHandler.current?.({ empty: true, blockId: nodeId, start: offset, end: offset, text: '' }) }) }),
+        ...buildExtensions({ readOnly, ...(onGoalCheckedChange === undefined ? {} : { onGoalCheckedChange: (goalId, checked) => goalCheckedHandler.current?.(goalId, checked) }), ...(onGoalTextChange === undefined ? {} : { onGoalTextChange: (goalId, text) => goalTextHandler.current?.(goalId, text), onGoalCursorChange: (nodeId, offset) => selectionHandler.current?.({ empty: true, blockId: nodeId, start: offset, end: offset, text: '' }) }) }),
         InternalLinkDecorations,
       ],
       content: toEditorDocument(doc),
@@ -331,7 +335,7 @@ function RichTextEditor({
     },
     // 依赖只放 `readOnly`：它是扩展装配的一部分（UniqueID 是否补 ID），变化必须重建。
     // `locked` 故意不在这里——它只走下面的 setEditable，否则每次保存都会换 DOM 节点。
-    [readOnly, onGoalTextChange !== undefined],
+    [readOnly, onGoalTextChange !== undefined, onGoalCheckedChange !== undefined],
   )
 
   useEffect(() => {
@@ -370,6 +374,24 @@ function RichTextEditor({
     if (incomingKey === JSON.stringify(toServerDocument(editor.getJSON()))) return
     replaceDocument(editor, incoming)
   }, [editor, doc])
+
+  const handledFocusRequest = useRef<string | null>(null)
+  useEffect(() => {
+    if (editor === null || editor.isDestroyed || !editor.isEditable || focusAfterRequestId === null || handledFocusRequest.current === focusAfterRequestId) return
+    let after: number | null = null
+    editor.state.doc.forEach((node, offset) => {
+      if (node.type.name === 'aiReply' && node.attrs.request_id === focusAfterRequestId) after = offset + node.nodeSize
+    })
+    if (after === null) return
+    const position: number = after
+    handledFocusRequest.current = focusAfterRequestId
+    const next = editor.state.doc.nodeAt(position)
+    if (next?.type.name === 'paragraph' && next.content.size === 0) {
+      editor.chain().setTextSelection(position + 1).focus().run()
+    } else {
+      editor.chain().insertContentAt(position, { type: 'paragraph' }).setTextSelection(position + 1).focus().run()
+    }
+  }, [editor, doc, focusAfterRequestId, editableNow])
 
   if (editor === null) return null
 

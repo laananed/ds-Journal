@@ -227,6 +227,7 @@ function InsightPanel({
   const [aiSettingsToken, setAiSettingsToken] = useState(0)
   const [aiSelection, setAiSelection] = useState<AutoRange[] | null>(null)
   const [aiCursor, setAiCursor] = useState<{ node_id: string; offset: number } | null>(null)
+  const [aiFocusRequest, setAiFocusRequest] = useState<string | null>(null)
   useEffect(() => { setAiCursor(null) }, [sessionId])
   useEffect(() => {
     const controller = new AbortController()
@@ -708,7 +709,7 @@ function InsightPanel({
             {!legacyLocked && (
               <div className="editor-field">
                 <RichTextEditor doc={draft.content_doc as ContentDocument} label="Insight 正文"
-                  onUserChange={changeContent} onLink={onResolveLink} onSelection={onAiSelection} />
+                  onUserChange={changeContent} onLink={onResolveLink} onSelection={onAiSelection} focusAfterRequestId={aiFocusRequest} />
               </div>
             )}
             {legacyLocked && <MarkdownContent source={file?.content ?? ''} onLink={onResolveLink} disabled={busy} />}
@@ -735,7 +736,7 @@ function InsightPanel({
               saved={saveStatus === 'saved' && session.inputSeq === session.ackedSeq}
               userInputSeq={session.userInputSeq} composing={session.imeComposing}
               settings={aiSettings} selection={aiSelection} cursor={aiCursor} disabled={busy}
-              onNotice={setNotice} onReloadSettings={() => setAiSettingsToken((value) => value + 1)} />
+              onNotice={setNotice} onResultApplied={setAiFocusRequest} onReloadSettings={() => setAiSettingsToken((value) => value + 1)} />
           )}
           {notice && <p className="detail-success" role="status">{notice}</p>}
           {writeError && <p className="detail-error" role="alert">{writeError}</p>}

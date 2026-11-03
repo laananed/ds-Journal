@@ -9,9 +9,9 @@
 import { mergeAttributes, Node } from '@tiptap/core'
 import { createChrome, SYSTEM_HINT } from './support.ts'
 
-export const GoalItem = Node.create<{ onGoalTextChange: ((goalId: string, text: string) => void) | null; onGoalCursorChange: ((nodeId: string, offset: number) => void) | null }>({
+export const GoalItem = Node.create<{ onGoalTextChange: ((goalId: string, text: string) => void) | null; onGoalCursorChange: ((nodeId: string, offset: number) => void) | null; onGoalCheckedChange: ((goalId: string, checked: boolean) => void) | null }>({
   name: 'goalItem',
-  addOptions() { return { onGoalTextChange: null, onGoalCursorChange: null } },
+  addOptions() { return { onGoalTextChange: null, onGoalCursorChange: null, onGoalCheckedChange: null } },
   group: 'block',
   atom: true,
   defining: true,
@@ -60,6 +60,7 @@ export const GoalItem = Node.create<{ onGoalTextChange: ((goalId: string, text: 
   addNodeView() {
     const onGoalTextChange = this.options.onGoalTextChange
     const onGoalCursorChange = this.options.onGoalCursorChange
+    const onGoalCheckedChange = this.options.onGoalCheckedChange
     return ({ node, editor, getPos }) => {
       const { dom, body } = createChrome({ className: 's4-node-goalItem', label: '目标', ...(onGoalTextChange ? {} : { hint: SYSTEM_HINT }) })
       const row = document.createElement('div')
@@ -67,8 +68,16 @@ export const GoalItem = Node.create<{ onGoalTextChange: ((goalId: string, text: 
       const box = document.createElement('input')
       box.type = 'checkbox'
       box.className = 's4-goal-check'
-      box.disabled = true
-      box.tabIndex = -1
+      box.disabled = onGoalCheckedChange === null
+      box.addEventListener('change', () => {
+        const position = getPos()
+        const current = typeof position === 'number' ? editor.state.doc.nodeAt(position) : null
+        if (!current) return
+        const checked = box.checked
+        box.checked = current.attrs.checked === true
+        if (!editor.isEditable || onGoalCheckedChange === null) return
+        onGoalCheckedChange(String(current.attrs.goal_id), checked)
+      })
       const text = document.createElement(onGoalTextChange ? 'textarea' : 'span')
       text.className = 's4-goal-text'
       if (text instanceof HTMLTextAreaElement) {
@@ -82,7 +91,23 @@ export const GoalItem = Node.create<{ onGoalTextChange: ((goalId: string, text: 
         }
         for (const name of ['focus', 'click', 'keyup', 'select']) text.addEventListener(name, reportCursor)
         const resize = () => { text.style.height = 'auto'; text.style.height = `${Math.max(text.scrollHeight, 28)}px` }
-        text.addEventListener('beforeinput', (event) => { if (!editor.isEditable) event.preventDefault() })
+        text.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter' || event.isComposing || !editor.isEditable) return
+          if (event.altKey && !event.ctrlKey && !event.metaKey) {
+            event.preventDefault()
+            text.setRangeText('\n', text.selectionStart, text.selectionEnd, 'end')
+            text.dispatchEvent(new Event('input', { bubbles: true }))
+            return
+          }
+          if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+          event.preventDefault()
+          const position = getPos()
+          const current = typeof position === 'number' ? editor.state.doc.nodeAt(position) : null
+          if (typeof position !== 'number' || current?.type.name !== 'goalItem') return
+          const after = position + current.nodeSize
+          editor.chain().insertContentAt(after, { type: 'paragraph' }).setTextSelection(after + 1).focus().run()
+        })
+        text.addEventListener('beforeinput' , (event) => { if (!editor.isEditable) event.preventDefault() })
         text.addEventListener('input', () => {
           resize()
           if (!editor.isEditable) return
@@ -103,19 +128,21 @@ export const GoalItem = Node.create<{ onGoalTextChange: ((goalId: string, text: 
 
       const render = (attrs: Record<string, unknown>) => {
         box.checked = attrs.checked === true
+        box.disabled = onGoalCheckedChange === null
+        row.dataset.checked = String(box.checked)
         const value = String(attrs.text ?? '')
         if (text instanceof HTMLTextAreaElement) {
           if (text.value !== value && document.activeElement !== text) text.value = value
           text.style.height = 'auto'
           text.style.height = `${Math.max(text.scrollHeight, 28)}px`
         } else text.textContent = value
-        box.setAttribute('aria-label', `目标${attrs.checked === true ? '已完成' : '未完成'}（只读镜像）`)
+        box.setAttribute('aria-label', `目标${attrs.checked === true ? '已完成' : '未完成'}${onGoalCheckedChange === null ? '（只读）' : ''}`)
       }
       render(node.attrs)
 
       return {
         dom,
-        stopEvent: (event) => event.target === text,
+        stopEvent: (event) => event.target === text || event.target === box,
         ignoreMutation: () => true,
         update(updated) {
           if (updated.type.name !== 'goalItem') return false

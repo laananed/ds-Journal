@@ -201,6 +201,7 @@ function RitualPage({
   const [aiSettingsToken, setAiSettingsToken] = useState(0)
   const [aiSelection, setAiSelection] = useState<AutoRange[] | null>(null)
   const [aiCursor, setAiCursor] = useState<{ node_id: string; offset: number } | null>(null)
+  const [aiFocusRequest, setAiFocusRequest] = useState<string | null>(null)
   useEffect(() => {
     const controller = new AbortController()
     getAISettings(controller.signal).then((value) => {
@@ -1651,7 +1652,8 @@ function RitualPage({
                             chromeHidden={chrome.hidden}
                             label={`${KIND_LABEL[kind]} 正文`}
                             onUserChange={handleBodyChange}
-                            {...(kind === 'set' ? { onGoalTextChange } : {})}
+                            {...(kind === 'set' ? { onGoalTextChange, onGoalCheckedChange: (goalId: string, checked: boolean) => { const goal = goals.find((item) => item.goalId === goalId); if (goal) void toggleGoal(goal, checked) } } : {})}
+                            focusAfterRequestId={aiFocusRequest}
                             onSelection={onAiSelection}
                           />
                         )}
@@ -1670,6 +1672,7 @@ function RitualPage({
                         cursor={aiCursor}
                         disabled={disabled || editorLocked}
                         onNotice={setNotice}
+                        onResultApplied={setAiFocusRequest}
                         onReloadSettings={() => setAiSettingsToken((value) => value + 1)}
                       />
                     )}

@@ -225,6 +225,10 @@
   margin: 0;
 }
 
+.s4-goal-row[data-checked='true'] .s4-goal-text {
+  text-decoration: line-through;
+}
+
 .s4-goal-text {
   font-weight: 500;
   color: #2b2b3c;
@@ -316,9 +320,17 @@ textarea.s4-goal-text {
   background: transparent;
   font: inherit;
   line-height: 1.5;
-  resize: vertical;
+  resize: none;
+  overflow: hidden;
 }
 textarea.s4-goal-text:focus-visible {
   outline: 2px solid #8571b0;
   outline-offset: 2px;
 }
+
+.s4-legacy-block-user, .s4-legacy-block-ai {
+  box-sizing: border-box; width: 100%; border: 0; resize: none; overflow: hidden;
+  padding: 0; background: transparent; font: inherit; line-height: 1.55; white-space: pre-wrap;
+}
+.s4-legacy-block-user:focus-visible { outline: none; }
+.s4-legacy-block-ai { color: #244db2; background: #f1f4ff; border-left: 3px solid #6574ff; padding: 10px; }

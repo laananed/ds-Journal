@@ -102,6 +102,7 @@ export interface WritingAiPanelProps {
   store?: EditSessionStore
   /** 顶层面板提示（保存失败等）。 */
   onNotice?: (message: string) => void
+  onResultApplied?: (requestId: string) => void
   /** 重新读取设置（用户刚在设置页改了开关时用）。 */
   onReloadSettings?: () => void
   onOpenSettings?: () => void
@@ -156,6 +157,7 @@ function WritingAiPanel({
   disabled = false,
   store = editSessionStore,
   onNotice,
+  onResultApplied,
   onReloadSettings,
   onOpenSettings,
   storage,
@@ -199,11 +201,11 @@ function WritingAiPanel({
   const mountedRef = useRef(true)
   const autoRef = useRef<ReturnType<typeof createAutoFileState> | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const latestRef = useRef({ userText, editorDocument, saved, composing, fileId })
+  const latestRef = useRef({ userText, editorDocument, saved, composing, fileId, userInputSeq })
   const indexRef = useRef<WritingRecoveryEntry[]>(readWritingIndex(storage ?? browserStorage()))
 
   useEffect(() => {
-    latestRef.current = { userText, editorDocument, saved, composing, fileId }
+    latestRef.current = { userText, editorDocument, saved, composing, fileId, userInputSeq }
   })
 
   useEffect(() => {
@@ -395,6 +397,7 @@ function WritingAiPanel({
       notify('上一次 AI 请求尚需处理，请先查询或处理已有结果。')
       return
     }
+    const startingInputSeq = latestRef.current.userInputSeq
     const rawQuestion = showQuestion ? question.trim() : ''
     if (input.kind === 'go_deeper' && input.trigger === 'manual'
       && Array.from(rawQuestion).length > 2000) {
@@ -514,7 +517,6 @@ function WritingAiPanel({
 
       const merged = mergeWritingDetail(base, detail, Date.now())
       setRecord(merged)
-      if (detail.writing_mode === 'continuation' && detail.reply) setPreviewDetail(detail)
       if (merged.phase !== 'ready') {
         if (input.trigger === 'automatic') {
           autoRef.current = autoRef.current === null ? null : noteSettled(autoRef.current, input.kind, {
@@ -526,11 +528,6 @@ function WritingAiPanel({
         return
       }
 
-      if (detail.writing_mode === 'continuation') {
-        setPreviewDetail(detail)
-        setRecord({ ...merged, message: '续写已生成，请选择采用或忽略。' })
-        return
-      }
       if (input.kind === 'minds_comments' && input.trigger === 'manual') {
         setCandidateDetail(detail)
         setShowMinds(true)
@@ -540,6 +537,8 @@ function WritingAiPanel({
 
       /* ---- 3. apply：队列内（保存屏障之后，只做窄应用） ---- */
       const applied = await applyReady(requestId, input.kind)
+      if (applied !== null && input.trigger === 'manual' && mountedRef.current && latestRef.current.userInputSeq === startingInputSeq) onResultApplied?.(requestId)
+      if (applied === null && detail.writing_mode === 'continuation' && detail.reply) setPreviewDetail(detail)
       setRecord(applied
         ? { ...merged, phase: 'applied', applied: true, message: applied }
         : {
@@ -558,7 +557,7 @@ function WritingAiPanel({
       markBusy(false)
       if (mountedRef.current) setTickToken((value) => value + 1)
     }
-  }, [applyReady, cursor, fileId, fileType, markBusy, notify, persistIndex, presets, question, record, sessionId, showQuestion, store])
+  }, [applyReady, cursor, fileId, fileType, markBusy, notify, onResultApplied, persistIndex, presets, question, record, sessionId, showQuestion, store])
 
   /* --------------------------------------------------- 自动触发循环 */
 
@@ -639,7 +638,7 @@ function WritingAiPanel({
       const merged = mergeWritingDetail(current, detail, Date.now())
       setRecord(merged)
       if (detail.status === 'ready' && detail.kind === 'minds_comments' && detail.candidate_mode === true) { setCandidateDetail(detail); setShowMinds(true) }
-      if ((detail.status === 'ready' || detail.status === 'conflict') && detail.writing_mode === 'continuation' && detail.reply) setPreviewDetail(detail)
+      if (detail.status === 'conflict' && detail.writing_mode === 'continuation' && detail.reply) setPreviewDetail(detail)
       setLastStatus(detail.status)
       const decision = decideRecovery(
         { requestId: current.requestId, kind: current.kind, fileId: current.fileId },
@@ -672,12 +671,12 @@ function WritingAiPanel({
       setRecord(ok
         ? { ...current, phase: 'applied', applied: true, message: ok }
         : { ...current, phase: 'conflict', message: '结果未写入：正文或位置可能已变化，预览仍可复制。' })
-      if (ok !== null) setPreviewDetail(null)
+      if (ok !== null) { setPreviewDetail(null); onResultApplied?.(current.requestId) }
     } finally {
       markBusy(false)
       if (mountedRef.current) setTickToken((value) => value + 1)
     }
-  }, [applyReady, markBusy, previewDetail, record])
+  }, [applyReady, markBusy, onResultApplied, record])
 
   /**
    * 同一 request_id 继续执行（只对 `prepared` 开放）。
@@ -695,11 +694,11 @@ function WritingAiPanel({
       setLastStatus(result.body.status)
       const merged = mergeWritingDetail(current, result.body, Date.now())
       setRecord(merged)
-      if (result.body.writing_mode === 'continuation' && result.body.reply) setPreviewDetail(result.body)
       if (merged.phase !== 'ready') return
       if (current.kind === 'minds_comments' && result.body.candidate_mode === true) { setCandidateDetail(result.body); setShowMinds(true); return }
-      if (result.body.writing_mode === 'continuation') { setPreviewDetail(result.body); return }
       const ok = await applyReady(current.requestId, current.kind)
+      if (ok !== null && result.body.trigger === 'manual') onResultApplied?.(current.requestId)
+      if (ok === null && result.body.writing_mode === 'continuation' && result.body.reply) setPreviewDetail(result.body)
       setRecord(ok
         ? { ...merged, phase: 'applied', applied: true, message: ok }
         : { ...merged, phase: 'conflict', message: '结果已生成但没能写入正文（源或占位已变化）。' })
@@ -716,17 +715,17 @@ function WritingAiPanel({
       markBusy(false)
       if (mountedRef.current) setTickToken((value) => value + 1)
     }
-  }, [applyReady, markBusy, record])
+  }, [applyReady, markBusy, onResultApplied, record])
 
   const chooseComment = useCallback(async (index: number) => {
     if (record === null || candidateDetail?.request_id !== record.requestId || busyRef.current) return
     markBusy(true)
     try {
       const message = await applyReady(record.requestId, record.kind, index)
-      if (message !== null) { setRecord({ ...record, phase: 'applied', applied: true, message }); setCandidateDetail(null) }
+      if (message !== null) { setRecord(null); setCandidateDetail(null); setShowMinds(false); setNotice(''); if (menuRef.current) menuRef.current.open = false; onResultApplied?.(record.requestId) }
       else setRecord({ ...record, phase: 'ready', message: '评价未写入：正文可能已变化；候选仍保留，可手动复制或查询状态。' })
     } finally { markBusy(false) }
-  }, [applyReady, candidateDetail, markBusy, record])
+  }, [applyReady, candidateDetail, markBusy, onResultApplied, record])
 
   const forget = useCallback(() => {
     if (record === null) return
@@ -812,7 +811,7 @@ function WritingAiPanel({
                 onChange={(event) => setQuestion(event.target.value)} />
             </label>
             {questionError !== '' && <p className="writing-ai-error" role="alert">{questionError}</p>}
-            <p className="writing-ai-note">填写后点击上方 AI 写作，问题不会写入正文；留空则生成续写预览。</p>
+            <p className="writing-ai-note">填写后点击上方 AI 写作，问题不会写入正文；留空则直接生成续写。</p>
           </div>}
 
           {record !== null && record.message !== '' && (
@@ -851,14 +850,10 @@ function WritingAiPanel({
         </>
       )}
 
-      {available && previewDetail !== null && (record?.phase === 'ready' || record?.phase === 'conflict') && (
+      {available && previewDetail !== null && record?.phase === 'conflict' && (
         <section className="writing-ai-candidates" aria-label="续写预览">
-          <p>续写预览（采用后插入光标所在段落之后）：</p>
+          <p>正文已变化，未自动写入；可复制本次续写：</p>
           <article className="writing-ai-candidate"><p>{previewDetail.reply}</p></article>
-          <div className="writing-ai-buttons">
-            <button type="button" disabled={disabled || busy || record?.phase !== 'ready'} onClick={() => { void applyCurrent() }}>采用</button>
-            <button type="button" disabled={busy} onClick={forget}>忽略</button>
-          </div>
         </section>
       )}
 
