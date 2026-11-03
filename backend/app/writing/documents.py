@@ -240,6 +240,80 @@ def user_text_document(document):
     return _plain(document, True)
 
 
+def capture_continuation_cursor(document, node_id=None, offset=None):
+    """Freeze user-only context before a cursor and its top-level insertion anchor."""
+    validate_document(document)
+    matches = []
+    def visit(node, path, protected=False):
+        kind = node['type']
+        if not protected and kind == 'goalItem':
+            identifier = node.get('attrs', {}).get('id')
+            if identifier: matches.append((identifier, path, node))
+            return
+        protected = protected or kind in (SPECIAL - {'goalReview'})
+        if not protected and kind in {'paragraph', 'heading'}:
+            identifier = node.get('attrs', {}).get('id')
+            if identifier:
+                matches.append((identifier, path, node))
+        for index, child in enumerate(node.get('content', [])):
+            visit(child, path + [index], protected)
+    visit(document, [])
+    if node_id is None:
+        if not matches: raise DocumentError('no editable text cursor')
+        node_id, path, target = matches[-1]
+        offset = len(_plain(target, True))
+    else:
+        node_id = _uuid(node_id)
+        selected = [item for item in matches if item[0] == node_id]
+        if len(selected) != 1: raise DocumentError('cursor node unavailable')
+        _, path, target = selected[0]
+    full = _plain(target, True)
+    if type(offset) is not int or offset < 0 or offset > len(full):
+        raise DocumentError('invalid cursor offset')
+    root = document['content'][path[0]]
+    root_id = root.get('attrs', {}).get('id')
+    if not isinstance(root_id, str): raise DocumentError('cursor block has no stable id')
+    prefix = deepcopy(document)
+    current = prefix
+    for index in path:
+        current['content'] = current['content'][:index + 1]
+        current = current['content'][index]
+    if current['type'] == 'goalItem':
+        current['attrs']['text'] = current['attrs']['text'][:offset]
+        return user_text_document(prefix), root_id
+    remaining = offset
+    inline = []
+    for child in current.get('content', []):
+        value = child.get('text', '') if child['type'] == 'text' else '\n'
+        if remaining <= 0: break
+        length = min(remaining, len(value))
+        if child['type'] == 'text':
+            piece = deepcopy(child)
+            piece['text'] = value[:length]
+            if piece['text']: inline.append(piece)
+        elif length == 1:
+            inline.append(child)
+        remaining -= length
+    current['content'] = inline
+    return user_text_document(prefix), root_id
+
+
+def insert_continuation_reply(document, root_id, request_id, reply):
+    """Insert an AI-owned block after the cursor's top-level block."""
+    validate_document(document)
+    request_id = _uuid(request_id)
+    root_id = _uuid(root_id)
+    if not isinstance(reply, str) or not reply.strip(): raise DocumentError('empty reply')
+    positions = [i for i, node in enumerate(document['content']) if node.get('attrs', {}).get('id') == root_id]
+    if len(positions) != 1: raise DocumentError('cursor block unavailable')
+    result = deepcopy(document)
+    position = positions[0] + 1
+    result['content'].insert(position, {'type': 'aiReply', 'attrs': {'id': str(uuid4()), 'request_id': request_id},
+        'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': reply}]}]})
+    validate_document(result)
+    return result
+
+
 def prepare_ai_placeholder(document, request_id):
     """Create a server-owned boundary and a fresh user continuation."""
     validate_document(document)

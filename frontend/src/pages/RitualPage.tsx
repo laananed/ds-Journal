@@ -42,8 +42,9 @@ import {
   restoreRitualReplace,
   updateRitualTemplate,
 } from '../api/rituals'
-import { getJournal } from '../api/journals'
-import { linkGoals, updateGoal } from '../api/ritualGoals'
+import { getJournal, updateJournal } from '../api/journals'
+import { linkGoals, updateGoal, relatedMutationFromPatch, type GoalJournalDetail } from '../api/ritualGoals'
+import { editGoalText, goalRelatedRevisions, validGoalText } from '../utils/goalEdits'
 import { getTrashItem, listTrash } from '../api/trash'
 import {
   draftHasChanges,
@@ -199,6 +200,7 @@ function RitualPage({
   const [aiSettings, setAiSettings] = useState<AISettings | null>(null)
   const [aiSettingsToken, setAiSettingsToken] = useState(0)
   const [aiSelection, setAiSelection] = useState<AutoRange[] | null>(null)
+  const [aiCursor, setAiCursor] = useState<{ node_id: string; offset: number } | null>(null)
   useEffect(() => {
     const controller = new AbortController()
     getAISettings(controller.signal).then((value) => {
@@ -209,6 +211,7 @@ function RitualPage({
     return () => controller.abort()
   }, [aiSettingsToken])
   const onAiSelection = useCallback((info: EditorSelectionInfo | null) => {
+    if (info?.blockId) setAiCursor({ node_id: info.blockId, offset: info.end })
     if (info === null || info.empty || info.blockId === null || info.end <= info.start) {
       setAiSelection(null)
     } else {
@@ -329,6 +332,22 @@ function RitualPage({
     const transport = journalTransport({
       journalKind: kind,
       ...(openFile === null ? { draftStartedAt: capture.draftStartedAt } : {}),
+      ...(kind !== 'set' ? {} : { update: async (id, payload) => {
+        if (payload.content_doc === undefined) return updateJournal(id, payload)
+        const current = await getJournal(id) as GoalJournalDetail
+        if (current.revision !== payload.expected_revision) {
+          throw Object.assign(new Error('目标版本已变化，请对照服务器版本。'), { status: 409 })
+        }
+        if (!Array.isArray(current.goal_links) || !Array.isArray(current.related_revisions)) {
+          throw new Error('目标关联信息不可用，草稿保留，请重新读取。')
+        }
+        const related_revisions = goalRelatedRevisions(current.content_doc, payload.content_doc, current)
+        const updated = await updateJournal(id, { ...payload, related_revisions }) as GoalJournalDetail
+        const related = relatedMutationFromPatch(updated)
+        if (related !== null) editSessionStore.applyFileMutation(related)
+        setRituals(previous => ({ ...previous, set: updated }))
+        return updated
+      } }),
     })
     if (openFile !== null) {
       const draft = journalToDraft(openFile)
@@ -361,6 +380,7 @@ function RitualPage({
     })
   }, [status, sessionId, capture, openFile, kind, tabId, effectiveDate, sessionEpoch])
 
+  useEffect(() => { setAiCursor(null) }, [sessionId])
   const session = useEditSession(sessionId)
   useEffect(() => {
     if (session?.fileId != null) {
@@ -893,6 +913,14 @@ function RitualPage({
   }
 
   /* ----------------------------------------------------------- 模板 */
+
+  const onGoalTextChange = useCallback((goalId: string, text: string) => {
+    if (sessionId === null) return
+    const current = editSessionStore.getSession(sessionId)
+    if (current?.draft.content_doc === null || current?.draft.content_doc === undefined) return
+    editSessionStore.changeSession(sessionId, { ...current.draft,
+      content_doc: editGoalText(current.draft.content_doc as ContentDocument, goalId, text) }, 'user_input')
+  }, [sessionId])
 
   const currentTemplate = templates[kind] ?? EMPTY_TEMPLATE
 
@@ -1535,6 +1563,9 @@ function RitualPage({
             onCompositionStart={handleCompositionStart}
             onCompositionEnd={handleCompositionEnd}>
             {notice !== '' && <p className="ritual-notice" role="status">{notice}</p>}
+            {kind === 'set' && goals.some(goal => !validGoalText(goal.text)) && (
+              <p className="ritual-alert" role="alert">目标不能为空，且不能超过 2000 字；输入保留在编辑器中，请修改后保存。</p>
+            )}
 
             {saveHint !== '' && (
               <div className="ritual-alert" role="alert">
@@ -1620,6 +1651,7 @@ function RitualPage({
                             chromeHidden={chrome.hidden}
                             label={`${KIND_LABEL[kind]} 正文`}
                             onUserChange={handleBodyChange}
+                            {...(kind === 'set' ? { onGoalTextChange } : {})}
                             onSelection={onAiSelection}
                           />
                         )}
@@ -1635,6 +1667,7 @@ function RitualPage({
                         composing={session.imeComposing}
                         settings={aiSettings}
                         selection={aiSelection}
+                        cursor={aiCursor}
                         disabled={disabled || editorLocked}
                         onNotice={setNotice}
                         onReloadSettings={() => setAiSettingsToken((value) => value + 1)}

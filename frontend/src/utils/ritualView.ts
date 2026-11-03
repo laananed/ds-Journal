@@ -17,6 +17,7 @@
  *    绝不携带前端自造的 AI 正文或来源。
  */
 
+import { validGoalText } from './goalEdits.ts'
 import type { ContentDocument } from '../types/document.ts'
 import type { Journal } from '../types/journal.ts'
 import type {
@@ -682,6 +683,7 @@ export function ritualRecordMatches(
 
 /** 首次落库前的可提交判定：必须有真实业务内容（产品 §4/§5）。 */
 export function isRitualDraftSavable(draft: { title: string; content_doc: unknown }): boolean {
+  if (goalsOf(draft.content_doc as ContentDocument | null).some((goal) => !validGoalText(goal.text))) return false
   if (draft.title.trim() !== '') return true
   return hasSavableBody(draft.content_doc as ContentDocument | null)
 }

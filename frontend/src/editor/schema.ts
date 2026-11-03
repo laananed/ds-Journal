@@ -407,6 +407,8 @@ const TaskMarkerInput = Extension.create({
 export interface EditorExtensionOptions {
   /** 只读模式不补 ID、不落库（API §1：GET 零写）。 */
   readOnly?: boolean
+  onGoalTextChange?: (goalId: string, text: string) => void
+  onGoalCursorChange?: (nodeId: string, offset: number) => void
 }
 
 /**
@@ -415,7 +417,7 @@ export interface EditorExtensionOptions {
  * StarterKit 自带的 `underline` 在本项目 schema 中不存在，必须显式关闭，
  * 否则用户能造出服务端一定拒绝的 Mark。
  */
-export function buildExtensions({ readOnly = false }: EditorExtensionOptions = {}): Extensions {
+export function buildExtensions({ readOnly = false, onGoalTextChange, onGoalCursorChange }: EditorExtensionOptions = {}): Extensions {
   return [
     StarterKit.configure({
       underline: false,
@@ -443,7 +445,7 @@ export function buildExtensions({ readOnly = false }: EditorExtensionOptions = {
     AiSummary,
     AiPlaceholder,
     RitualQuestion,
-    GoalItem,
+    GoalItem.configure({ onGoalTextChange: readOnly ? null : (onGoalTextChange ?? null), onGoalCursorChange: readOnly ? null : (onGoalCursorChange ?? null) }),
     GoalReview,
     LegacyText,
     LegacyBlocks,

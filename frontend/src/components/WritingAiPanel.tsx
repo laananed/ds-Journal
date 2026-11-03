@@ -97,6 +97,7 @@ export interface WritingAiPanelProps {
   settings: AutoAiSettings | null
   /** 用户当前选中的范围（文件/选区评论）；`null` 表示整篇。 */
   selection?: AutoRange[] | null
+  cursor?: { node_id: string; offset: number } | null
   disabled?: boolean
   store?: EditSessionStore
   /** 顶层面板提示（保存失败等）。 */
@@ -151,6 +152,7 @@ function WritingAiPanel({
   composing = false,
   settings,
   selection = null,
+  cursor = null,
   disabled = false,
   store = editSessionStore,
   onNotice,
@@ -160,6 +162,9 @@ function WritingAiPanel({
   visible,
 }: WritingAiPanelProps) {
   const [record, setRecord] = useState<WritingRequestRecord | null>(null)
+  const [candidateDetail, setCandidateDetail] = useState<AIRequestDetail | null>(null)
+  const [previewDetail, setPreviewDetail] = useState<AIRequestDetail | null>(null)
+  useEffect(() => { setCandidateDetail(null); setPreviewDetail(null) }, [fileId, fileType])
   const [comments, setComments] = useState<AIComment[]>([])
   const [commentsError, setCommentsError] = useState('')
   const [commentsLoading, setCommentsLoading] = useState(false)
@@ -342,6 +347,7 @@ function WritingAiPanel({
   const applyReady = useCallback(async (
     requestId: string,
     kind: WritingRequestKind,
+    selectedCommentIndex?: number,
   ): Promise<string | null> => {
     if (sessionId === null) return null
     try {
@@ -349,7 +355,7 @@ function WritingAiPanel({
       const mutation = await store.runFileCommand(sessionId, async () => {
         const session = store.getSession(sessionId)
         if (session === null || session.revision === null) throw new Error('会话已关闭')
-        const mutation = await applyAIWriting(requestId, session.revision)
+        const mutation = await applyAIWriting(requestId, session.revision, undefined, selectedCommentIndex)
         captured.value = mutation
         return toMutation(mutation.files, mutation.effects, requestId)
       })
@@ -357,7 +363,7 @@ function WritingAiPanel({
       persistIndex(removeWritingEntry(indexRef.current, requestId))
       const message = kind === 'minds_comments'
         ? commentApplyMessage(captured.value?.comments)
-        : 'Go Deeper 结果已附着在正文原位，可以继续往下写。'
+        : 'AI 结果已写入正文，可以继续写。'
       if (kind === 'minds_comments') void reloadComments(0)
       notify(message)
       return message
@@ -389,7 +395,7 @@ function WritingAiPanel({
       notify('上一次 AI 请求尚需处理，请先查询或处理已有结果。')
       return
     }
-    const rawQuestion = question.trim()
+    const rawQuestion = showQuestion ? question.trim() : ''
     if (input.kind === 'go_deeper' && input.trigger === 'manual'
       && Array.from(rawQuestion).length > 2000) {
       setQuestionError('问题太长（最多 2,000 字），内容保留在输入框里。')
@@ -430,9 +436,10 @@ function WritingAiPanel({
             trigger: input.trigger,
             source: { type: fileType, id: session.fileId, expected_revision: session.revision },
             ...(input.kind === 'go_deeper'
-              ? (input.trigger === 'manual' && rawQuestion !== '' ? { question: rawQuestion } : {})
+              ? (input.trigger === 'manual' && rawQuestion !== '' ? { question: rawQuestion } : input.trigger === 'manual' ? { writing_mode: 'continuation' as const, ...(cursor === null ? {} : { cursor }) } : {})
               : {
                   mind_preset_ids: input.presets ?? presets,
+                  ...(input.trigger === 'manual' ? { candidate_mode: true } : {}),
                   // `null`/空数组表示整篇：不传 scope，由服务端按 `all` 处理。
                   ...(input.ranges === null || input.ranges === undefined || input.ranges.length === 0
                     ? {}
@@ -507,6 +514,7 @@ function WritingAiPanel({
 
       const merged = mergeWritingDetail(base, detail, Date.now())
       setRecord(merged)
+      if (detail.writing_mode === 'continuation' && detail.reply) setPreviewDetail(detail)
       if (merged.phase !== 'ready') {
         if (input.trigger === 'automatic') {
           autoRef.current = autoRef.current === null ? null : noteSettled(autoRef.current, input.kind, {
@@ -515,6 +523,18 @@ function WritingAiPanel({
             userText: latestRef.current.userText,
           })
         }
+        return
+      }
+
+      if (detail.writing_mode === 'continuation') {
+        setPreviewDetail(detail)
+        setRecord({ ...merged, message: '续写已生成，请选择采用或忽略。' })
+        return
+      }
+      if (input.kind === 'minds_comments' && input.trigger === 'manual') {
+        setCandidateDetail(detail)
+        setShowMinds(true)
+        setRecord({ ...merged, message: '请选择一条评价；其他候选不会写入正文。' })
         return
       }
 
@@ -538,7 +558,7 @@ function WritingAiPanel({
       markBusy(false)
       if (mountedRef.current) setTickToken((value) => value + 1)
     }
-  }, [applyReady, fileId, fileType, markBusy, notify, persistIndex, presets, question, record, sessionId, store])
+  }, [applyReady, cursor, fileId, fileType, markBusy, notify, persistIndex, presets, question, record, sessionId, showQuestion, store])
 
   /* --------------------------------------------------- 自动触发循环 */
 
@@ -618,13 +638,15 @@ function WritingAiPanel({
       if (!mountedRef.current) return
       const merged = mergeWritingDetail(current, detail, Date.now())
       setRecord(merged)
+      if (detail.status === 'ready' && detail.kind === 'minds_comments' && detail.candidate_mode === true) { setCandidateDetail(detail); setShowMinds(true) }
+      if ((detail.status === 'ready' || detail.status === 'conflict') && detail.writing_mode === 'continuation' && detail.reply) setPreviewDetail(detail)
       setLastStatus(detail.status)
       const decision = decideRecovery(
         { requestId: current.requestId, kind: current.kind, fileId: current.fileId },
         detail,
       )
       if (decision.action === 'drop') persistIndex(removeWritingEntry(indexRef.current, current.requestId))
-      if (decision.action === 'apply') notify('结果已就绪：点「写入正文」把它合进来。')
+      if (decision.action === 'apply') notify(current.kind === 'minds_comments' && detail.candidate_mode === true ? '评价已生成，请选择一条。' : '结果已就绪：点「写入正文」把它合进来。')
       if (detail.status === 'prepared') notify('这次请求已登记但从未执行：可以用同一个 request_id 继续，不会重复登记或重复计费。')
     } catch (error: unknown) {
       if (!mountedRef.current) return
@@ -649,12 +671,13 @@ function WritingAiPanel({
       const ok = await applyReady(current.requestId, current.kind)
       setRecord(ok
         ? { ...current, phase: 'applied', applied: true, message: ok }
-        : { ...current, phase: 'conflict', message: '结果已生成但没能写入正文（源或占位已变化）。' })
+        : { ...current, phase: 'conflict', message: '结果未写入：正文或位置可能已变化，预览仍可复制。' })
+      if (ok !== null) setPreviewDetail(null)
     } finally {
       markBusy(false)
       if (mountedRef.current) setTickToken((value) => value + 1)
     }
-  }, [applyReady, markBusy, record])
+  }, [applyReady, markBusy, previewDetail, record])
 
   /**
    * 同一 request_id 继续执行（只对 `prepared` 开放）。
@@ -672,7 +695,10 @@ function WritingAiPanel({
       setLastStatus(result.body.status)
       const merged = mergeWritingDetail(current, result.body, Date.now())
       setRecord(merged)
+      if (result.body.writing_mode === 'continuation' && result.body.reply) setPreviewDetail(result.body)
       if (merged.phase !== 'ready') return
+      if (current.kind === 'minds_comments' && result.body.candidate_mode === true) { setCandidateDetail(result.body); setShowMinds(true); return }
+      if (result.body.writing_mode === 'continuation') { setPreviewDetail(result.body); return }
       const ok = await applyReady(current.requestId, current.kind)
       setRecord(ok
         ? { ...merged, phase: 'applied', applied: true, message: ok }
@@ -692,8 +718,20 @@ function WritingAiPanel({
     }
   }, [applyReady, markBusy, record])
 
+  const chooseComment = useCallback(async (index: number) => {
+    if (record === null || candidateDetail?.request_id !== record.requestId || busyRef.current) return
+    markBusy(true)
+    try {
+      const message = await applyReady(record.requestId, record.kind, index)
+      if (message !== null) { setRecord({ ...record, phase: 'applied', applied: true, message }); setCandidateDetail(null) }
+      else setRecord({ ...record, phase: 'ready', message: '评价未写入：正文可能已变化；候选仍保留，可手动复制或查询状态。' })
+    } finally { markBusy(false) }
+  }, [applyReady, candidateDetail, markBusy, record])
+
   const forget = useCallback(() => {
     if (record === null) return
+    setCandidateDetail(null)
+    setPreviewDetail(null)
     persistIndex(removeWritingEntry(indexRef.current, record.requestId))
     setRecord(null)
   }, [persistIndex, record])
@@ -774,7 +812,7 @@ function WritingAiPanel({
                 onChange={(event) => setQuestion(event.target.value)} />
             </label>
             {questionError !== '' && <p className="writing-ai-error" role="alert">{questionError}</p>}
-            <p className="writing-ai-note">填写后点击上方 AI 写作，问题不会写入正文。</p>
+            <p className="writing-ai-note">填写后点击上方 AI 写作，问题不会写入正文；留空则生成续写预览。</p>
           </div>}
 
           {record !== null && record.message !== '' && (
@@ -785,7 +823,7 @@ function WritingAiPanel({
               这次可能已经消耗 Token。不会自动换新的 request_id 重发；需要时先查询，再手动决定。
             </p>
           )}
-          {record !== null && record.phase === 'ready' && (
+          {record !== null && record.phase === 'ready' && previewDetail === null && candidateDetail === null && (
             <div className="writing-ai-buttons">
               <button type="button" className="writing-ai-primary"
                 disabled={disabled || busy}
@@ -811,6 +849,31 @@ function WritingAiPanel({
           )}
           {autoStatus !== '' && <p className="writing-ai-note" role="status">{autoStatus}</p>}
         </>
+      )}
+
+      {available && previewDetail !== null && (record?.phase === 'ready' || record?.phase === 'conflict') && (
+        <section className="writing-ai-candidates" aria-label="续写预览">
+          <p>续写预览（采用后插入光标所在段落之后）：</p>
+          <article className="writing-ai-candidate"><p>{previewDetail.reply}</p></article>
+          <div className="writing-ai-buttons">
+            <button type="button" disabled={disabled || busy || record?.phase !== 'ready'} onClick={() => { void applyCurrent() }}>采用</button>
+            <button type="button" disabled={busy} onClick={forget}>忽略</button>
+          </div>
+        </section>
+      )}
+
+      {available && candidateDetail !== null && record?.phase === 'ready' && (
+        <section className="writing-ai-candidates" aria-label="DpSk 评价候选">
+          <p>选择一条评价写入正文：</p>
+          {(candidateDetail.comments ?? []).map((candidate, index) => (
+            <article className="writing-ai-candidate" key={index}>
+              <p>{candidate.text}</p>
+              <button type="button" disabled={disabled || busy} onClick={() => { void chooseComment(index) }}>选择这条</button>
+            </article>
+          ))}
+          {(candidateDetail.comments?.length ?? 0) === 0 && <p>本次没有生成评价；不会自动重新请求。</p>}
+          <button type="button" disabled={busy} onClick={() => { setCandidateDetail(null); setRecord({ ...record, phase: 'unknown', message: '候选已保留，可查询状态继续选择。' }) }}>暂不选择</button>
+        </section>
       )}
 
       {available && showMinds && (

@@ -9,8 +9,9 @@
 import { mergeAttributes, Node } from '@tiptap/core'
 import { createChrome, SYSTEM_HINT } from './support.ts'
 
-export const GoalItem = Node.create({
+export const GoalItem = Node.create<{ onGoalTextChange: ((goalId: string, text: string) => void) | null; onGoalCursorChange: ((nodeId: string, offset: number) => void) | null }>({
   name: 'goalItem',
+  addOptions() { return { onGoalTextChange: null, onGoalCursorChange: null } },
   group: 'block',
   atom: true,
   defining: true,
@@ -57,8 +58,10 @@ export const GoalItem = Node.create({
   },
 
   addNodeView() {
-    return ({ node }) => {
-      const { dom, body } = createChrome({ className: 's4-node-goalItem', label: '目标', hint: SYSTEM_HINT })
+    const onGoalTextChange = this.options.onGoalTextChange
+    const onGoalCursorChange = this.options.onGoalCursorChange
+    return ({ node, editor, getPos }) => {
+      const { dom, body } = createChrome({ className: 's4-node-goalItem', label: '目标', ...(onGoalTextChange ? {} : { hint: SYSTEM_HINT }) })
       const row = document.createElement('div')
       row.className = 's4-goal-row'
       const box = document.createElement('input')
@@ -66,20 +69,54 @@ export const GoalItem = Node.create({
       box.className = 's4-goal-check'
       box.disabled = true
       box.tabIndex = -1
-      const text = document.createElement('span')
+      const text = document.createElement(onGoalTextChange ? 'textarea' : 'span')
       text.className = 's4-goal-text'
+      if (text instanceof HTMLTextAreaElement) {
+        text.rows = 1
+        text.setAttribute('aria-label', '编辑目标')
+        const reportCursor = () => {
+          const position = getPos()
+          const current = typeof position === 'number' ? editor.state.doc.nodeAt(position) : null
+          if (current?.type.name !== 'goalItem' || typeof current.attrs.id !== 'string') return
+          onGoalCursorChange?.(current.attrs.id, Array.from(text.value.slice(0, text.selectionStart ?? 0)).length)
+        }
+        for (const name of ['focus', 'click', 'keyup', 'select']) text.addEventListener(name, reportCursor)
+        const resize = () => { text.style.height = 'auto'; text.style.height = `${Math.max(text.scrollHeight, 28)}px` }
+        text.addEventListener('beforeinput', (event) => { if (!editor.isEditable) event.preventDefault() })
+        text.addEventListener('input', () => {
+          resize()
+          if (!editor.isEditable) return
+          const position = getPos()
+          if (typeof position !== 'number') return
+          const current = editor.state.doc.nodeAt(position)
+          if (current?.type.name !== 'goalItem') return
+          const value = text.value
+          if (value === current.attrs.text) return
+          editor.view.dispatch(editor.state.tr.setNodeMarkup(position, undefined, { ...current.attrs, text: value })
+            .setMeta('stage4System', true))
+          onGoalTextChange?.(String(current.attrs.goal_id), value)
+          reportCursor()
+        })
+      }
       row.append(box, text)
       body.append(row)
 
       const render = (attrs: Record<string, unknown>) => {
         box.checked = attrs.checked === true
-        text.textContent = String(attrs.text ?? '')
+        const value = String(attrs.text ?? '')
+        if (text instanceof HTMLTextAreaElement) {
+          if (text.value !== value && document.activeElement !== text) text.value = value
+          text.style.height = 'auto'
+          text.style.height = `${Math.max(text.scrollHeight, 28)}px`
+        } else text.textContent = value
         box.setAttribute('aria-label', `目标${attrs.checked === true ? '已完成' : '未完成'}（只读镜像）`)
       }
       render(node.attrs)
 
       return {
         dom,
+        stopEvent: (event) => event.target === text,
+        ignoreMutation: () => true,
         update(updated) {
           if (updated.type.name !== 'goalItem') return false
           render(updated.attrs)

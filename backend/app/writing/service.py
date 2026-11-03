@@ -306,6 +306,12 @@ def invalidate_changed_go_deeper(db, journal_id, document, file_type='journal'):
         AIRequest.kind == 'go_deeper', AIRequest.status.in_(['prepared','pending','ready']),
         AIRequest.sources.contains([{'type':file_type,'id':journal_id}])).with_for_update()).all()
     for request in requests:
+        if request.sources[0].get('writing_mode') == 'continuation':
+            from app.writing.documents import user_text_document
+            if user_text_document(document) != request.sources[0]['user_text']:
+                request.status = 'conflict'
+                request.error_category = 'source_changed'
+            continue
         try:
             apply_ai_placeholder(document, str(request.id), request.sources[0]['user_text'], 'check')
         except DocumentError:

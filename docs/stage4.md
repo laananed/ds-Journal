@@ -178,3 +178,8 @@ Mock 可证明流程和故障边界，不证明真实模型输出质量。新 AI
 - [Minds Comments](https://mindsera.com/help/editor/minds-comments)：参考正文定位与侧栏，排除其记忆/复杂 Mind 管理/聊天。
 - [Tiptap Persistence](https://tiptap.dev/docs/editor/core-concepts/persistence)、[Mark API](https://tiptap.dev/docs/editor/extensions/custom-extensions/create-new/mark)、[UniqueID](https://tiptap.dev/docs/editor/extensions/functionality/uniqueid)：支持 JSON、自定义 Mark、稳定节点 ID 的技术选择；不把官方示例的 localStorage 正文存储搬入本项目。
 - [Tiptap Markdown](https://tiptap.dev/docs/editor/markdown)：当前文档标示 Beta，不能据双向转换接口承诺所有旧文无损。
+
+
+### 2026-11-03 用户确认的写作体验调整（实施中）
+
+开始今天中的目标渲染后仍可编辑及换行补充，保留目标身份和已建立的复盘同步。手动 DpSk 评价请求 2～3 条供选择，选中一条后写入正文 AI 块，其余候选丢弃；自动评论保留原行为。AI 写作默认基于光标前用户文字生成续写预览，由用户决定采用或忽略，自定义提问仍可用。日记编辑界面精简，自动保存失败和冲突处理仍须可见。本条为实施中的产品决定，不表示独立验收通过。

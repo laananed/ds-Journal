@@ -14,6 +14,7 @@ class RequestNotFound(WritingError):
 
 
 ERROR_MESSAGES = {
+    'minds_candidate_count': '评价数量不符合 2～3 条的要求，本次没有写入正文；可手动重新生成，可能已消耗 Token。',
     'review_invalid': '复盘结构或原文证据无效，检查点未推进。',
     'source_changed': '源文件已修改或删除，结果未附着。',
     'expired': '请求状态不明，可能已消耗 Token；请勿自动重发。',
@@ -89,6 +90,9 @@ def request_response(db, request_id):
         'reply': result.get('reply'), 'file': file, 'review': result.get('review'),
         'saved_target': row.saved_target,
         'comments': comments,
+        'trigger': row.sources[0].get('trigger') if row.sources else None,
+        'writing_mode': row.sources[0].get('writing_mode') if row.sources else None,
+        'candidate_mode': bool(row.sources[0].get('candidate_mode', False)) if row.sources else False,
         'usage': _aggregate(db, [row.id])[row.id],
         'web_status': result.get('web_status', 'not_needed'),
         'citations': result.get('citations', []),

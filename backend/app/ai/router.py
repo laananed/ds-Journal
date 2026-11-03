@@ -49,7 +49,7 @@ def prepare_writing(payload: WritingPrepare, db: Session = Depends(get_db)):
 def apply_writing(request_id: UUID, payload: WritingApply, db: Session = Depends(get_db)):
     from app.ai.writing_requests import apply
     try:
-        return apply(db, request_id, payload.expected_revision)
+        return apply(db, request_id, payload.expected_revision, payload.selected_comment_index)
     except Exception:
         db.rollback()
         raise

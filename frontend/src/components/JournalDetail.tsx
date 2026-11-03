@@ -2,13 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { JournalApiError, deleteJournal, getJournal, updateJournal } from '../api/journals'
 import { WritingApiError, deleteAiBlock } from '../api/writing'
 import AiWritingActions, { type AiPrepareResult } from './AiWritingActions'
-import FolderSelect from './FolderSelect'
 import WritingContent from './WritingContent'
 import WritingEditor from './WritingEditor'
 import { formatServerTimestamp } from '../utils/journalDetail'
 import { useAutosave, type AutosaveFile, type FlushResult } from '../hooks/useAutosave'
 import {
-  autosaveHint,
   draftToSnapshot,
   isSnapshotPatchEmpty,
   snapshotPatch,
@@ -86,7 +84,7 @@ function toJournal(detail: AiFileDetail): Journal {
 }
 
 function JournalDetail({
-  journalId, onBusyChange, onDirtyChange, onFlushReady, onAiLockChange, onNavigate, onStartReview, onClose, onDataChanged, onDeleted, onResolveLink,
+  journalId, onBusyChange, onDirtyChange, onFlushReady, onAiLockChange, onStartReview, onClose, onDataChanged, onDeleted, onResolveLink,
 }: JournalDetailProps) {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [detail, setDetail] = useState<Journal | null>(null)
@@ -176,14 +174,6 @@ function JournalDetail({
     setBlockError('')
     setMode('edit')
   }
-  function exitEditing() {
-    autosave.load(null, EMPTY_DRAFT)
-    setDeleteStage('idle')
-    setDeleteError('')
-    setBlockError('')
-    setMode('view')
-  }
-
   async function confirmDelete() {
     if (!detail || writing.current) return
     writing.current = true
@@ -318,10 +308,10 @@ function JournalDetail({
   const invalidDraft = autosave.dirty && !autosave.savable
   return (
     <section className="journal-detail journal-page" aria-label="日记详情">
-      <div className="detail-header">
-        <h2>{mode === 'edit' ? '编辑日记' : '阅读日记'}</h2>
+      {mode !== 'edit' && <div className="detail-header">
+        <h2>阅读日记</h2>
         <button type="button" onClick={onClose} disabled={busy || aiLocked}>返回列表</button>
-      </div>
+      </div>}
       {status === 'loading' && <p className="detail-state" role="status">正在读取详情……</p>}
       {status === 'error' && (
         <div className="detail-state detail-state-error" role="alert">
@@ -376,10 +366,9 @@ function JournalDetail({
       )}
       {status === 'success' && detail && mode === 'edit' && (
         <>
-          <div className={`autosave-status autosave-${autosave.status}`} role="status" aria-live="polite">
+          {(autosave.status === 'failed' || autosave.status === 'conflict') && <div className={`autosave-status autosave-${autosave.status}`} role="status" aria-live="polite">
             <span className="autosave-label">{statusLabel(autosave.status)}</span>
-            <span className="autosave-hint">{autosave.status === 'failed' || autosave.status === 'conflict'
-              ? autosave.error : autosaveHint(autosave.status)}</span>
+            <span className="autosave-hint">{autosave.error}</span>
             {autosave.status === 'failed' && (
               <button type="button" onClick={() => void autosave.retry()}>重试保存</button>
             )}
@@ -389,22 +378,9 @@ function JournalDetail({
                 <button type="button" onClick={() => void autosave.reloadServerVersion()}>重新载入服务器版本</button>
               </>
             )}
-          </div>
+          </div>}
           <form className="detail-form" onSubmit={(event) => { event.preventDefault(); void autosave.saveNow() }}>
-            <label className="editor-field"><span>日期</span>
-              <input type="date" value={draft.date} disabled={aiLocked}
-                onChange={(event) => autosave.changeDraft({ date: event.target.value })} />
-            </label>
-            <label className="editor-field"><span>标题（留空表示没有标题）</span>
-              <input type="text" value={draft.title} disabled={aiLocked}
-                placeholder="日记标题（可留空）" aria-describedby="edit-journal-title-hint"
-                onChange={(event) => autosave.changeDraft({ title: event.target.value })}
-                onCompositionStart={autosave.onCompositionStart}
-                onCompositionEnd={autosave.onCompositionEnd} />
-            </label>
-            <p id="edit-journal-title-hint" className="detail-hint">标题最多 80 个字符；有效输入会自动保存。返回查看也会先尝试保存。</p>
             <div className="editor-field">
-              <span>正文</span>
               <WritingEditor
                 blocks={draftBlocks}
                 locked={aiLocked}
@@ -416,18 +392,12 @@ function JournalDetail({
                 onResolveLink={onResolveLink}
               />
             </div>
-            <FolderSelect value={draft.folder_id} disabled={aiLocked}
-              onChange={(folderId) => autosave.changeDraft({ folder_id: folderId })} />
             {blockError && <p className="detail-error" role="alert">{blockError}</p>}
             {invalidDraft && (
               <p className="detail-hint" role="status">
                 当前输入为空或超出长度限制，暂不提交；内容会保留在编辑器里。
               </p>
             )}
-            <div className="editor-actions">
-              <button className="journal-primary" type="submit" disabled={!autosave.dirty || !autosave.savable || autosave.saving || aiLocked}>立即保存</button>
-              <button type="button" onClick={() => onNavigate(exitEditing)} disabled={aiLocked}>返回查看</button>
-            </div>
           </form>
           {/* T07：局部陪伴写作入口，只在编辑态出现；调用期间本页编辑/删除/导航被锁。 */}
           <details className="journal-tools"><summary>陪伴写作与调用记录</summary>

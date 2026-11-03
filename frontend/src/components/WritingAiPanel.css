@@ -317,3 +317,18 @@
     padding: 6px 10px;
   }
 }
+
+.writing-ai-candidates {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+.writing-ai-candidate {
+  padding: 12px 14px;
+  border-left: 3px solid #647cff;
+  border-radius: 8px;
+  background: #f2f5ff;
+  color: #26345b;
+}
+.writing-ai-candidate p { margin: 0 0 8px; white-space: pre-wrap; }
+.writing-ai-candidate button { cursor: pointer; }

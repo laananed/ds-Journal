@@ -53,4 +53,5 @@ export interface JournalUpdateFields {
 /** 对外 PATCH 请求体：Stage 3 起必须携带 expected_revision。 */
 export interface JournalUpdate extends JournalUpdateFields {
   expected_revision: number
+  related_revisions?: Array<{ type: 'journal'; id: number; revision: number }>
 }

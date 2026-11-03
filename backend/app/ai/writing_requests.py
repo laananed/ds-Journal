@@ -2,11 +2,12 @@
 from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
+from uuid import uuid4
 from sqlalchemy import select, text
 from app.ai import client, local, search, settings, tool_calls, usage
 from app.ai.incremental import Increment, compute_increment
 from app.ai.local import active, lock_source, LocalError
-from app.ai.prompts import local_messages, minds_messages
+from app.ai.prompts import local_messages, minds_messages, continuation_messages
 from app.ai.requests import recover_pending, request_response
 from app.ai.review import record_round as _record_review_round
 from app.ai.models import AIRequest, AICheckpoint
@@ -15,7 +16,8 @@ from app.journal.schemas import _is_blank, _validate_content
 from app.journal.service import get_journal
 from app.insight.service import get_insight
 from app.writing.documents import (DocumentError, _plain, convert_legacy_text, prepare_ai_placeholder,
-                                   apply_ai_placeholder, project_document, user_text_document, validate_anchor)
+                                   apply_ai_placeholder, project_document, user_text_document, validate_anchor,
+                                   capture_continuation_cursor, insert_continuation_reply)
 from app.writing.service import LegacyConversionRequired, WriteConflict, WritingError
 
 
@@ -60,7 +62,11 @@ def execute(db, request_id):
         if kind == 'minds_comments':
             from app.ai.comments import prompt_nodes
             messages = minds_messages(prompt_nodes(source), source['mind_preset_ids'],
-                                      frozen_settings['custom_prompt'], web_tools=access.enabled)
+                                      frozen_settings['custom_prompt'], web_tools=access.enabled,
+                                      candidate_mode=source.get('candidate_mode', False))
+        elif source.get('writing_mode') == 'continuation':
+            messages = continuation_messages(source['continuation_context'], frozen_settings['custom_prompt'],
+                                             web_tools=access.enabled)
         else:
             messages = local_messages(increment, question, frozen_settings['custom_prompt'],
                                       source.get('context', []), web_tools=access.enabled)
@@ -83,9 +89,11 @@ def execute(db, request_id):
             stored['reply'] = outcome.result.text
         parse_error = None
         if kind == 'minds_comments' and outcome.result is not None and not outcome.result.truncated:
-            from app.ai.comments import parse_comments
+            from app.ai.comments import CandidateCountError, parse_comments
             try:
                 stored['comments'] = parse_comments(outcome.result.text, source)
+            except CandidateCountError:
+                parse_error = 'minds_candidate_count'
             except WritingError:
                 parse_error = 'minds_invalid'
         request.result = stored
@@ -200,7 +208,7 @@ def prepare(db, payload):
     checkpoint = db.get(AICheckpoint, (source['type'], row.id))
     increment = compute_increment(current, checkpoint.consumed_user_text if checkpoint else None)
     question = payload.question if payload.question and not _is_blank(payload.question) else None
-    if payload.kind == 'go_deeper' and not increment.valid and question is None:
+    if payload.kind == 'go_deeper' and payload.writing_mode != 'continuation' and not increment.valid and question is None:
         db.rollback()
         return {'status':'noop','message':'要我分析啥啊？','request_id':None,'usage':None}
     frozen = {'type':source['type'],'id':row.id,'revision':row.revision,'user_text':current,
@@ -208,11 +216,22 @@ def prepare(db, payload):
               'date':row.journal_date.isoformat() if source['type'] == 'journal' else None,
               'format':'document_v1','document':doc,'scope':scope,
               'increment':{'text':increment.text,'revised':increment.revised,'position':increment.position},
-              'mind_preset_ids':presets,'trigger':payload.trigger}
+              'mind_preset_ids':presets,'trigger':payload.trigger,'candidate_mode':payload.candidate_mode}
     if payload.kind == 'go_deeper' and question:
         frozen['context'] = local.recent_context(db, source)
+    if payload.writing_mode == 'continuation':
+        try:
+            cursor = payload.cursor
+            context, root_id = capture_continuation_cursor(doc, str(cursor.node_id) if cursor else None,
+                                                            cursor.offset if cursor else None)
+        except DocumentError as error:
+            raise WritingError('invalid continuation cursor') from error
+        if _is_blank(context):
+            db.rollback()
+            return {'status':'noop','message':'光标前没有可续写的文字。','request_id':None,'usage':None}
+        frozen.update(writing_mode='continuation', continuation_context=context, continuation_root_id=root_id)
     files, effects = [], []
-    if payload.kind == 'go_deeper':
+    if payload.kind == 'go_deeper' and payload.writing_mode != 'continuation':
         updated = prepare_ai_placeholder(doc, str(payload.request_id))
         projection = project_document(updated)
         try:
@@ -236,7 +255,7 @@ def prepare(db, payload):
     return {'request_id':str(payload.request_id),'status':'prepared','files':files,'effects':effects}
 
 
-def apply(db, request_id, expected_revision):
+def apply(db, request_id, expected_revision, selected_comment_index=None):
     existing = db.get(AIRequest, request_id)
     if existing is None or existing.kind not in ('go_deeper', 'minds_comments'):
         raise RequestNotFound('AI request not found')
@@ -248,8 +267,13 @@ def apply(db, request_id, expected_revision):
         raise RequestNotFound('AI request not found')
     source = deepcopy(request.sources[0])
     if request.status == 'applied':
+        if selected_comment_index is not None and (request.result or {}).get('selected_comment_index') != selected_comment_index:
+            raise WriteConflict('different comment candidate was already applied')
+        detail = request_response(db, request_id)
         db.rollback()
-        return {'request_id':str(request_id),'status':'applied','files':[],'effects':[]}
+        comments = detail.get('comments') or []
+        return {'request_id':str(request_id),'status':'applied','files':[],'effects':[],
+                'comments':[{'id':c['id'],'anchor_state':c['anchor_state']} for c in comments]}
     if request.status != 'ready':
         raise WriteConflict('request is not ready')
     if not active(row) or row.content_doc is None:
@@ -261,7 +285,26 @@ def apply(db, request_id, expected_revision):
         raise WriteConflict('file revision has changed')
     if request.kind == 'minds_comments':
         from app.ai.comments import apply_comments
+        manual = source.get('candidate_mode', False)
+        if manual:
+            if user_text_document(row.content_doc) != source['user_text']:
+                raise WriteConflict('source changed; candidate remains available')
+            choices = (request.result or {}).get('comments')
+            if selected_comment_index is None or not isinstance(choices, list) or selected_comment_index >= len(choices):
+                raise WritingError('select an available comment candidate')
+            chosen = choices[selected_comment_index]
+            request.result = {**(request.result or {}), 'comments': [chosen],
+                              'selected_comment_index': selected_comment_index}
+            request.result.pop('reply', None)
+        elif selected_comment_index is not None:
+            raise WritingError('automatic comments do not accept candidate selection')
         doc, comments = apply_comments(db, row, request, source)
+        marks_changed = doc != row.content_doc
+        reply_id = None
+        if manual and comments:
+            reply_id = str(uuid4())
+            doc['content'].append({'type':'aiReply', 'attrs':{'id':reply_id, 'request_id':str(request_id)},
+                                   'content':[{'type':'paragraph','content':[{'type':'text','text':comments[0].text}]}]})
         changed = doc != row.content_doc
         if changed:
             projection = project_document(doc)
@@ -276,10 +319,36 @@ def apply(db, request_id, expected_revision):
         request.completed_at = datetime.now(timezone.utc)
         db.flush()
         detail = (get_journal(db, row.id) if source['type'] == 'journal' else get_insight(db, row.id)).model_dump(mode='json')
+        ops = ([{'kind':'comment_marks'}] if marks_changed else [])
+        if reply_id is not None:
+            ops.append({'kind':'replace_placeholder','node_id':reply_id})
         result = {'request_id':str(request_id),'status':'applied','files':[detail] if changed else [],
                   'effects':[{'type':source['type'],'id':row.id,'base_revision':expected_revision,
-                              'revision':row.revision,'ops':[{'kind':'comment_marks'}]}] if changed else [],
+                              'revision':row.revision,'ops':ops}] if changed else [],
                   'comments':[{'id':str(c.id),'anchor_state':c.anchor_state} for c in comments]}
+        db.commit()
+        return result
+    if source.get('writing_mode') == 'continuation':
+        if user_text_document(row.content_doc) != source['user_text']:
+            raise WriteConflict('source changed; continuation remains available')
+        try:
+            doc = insert_continuation_reply(row.content_doc, source['continuation_root_id'], str(request_id),
+                                            (request.result or {}).get('reply'))
+            projection = project_document(doc)
+            _validate_content(projection)
+        except (DocumentError, ValueError) as error:
+            raise WriteConflict('continuation insertion point unavailable') from error
+        node = next(n for n in doc['content'] if n['type'] == 'aiReply' and n['attrs']['request_id'] == str(request_id))
+        row.content_doc, row.content = doc, projection
+        row.revision += 1
+        row.updated_at = datetime.now(timezone.utc)
+        request.status = 'applied'
+        request.completed_at = datetime.now(timezone.utc)
+        db.flush()
+        detail = (get_journal(db, row.id) if source['type'] == 'journal' else get_insight(db, row.id)).model_dump(mode='json')
+        result = {'request_id':str(request_id),'status':'applied','files':[detail],
+                  'effects':[{'type':source['type'],'id':row.id,'base_revision':expected_revision,
+                              'revision':row.revision,'ops':[{'kind':'replace_placeholder','node_id':node['attrs']['id']}]}]}
         db.commit()
         return result
     try:

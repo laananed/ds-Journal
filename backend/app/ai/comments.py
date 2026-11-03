@@ -43,11 +43,17 @@ def prompt_nodes(source):
     return nodes
 
 
+class CandidateCountError(WritingError):
+    pass
+
+
 def parse_comments(raw, source):
     try:
         result = json.loads(raw)
         if not isinstance(result, dict) or set(result) != {'comments'} or not isinstance(result['comments'], list) or len(result['comments']) > 30:
             raise ValueError
+        if source.get('candidate_mode', False) and not 2 <= len(result['comments']) <= 3:
+            raise CandidateCountError('expected two or three comment candidates')
         for item in result['comments']:
             if not isinstance(item, dict) or set(item) != {'mind_preset_id','text','anchor'}:
                 raise ValueError
@@ -60,6 +66,8 @@ def parse_comments(raw, source):
                 raise ValueError
             anchor['quote_sha256'] = hashlib.sha256(anchor['quote'].encode()).hexdigest()
         return result['comments']
+    except CandidateCountError:
+        raise
     except (ValueError, TypeError, KeyError, UnicodeError) as error:
         raise WritingError('invalid comment result') from error
 

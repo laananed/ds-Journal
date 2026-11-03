@@ -226,6 +226,8 @@ function InsightPanel({
   const [aiSettings, setAiSettings] = useState<AISettings | null>(null)
   const [aiSettingsToken, setAiSettingsToken] = useState(0)
   const [aiSelection, setAiSelection] = useState<AutoRange[] | null>(null)
+  const [aiCursor, setAiCursor] = useState<{ node_id: string; offset: number } | null>(null)
+  useEffect(() => { setAiCursor(null) }, [sessionId])
   useEffect(() => {
     const controller = new AbortController()
     getAISettings(controller.signal).then((value) => {
@@ -236,6 +238,7 @@ function InsightPanel({
     return () => controller.abort()
   }, [aiSettingsToken])
   const onAiSelection = useCallback((info: EditorSelectionInfo | null) => {
+    if (info?.blockId) setAiCursor({ node_id: info.blockId, offset: info.end })
     if (info === null || info.empty || info.blockId === null || info.end <= info.start) {
       setAiSelection(null)
     } else {
@@ -731,7 +734,7 @@ function InsightPanel({
               userText={userTextOf(draft.content_doc)} editorDocument={draft.content_doc}
               saved={saveStatus === 'saved' && session.inputSeq === session.ackedSeq}
               userInputSeq={session.userInputSeq} composing={session.imeComposing}
-              settings={aiSettings} selection={aiSelection} disabled={busy}
+              settings={aiSettings} selection={aiSelection} cursor={aiCursor} disabled={busy}
               onNotice={setNotice} onReloadSettings={() => setAiSettingsToken((value) => value + 1)} />
           )}
           {notice && <p className="detail-success" role="status">{notice}</p>}

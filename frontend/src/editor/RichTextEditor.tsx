@@ -50,6 +50,7 @@ export interface RichTextEditorProps {
    */
   locked?: boolean
   onUserChange?: (document: ContentDocument, schemaVersion: number) => void
+  onGoalTextChange?: (goalId: string, text: string) => void
   onSelection?: (selection: EditorSelectionInfo | null) => void
   /** 点击正文内部链接（`[[显示标题]]`）时上报标题；不传则不拦截任何点击。 */
   onLink?: (title: string) => void
@@ -270,7 +271,7 @@ function Toolbar({ editor, locked = false, onFocus, onBlur }: {
 }
 
 function RichTextEditor({
-  doc, readOnly = false, locked = false, onUserChange, onSelection, onLink, label, className, chromeHidden = false,
+  doc, readOnly = false, locked = false, onUserChange, onGoalTextChange, onSelection, onLink, label, className, chromeHidden = false,
 }: RichTextEditorProps) {
   const editableNow = !readOnly && !locked
   // 焦点进入工具栏时暂停淡出：否则键盘用户 Tab 过去会落在看不见的按钮上。
@@ -278,6 +279,8 @@ function RichTextEditor({
   const fadeToolbar = chromeHidden && !toolbarFocused
   const changeHandler = useRef(onUserChange)
   const selectionHandler = useRef(onSelection)
+  const goalTextHandler = useRef(onGoalTextChange)
+  goalTextHandler.current = onGoalTextChange
   useEffect(() => {
     changeHandler.current = onUserChange
     selectionHandler.current = onSelection
@@ -305,7 +308,7 @@ function RichTextEditor({
   const editor = useEditor(
     {
       extensions: [
-        ...buildExtensions({ readOnly }),
+        ...buildExtensions({ readOnly, ...(onGoalTextChange === undefined ? {} : { onGoalTextChange: (goalId, text) => goalTextHandler.current?.(goalId, text), onGoalCursorChange: (nodeId, offset) => selectionHandler.current?.({ empty: true, blockId: nodeId, start: offset, end: offset, text: '' }) }) }),
         InternalLinkDecorations,
       ],
       content: toEditorDocument(doc),
@@ -328,7 +331,7 @@ function RichTextEditor({
     },
     // 依赖只放 `readOnly`：它是扩展装配的一部分（UniqueID 是否补 ID），变化必须重建。
     // `locked` 故意不在这里——它只走下面的 setEditable，否则每次保存都会换 DOM 节点。
-    [readOnly],
+    [readOnly, onGoalTextChange !== undefined],
   )
 
   useEffect(() => {

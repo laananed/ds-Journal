@@ -194,9 +194,9 @@ export async function executeAIWriting(requestId: string, signal?: AbortSignal):
   return { status: response.status, body: await response.json() as AIRequestDetail }
 }
 
-export async function applyAIWriting(requestId: string, expectedRevision: number, signal?: AbortSignal): Promise<AIWritingMutation> {
+export async function applyAIWriting(requestId: string, expectedRevision: number, signal?: AbortSignal, selectedCommentIndex?: number): Promise<AIWritingMutation> {
   const response = await fetch(`${apiBase()}/api/ai/writing/${encodeURIComponent(requestId)}/apply`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expected_revision: expectedRevision }), signal,
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expected_revision: expectedRevision, ...(selectedCommentIndex === undefined ? {} : { selected_comment_index: selectedCommentIndex }) }), signal,
   })
   if (!response.ok) throw new AiApiError(response.status, await readErrorMessage(response))
   return await response.json() as AIWritingMutation

@@ -196,6 +196,12 @@ class WritingRanges(BaseModel):
         return self
 
 
+class WritingCursor(BaseModel):
+    model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
+    node_id: UUID
+    offset: Annotated[int, Field(strict=True, ge=0)]
+
+
 class WritingPrepare(BaseModel):
     model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
     request_id: UUID
@@ -205,9 +211,18 @@ class WritingPrepare(BaseModel):
     question: Annotated[str, Field(strict=True, max_length=2000)] | None = None
     mind_preset_ids: list[Literal['gentle_reflection', 'alternative_perspectives', 'thinking_traps']] | None = None
     scope: Literal['all'] | WritingRange | WritingRanges | None = None
+    writing_mode: Literal['continuation'] | None = None
+    cursor: WritingCursor | None = None
+    candidate_mode: bool = False
 
     @model_validator(mode='after')
     def valid_options(self):
+        if self.candidate_mode and (self.kind != 'minds_comments' or self.trigger != 'manual'):
+            raise ValueError('candidate selection requires manual comments')
+        if self.writing_mode == 'continuation' and (self.kind != 'go_deeper' or self.trigger != 'manual' or self.question is not None):
+            raise ValueError('continuation requires manual writing without a question')
+        if self.cursor is not None and self.writing_mode != 'continuation':
+            raise ValueError('cursor requires continuation')
         if self.kind == 'go_deeper':
             if self.mind_preset_ids is not None or self.scope is not None or (self.trigger == 'automatic' and self.question is not None):
                 raise ValueError('invalid Go Deeper options')
@@ -223,6 +238,7 @@ class WritingPrepare(BaseModel):
 class WritingApply(BaseModel):
     model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
     expected_revision: Revision
+    selected_comment_index: Annotated[int, Field(strict=True, ge=0, le=29)] | None = None
 
 
 class AiRequestResponse(BaseModel):
@@ -239,6 +255,9 @@ class AiRequestResponse(BaseModel):
     citations: list[dict]
     error: dict | None
     comments: list[dict] | None = None
+    trigger: Literal['manual', 'automatic'] | None = None
+    writing_mode: Literal['continuation'] | None = None
+    candidate_mode: bool = False
 
 
 class NoopResponse(BaseModel):

@@ -211,6 +211,7 @@ function WritingPage({
   const [aiSettingsToken, setAiSettingsToken] = useState(0)
   /** 编辑器当前选区（块 ID + 码点区间）；`null` 表示整篇评论。 */
   const [aiSelection, setAiSelection] = useState<AutoRange[] | null>(null)
+  const [aiCursor, setAiCursor] = useState<{ node_id: string; offset: number } | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -232,6 +233,7 @@ function WritingPage({
    * 绝不猜一个「相近的文字」当锚点。
    */
   const onEditorSelection = useCallback((info: EditorSelectionInfo | null) => {
+    if (info?.blockId) setAiCursor({ node_id: info.blockId, offset: info.end })
     if (info === null || info.empty || info.blockId === null || info.end <= info.start) {
       setAiSelection(null)
       return
@@ -240,7 +242,7 @@ function WritingPage({
   }, [])
 
   // 换草稿/换会话时丢掉旧选区：范围属于某一篇正文，不跟着跨文件走。
-  useEffect(() => { setAiSelection(null) }, [sessionId])
+  useEffect(() => { setAiSelection(null); setAiCursor(null) }, [sessionId])
 
   const businessDate = writingDateFromBusinessDay(businessDay)
 
@@ -1147,6 +1149,7 @@ function WritingPage({
                   composing={session.imeComposing}
                   settings={aiSettings}
                   selection={aiSelection}
+                  cursor={aiCursor}
                   disabled={disabled}
                   store={store}
                   onNotice={setNotice}

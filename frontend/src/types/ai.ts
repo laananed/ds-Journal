@@ -112,8 +112,8 @@ export type AIWritingPrepare = {
   trigger: 'manual' | 'automatic'
   source: { type: 'journal' | 'insight'; id: number; expected_revision: number }
 } & (
-  | { kind: 'go_deeper'; question?: string }
-  | { kind: 'minds_comments'; scope?: AIWritingScope; mind_preset_ids?: MindPresetId[] }
+  | { kind: 'go_deeper'; question?: string; writing_mode?: 'continuation'; cursor?: { node_id: string; offset: number } }
+  | { kind: 'minds_comments'; scope?: AIWritingScope; mind_preset_ids?: MindPresetId[]; candidate_mode?: boolean }
 )
 
 export interface AICommentAnchor extends AIWritingRange { quote: string; quote_sha256: string }
@@ -184,6 +184,9 @@ export interface AIRequestDetail {
   citations: AICitation[]
   error: AIRequestErrorInfo | null
   comments?: Array<AIComment | { mind_preset_id: MindPresetId; text: string; anchor: AICommentAnchor }> | null
+  trigger?: 'manual' | 'automatic' | null
+  writing_mode?: 'continuation' | null
+  candidate_mode?: boolean
 }
 
 /**
