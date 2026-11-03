@@ -40,6 +40,18 @@
   --sj-context-width: 264px;
   --sj-aside-width: 296px;
 
+  /*
+   * 手机安全区（刘海 / 底部手势条）。
+   *
+   * `env()` 在没有声明 `viewport-fit=cover` 的页面里回落到 0，所以桌面端
+   * 完全不受影响；一旦外层（APK WebView 或改造后的 index.html）声明了
+   * cover，这里就自动让出刘海与手势条的空间，不需要再写第二份样式。
+   */
+  --sj-safe-top: env(safe-area-inset-top, 0px);
+  --sj-safe-right: env(safe-area-inset-right, 0px);
+  --sj-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --sj-safe-left: env(safe-area-inset-left, 0px);
+
   display: grid;
   grid-template-columns: var(--sj-nav-width) minmax(0, 1fr);
   width: 100%;
@@ -339,7 +351,8 @@
     width: 100%;
     height: auto;
     max-height: none;
-    padding: 10px 14px;
+    /* 顶部横栏：躲开刘海，左右让出机身圆角 */
+    padding: calc(10px + var(--sj-safe-top)) calc(14px + var(--sj-safe-right)) 10px calc(14px + var(--sj-safe-left));
     border-right: 0;
     border-bottom: 1px solid var(--sj-border);
   }
@@ -372,7 +385,7 @@
     bottom: calc(100% + 26px);
   }
   .sj-shell__main {
-    padding: 24px 20px 56px;
+    padding: 24px 20px calc(56px + var(--sj-safe-bottom));
   }
   .sj-shell__main-inner {
     max-width: 720px;
@@ -385,17 +398,21 @@
     border-top: 1px solid var(--sj-border);
   }
   .sj-shell__shortcuts {
-    right: 12px;
-    bottom: 12px;
+    right: calc(12px + var(--sj-safe-right));
+    bottom: calc(12px + var(--sj-safe-bottom));
   }
 }
 
 @media (max-width: 480px) {
   .sj-shell__sidebar {
-    padding: 8px 12px;
+    padding: calc(8px + var(--sj-safe-top)) calc(12px + var(--sj-safe-right)) 8px calc(12px + var(--sj-safe-left));
   }
+  /*
+   * 底部留白要为右下角「快捷入口」让位：横排后约 52px 高，
+   * 留 88px 保证滚到页尾时最后一行正文不被按钮压住。
+   */
   .sj-shell__main {
-    padding: 20px 16px 44px;
+    padding: 20px 16px calc(88px + var(--sj-safe-bottom));
   }
   .sj-shell__aside {
     padding: 16px 16px 32px;
@@ -403,6 +420,27 @@
   .sj-shell__theme-option {
     padding: 6px 8px;
     font-size: 13px;
+  }
+}
+
+/*
+ * 360～430px：目标手机宽度区间。
+ * 左右留白再收 4px，把宽度让给正文（390px 屏幕上正文列约 358px）；
+ * 外观面板与「更多」菜单按视口宽度限制，避免贴边溢出。
+ */
+@media (max-width: 430px) {
+  .sj-shell__main {
+    padding: 16px 12px calc(88px + var(--sj-safe-bottom));
+  }
+  .sj-shell__aside {
+    padding: 14px 12px 28px;
+  }
+  .sj-shell__theme-panel {
+    min-width: 172px;
+    max-width: calc(100vw - 24px);
+  }
+  .sj-shell__theme-option {
+    font-size: 13.5px;
   }
 }
 

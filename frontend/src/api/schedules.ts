@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from './demoAuth'
 /**
  * 独立日程（C01）的 HTTP 客户端 —— 按 `docs/stage4-api.md` §13 草案实现。
  *

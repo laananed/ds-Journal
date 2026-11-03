@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from './demoAuth'
 import { JournalApiError } from './journals.ts'
 import { journalToServerFile } from '../state/journalSession.ts'
 import type { FileEffect, FileMutation } from '../state/editSessions.ts'

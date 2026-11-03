@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from './demoAuth'
 import type { TrashFilter, TrashItem, TrashPageData, TrashType } from '../types/trash'
 
 /**

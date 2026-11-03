@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from './demoAuth'
 import type { Insight, InsightCreate, InsightPage, InsightUpdate } from '../types/insight'
 
 /** Insight 请求错误。 */

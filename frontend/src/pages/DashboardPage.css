@@ -338,6 +338,27 @@
   }
 }
 
+/* 360～430px：卡片内边距再收一档，标题不折成三行 */
+@media (max-width: 430px) {
+  .dash-hero {
+    padding: 20px 16px 18px;
+    border-radius: 18px;
+  }
+  .dash-hero-title {
+    font-size: 22px;
+  }
+  .dash .dash-quick {
+    padding: 0 10px 0 16px;
+  }
+  .dash .dash-action {
+    padding: 0 12px;
+    font-size: 14px;
+  }
+  .dash-meta {
+    font-size: 12px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dash-quick,
   .dash .dash-action {

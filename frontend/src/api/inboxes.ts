@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from './demoAuth'
 import type { DailyInboxState, Inbox, InboxCreate, InboxPage, InboxUpdate } from '../types/inbox'
 
 /** Inbox 请求错误。`status === 409` 表示当天已存在 Daily Inbox。 */
