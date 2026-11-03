@@ -26,7 +26,11 @@ import './RitualPage.css'
 import RitualQuestions from '../components/RitualQuestions'
 import RitualRestoreCompare from '../components/RitualRestoreCompare'
 import { DraftConflictView, LocalDraftPanel, type DraftAction, type DraftPanelItem } from '../components/WritingDraftRecovery'
-import RichTextEditor from '../editor/RichTextEditor'
+import RichTextEditor, { type EditorSelectionInfo } from '../editor/RichTextEditor'
+import WritingAiPanel, { NO_SERVER_VERSION_NOTICE } from '../components/WritingAiPanel'
+import { getAISettings } from '../api/ai'
+import type { AISettings } from '../types/ai'
+import type { AutoRange } from '../state/autoAi'
 import { EMPTY_DOCUMENT } from '../editor/schema'
 import {
   copyRitualContent,
@@ -72,6 +76,7 @@ import {
   needsLocalDraft,
   planCandidate,
   planReplay,
+  userTextOf,
   type CandidatePlan,
 } from '../utils/writingSession'
 import type { ContentDocument } from '../types/document'
@@ -191,6 +196,25 @@ function RitualPage({
    * 收起 + 需要时在正文上方展开，正文才真正成为主体（且显隐不引起重排）。
    */
   const [contextOpen, setContextOpen] = useState(false)
+  const [aiSettings, setAiSettings] = useState<AISettings | null>(null)
+  const [aiSettingsToken, setAiSettingsToken] = useState(0)
+  const [aiSelection, setAiSelection] = useState<AutoRange[] | null>(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    getAISettings(controller.signal).then((value) => {
+      if (!controller.signal.aborted) setAiSettings(value)
+    }).catch(() => {
+      if (!controller.signal.aborted) setAiSettings(null)
+    })
+    return () => controller.abort()
+  }, [aiSettingsToken])
+  const onAiSelection = useCallback((info: EditorSelectionInfo | null) => {
+    if (info === null || info.empty || info.blockId === null || info.end <= info.start) {
+      setAiSelection(null)
+    } else {
+      setAiSelection([{ node_id: info.blockId, start: info.start, end: info.end }])
+    }
+  }, [])
   /* ------------------------------------------------------------ 读取 */
 
   const [status, setStatus] = useState<LoadStatus>('loading')
@@ -338,6 +362,11 @@ function RitualPage({
   }, [status, sessionId, capture, openFile, kind, tabId, effectiveDate, sessionEpoch])
 
   const session = useEditSession(sessionId)
+  useEffect(() => {
+    if (session?.fileId != null) {
+      setNotice((current) => current === NO_SERVER_VERSION_NOTICE ? '' : current)
+    }
+  }, [session?.fileId])
   const actions = useEditSessionActions(sessionId)
   const draftStartedAt = capture?.draftStartedAt ?? ''
   const mirrorOptions = useMemo(() => ({
@@ -1591,9 +1620,26 @@ function RitualPage({
                             chromeHidden={chrome.hidden}
                             label={`${KIND_LABEL[kind]} 正文`}
                             onUserChange={handleBodyChange}
+                            onSelection={onAiSelection}
                           />
                         )}
                     </div>
+                    {session !== null && (
+                      <WritingAiPanel
+                        sessionId={sessionId}
+                        fileId={session.fileId}
+                        userText={userTextOf(session.draft.content_doc)}
+                        editorDocument={session.draft.content_doc}
+                        saved={session.status === 'saved' && session.inputSeq === session.ackedSeq}
+                        userInputSeq={session.userInputSeq}
+                        composing={session.imeComposing}
+                        settings={aiSettings}
+                        selection={aiSelection}
+                        disabled={disabled || editorLocked}
+                        onNotice={setNotice}
+                        onReloadSettings={() => setAiSettingsToken((value) => value + 1)}
+                      />
+                    )}
                     <div className={`sj-ritual__status${statusCritical ? ' is-critical' : ''}`} role="status" aria-live="polite">
                       <span>{session !== null ? statusLabel(sessionStatus) : '正在准备编辑会话……'}</span>
                       {mirror.localState !== 'idle' && <span>{localStateLabel(mirror.localState)}</span>}

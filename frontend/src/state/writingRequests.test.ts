@@ -115,6 +115,18 @@ function record(overrides: Partial<WritingRequestRecord> = {}): WritingRequestRe
 /* ------------------------------------------- 3. 状态映射：未知不当成功 */
 
 {
+  let entries: WritingRecoveryEntry[] = []
+  entries = addWritingEntry(entries, { requestId: REQ_A, kind: 'go_deeper', fileId: 12 })
+  entries = addWritingEntry(entries, { requestId: REQ_B, kind: 'go_deeper', fileId: 12, fileType: 'insight' })
+  expectEqual(entries.length, 2, 'Journal 与 Insight 数字 ID 相同时恢复索引互不覆盖')
+  const restored = parseWritingIndex(serializeWritingIndex(entries))
+  expectEqual(restored[0].fileType ?? 'journal', 'journal', '旧索引默认 Journal')
+  expectEqual(restored[1].fileType, 'insight', 'Insight 身份可恢复')
+  expectEqual(findWritingEntry(restored, 12, 'go_deeper')?.requestId, REQ_A, 'Journal 查询不会取到同号 Insight')
+  expectEqual(findWritingEntry(restored, 12, 'go_deeper', 'insight')?.requestId, REQ_B, 'Insight 查询不会取到同号 Journal')
+}
+
+{
   expectEqual(phaseForWritingStatus('prepared'), 'running', 'prepared 仍是进行中（未调用模型）')
   expectEqual(phaseForWritingStatus('pending'), 'running', 'pending 进行中')
   expectEqual(phaseForWritingStatus('ready'), 'ready', 'ready 待写入')

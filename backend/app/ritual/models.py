@@ -37,8 +37,14 @@ class RitualCopy(Base):
 
 class AIComment(Base):
     __tablename__ = 'ai_comments'
+    __table_args__ = (CheckConstraint(
+        '(journal_id IS NOT NULL AND insight_id IS NULL) OR '
+        '(journal_id IS NULL AND insight_id IS NOT NULL)',
+        name='ck_ai_comments_one_source',
+    ),)
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
-    journal_id: Mapped[int] = mapped_column(ForeignKey('journals.id', ondelete='CASCADE'), nullable=False)
+    journal_id: Mapped[int | None] = mapped_column(ForeignKey('journals.id', ondelete='CASCADE'))
+    insight_id: Mapped[int | None] = mapped_column(ForeignKey('insights.id', ondelete='CASCADE'))
     request_id: Mapped[UUID | None] = mapped_column(ForeignKey('ai_requests.id', ondelete='SET NULL'))
     mind_preset_id: Mapped[str] = mapped_column(Text, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)

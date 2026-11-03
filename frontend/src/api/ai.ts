@@ -201,14 +201,14 @@ export async function applyAIWriting(requestId: string, expectedRevision: number
   return await response.json() as AIWritingMutation
 }
 
-export async function listAIComments(journalId: number, page = 1, signal?: AbortSignal): Promise<AICommentsPage> {
-  const response = await fetch(`${apiBase()}/api/journals/${journalId}/comments?page=${page}`, { signal })
+export async function listAIComments(journalId: number, page = 1, signal?: AbortSignal, fileType: 'journal' | 'insight' = 'journal'): Promise<AICommentsPage> {
+  const response = await fetch(`${apiBase()}/api/${fileType === 'journal' ? 'journals' : 'insights'}/${journalId}/comments?page=${page}`, { signal })
   if (!response.ok) throw new AiApiError(response.status, await readErrorMessage(response))
   return await response.json() as AICommentsPage
 }
 
-export async function deleteAIComment(journalId: number, commentId: string, revision: number, signal?: AbortSignal): Promise<void> {
-  const response = await fetch(`${apiBase()}/api/journals/${journalId}/comments/${encodeURIComponent(commentId)}`, {
+export async function deleteAIComment(journalId: number, commentId: string, revision: number, signal?: AbortSignal, fileType: 'journal' | 'insight' = 'journal'): Promise<void> {
+  const response = await fetch(`${apiBase()}/api/${fileType === 'journal' ? 'journals' : 'insights'}/${journalId}/comments/${encodeURIComponent(commentId)}`, {
     method: 'DELETE', headers: { 'If-Match': `"${revision}"` }, signal,
   })
   if (!response.ok) throw new AiApiError(response.status, await readErrorMessage(response))

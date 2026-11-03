@@ -50,7 +50,7 @@ async function readErrorMessage(response: Response): Promise<string> {
  * - 只删指定 AI 段，不会回退检查点、也不会减少已发生的 Token。
  */
 export async function deleteAiBlock(
-  type: 'journal' | 'inbox',
+  type: 'journal' | 'inbox' | 'insight',
   id: number,
   blockId: string,
   expectedRevision: number,

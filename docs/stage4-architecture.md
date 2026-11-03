@@ -130,7 +130,7 @@ Journal 增 `journal_kind text NOT NULL DEFAULT 'writing'`，检查枚举；在 
 
 当前 `app/ai/local.py` 的 register/account/attach 拆为明确的 prepare/execute/apply，但继续现有同步工作线程、总截止与账本，不引入 BackgroundTasks、任务队列或新运行服务。进程仍单实例运行，功能调用并发上限沿用2，同源写作/复盘在途互斥。
 
-prepare 由文件队列执行：取得真实已保存 U/版本/设置与范围，登记 prepared、Go Deeper 占位及其后用户段；返回窄效果，允许继续写。execute 只对 prepared 抢占为 pending、写 started_at，释放事务后才调用；重放不能再次上游执行。每个子调用先独立记 usage，持久化业务 ready/failed，与文件应用分开。
+prepare 由文件队列执行：取得真实已保存 U/版本/设置与范围，登记 prepared、Go Deeper 占位及其后用户段；返回窄效果，允许继续写。Journal 和 Insight 按 `(type, id)` 隔离请求、检查点和评论归属。评论分别关联 Journal 或 Insight 外键，恰有一个有效来源。execute 只对 prepared 抢占为 pending、写 started_at，释放事务后才调用；重放不能再次上游执行。每个子调用先独立记 usage，持久化业务 ready/failed，与文件应用分开。
 
 apply 再进入文件队列：保存到序号屏障、锁有效源/请求，验证占位和调用前用户前缀；允许其后新增。只替换占位并原子更新 C/request/file。下方新输入即使未在调用中也保留，C 只到 frozen U。返回 FileMutation，不能用完整 file 回填覆盖新草稿。
 

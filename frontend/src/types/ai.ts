@@ -47,7 +47,7 @@ export interface AIUsage {
 
 /** 文件身份：跨表身份是 type + id，不共用 id 空间。 */
 export interface AISourceIdentity {
-  type: 'journal' | 'inbox'
+  type: 'journal' | 'inbox' | 'insight'
   id: number
   revision?: number
 }
@@ -110,7 +110,7 @@ export type AIWritingScope = 'all' | AIWritingRange | { ranges: AIWritingRange[]
 export type AIWritingPrepare = {
   request_id: string
   trigger: 'manual' | 'automatic'
-  source: { type: 'journal'; id: number; expected_revision: number }
+  source: { type: 'journal' | 'insight'; id: number; expected_revision: number }
 } & (
   | { kind: 'go_deeper'; question?: string }
   | { kind: 'minds_comments'; scope?: AIWritingScope; mind_preset_ids?: MindPresetId[] }
@@ -137,7 +137,7 @@ export interface AICommentsPage {
 export interface AIWritingMutation {
   request_id: string
   status: AIRequestStatus
-  files: import('./journal').Journal[]
+  files: (import('./journal').Journal | import('./insight').Insight)[]
   effects: import('../state/editSessions').FileEffect[]
   comments?: Array<{ id: string; anchor_state: 'available' | 'unavailable' }>
 }

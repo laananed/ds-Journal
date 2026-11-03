@@ -253,12 +253,13 @@ def writing_changes(row, data, *, db=None):
             # Exact legacy conversion is a server-controlled identity transition.
             changes['content'] = row.content
         else:
-            if db is not None and hasattr(row, 'journal_kind'):
+            if db is not None:
+                file_type = 'journal' if hasattr(row, 'journal_kind') else 'insight'
                 from app.ai.comments import reconcile_comment_marks
-                candidate = reconcile_comment_marks(db, row.id, current_doc, candidate)
-                invalidate_changed_go_deeper(db, row.id, candidate)
+                candidate = reconcile_comment_marks(db, row.id, current_doc, candidate, file_type)
+                invalidate_changed_go_deeper(db, row.id, candidate, file_type)
                 from app.ai.comments import track_changed_minds
-                track_changed_minds(db, row.id, candidate)
+                track_changed_minds(db, row.id, candidate, file_type)
                 changes['content_doc'] = candidate
                 changes['content'] = document_content(candidate, current_doc, verified_comments=True)
             else:
@@ -285,25 +286,25 @@ def cleanup_private_ai(db, file_type, file_id):
         [{"type": file_type, "id": file_id}])).execution_options(synchronize_session=False))
 
 
-def invalidate_writing_ai(db, journal_id):
+def invalidate_writing_ai(db, journal_id, file_type='journal'):
     """Invalidate in-flight writing requests in the source lifecycle transaction."""
     from sqlalchemy import update
     from app.ai.models import AIRequest
     db.execute(update(AIRequest).where(
         AIRequest.kind.in_(['go_deeper', 'minds_comments']),
         AIRequest.status.in_(['prepared', 'pending', 'ready']),
-        AIRequest.sources.contains([{'type': 'journal', 'id': journal_id}]),
+        AIRequest.sources.contains([{'type': file_type, 'id': journal_id}]),
     ).values(status='conflict', error_category='source_changed')
        .execution_options(synchronize_session=False))
 
 
-def invalidate_changed_go_deeper(db, journal_id, document):
+def invalidate_changed_go_deeper(db, journal_id, document, file_type='journal'):
     """Revoke a boundary as soon as its frozen prefix changes, even if later restored."""
     from app.ai.models import AIRequest
     from app.writing.documents import DocumentError, apply_ai_placeholder
     requests = db.scalars(select(AIRequest).where(
         AIRequest.kind == 'go_deeper', AIRequest.status.in_(['prepared','pending','ready']),
-        AIRequest.sources.contains([{'type':'journal','id':journal_id}])).with_for_update()).all()
+        AIRequest.sources.contains([{'type':file_type,'id':journal_id}])).with_for_update()).all()
     for request in requests:
         try:
             apply_ai_placeholder(document, str(request.id), request.sources[0]['user_text'], 'check')
@@ -317,9 +318,10 @@ def delete_ai_block(db, file_type, file_id, block_id, expected_revision):
     from sqlalchemy import update
     from app.inbox.models import Inbox
     from app.journal.models import Journal
+    from app.insight.models import Insight
 
-    model = Journal if file_type == "journal" else Inbox
-    active = [model.deleted_at.is_(None)] if file_type == "journal" else []
+    model = {'journal': Journal, 'inbox': Inbox, 'insight': Insight}[file_type]
+    active = [model.deleted_at.is_(None)] if file_type in ('journal', 'insight') else []
     try:
         row = db.scalar(select(model).where(model.id == file_id, *active).with_for_update()
                         .execution_options(populate_existing=True))
@@ -328,8 +330,8 @@ def delete_ai_block(db, file_type, file_id, block_id, expected_revision):
         if row.revision != expected_revision:
             raise WriteConflict("file revision has changed")
         if getattr(row, 'content_doc', None) is not None:
-            if file_type != 'journal':
-                raise WritingError('AI block deletion only supports Journal')
+            if file_type not in ('journal', 'insight'):
+                raise WritingError('AI block deletion only supports Journal and Insight')
             from copy import deepcopy
             from app.ai.models import AIRequest
             from app.writing.documents import project_document
@@ -350,7 +352,7 @@ def delete_ai_block(db, file_type, file_id, block_id, expected_revision):
             if node['type'] == 'aiPlaceholder':
                 db.execute(update(AIRequest).where(AIRequest.id == node['attrs']['request_id'],
                     AIRequest.kind == 'go_deeper', AIRequest.status.in_(['prepared','pending','ready']),
-                    AIRequest.sources.contains([{'type':'journal','id':file_id}]))
+                    AIRequest.sources.contains([{'type':file_type,'id':file_id}]))
                     .values(status='conflict', error_category='source_changed'))
             db.commit()
             return True

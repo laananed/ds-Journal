@@ -28,7 +28,7 @@ router = APIRouter(prefix="/api/files", tags=["writing"])
 
 
 @router.delete("/{type}/{id}/ai-blocks/{block_id}", status_code=204)
-def delete_ai_block(type: Literal["journal", "inbox"], id: int, block_id: UUID,
+def delete_ai_block(type: Literal["journal", "inbox", "insight"], id: int, block_id: UUID,
                     expected_revision: int = Depends(matched_revision),
                     db: Session = Depends(get_db)):
     from app.writing.service import delete_ai_block as remove

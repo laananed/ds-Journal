@@ -222,7 +222,7 @@ def _source_identity(source: Any) -> dict[str, Any] | None:
         return None
     source_type = source.get("type")
     source_id = source.get("id")
-    if source_type not in ("journal", "inbox"):
+    if source_type not in ("journal", "inbox", "insight"):
         return None
     if isinstance(source_id, bool) or not isinstance(source_id, int):
         return None

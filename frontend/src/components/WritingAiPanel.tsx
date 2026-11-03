@@ -37,6 +37,9 @@ import {
   type FileMutation,
 } from '../state/editSessions'
 import { journalToDraft } from '../state/journalSession'
+import { insightToServerFile } from '../state/insightSession'
+import { getJournal } from '../api/journals'
+import { getInsight } from '../api/insights'
 import {
   addWritingEntry,
   decideRecovery,
@@ -66,8 +69,12 @@ import {
 import { newRequestId } from '../utils/aiRequestState'
 import type { AIComment, AIRequestDetail, AIRequestStatus, AIWritingMutation, AINoopResponse } from '../types/ai'
 import type { Journal } from '../types/journal'
+import type { Insight } from '../types/insight'
+
+export const NO_SERVER_VERSION_NOTICE = '这篇还没有服务器版本：先保存成功，AI 才能读取它。'
 
 export interface WritingAiPanelProps {
+  fileType?: 'journal' | 'insight'
   /** 会话身份；为空表示还没有会话（不能调用 AI）。 */
   sessionId: string | null
   /** 服务器文件 ID；`null` 说明这篇还没有保存成功。 */
@@ -111,12 +118,11 @@ function isNoop(value: AIWritingMutation | AINoopResponse): value is AINoopRespo
 }
 
 /** 后端文件详情数组 → 会话可应用的 FileMutation（effects 原样来自后端）。 */
-function toMutation(files: Journal[], effects: FileMutation['effects'], requestId: string | null): FileMutation {
+function toMutation(files: (Journal | Insight)[], effects: FileMutation['effects'], requestId: string | null): FileMutation {
   return {
-    files: files.map((file) => ({
-      type: 'journal' as const,
-      file: { id: file.id, revision: file.revision, draft: journalToDraft(file) },
-    })),
+    files: files.map((file) => file.type === 'insight'
+      ? { type: 'insight' as const, file: insightToServerFile(file) }
+      : { type: 'journal' as const, file: { id: file.id, revision: file.revision, draft: journalToDraft(file) } }),
     effects,
     request_id: requestId,
   }
@@ -131,6 +137,7 @@ function statusOf(error: unknown): number | null {
 }
 
 function WritingAiPanel({
+  fileType = 'journal',
   sessionId,
   fileId,
   userText,
@@ -162,6 +169,11 @@ function WritingAiPanel({
   const [questionError, setQuestionError] = useState('')
   const [presets, setPresets] = useState<MindPresetId[]>(settings?.mind_preset_ids ?? ['gentle_reflection'])
   const [notice, setNotice] = useState('')
+  useEffect(() => {
+    if (fileId !== null) {
+      setNotice((current) => current === NO_SERVER_VERSION_NOTICE ? '' : current)
+    }
+  }, [fileId])
   const [autoStatus, setAutoStatus] = useState('')
   const [tickToken, setTickToken] = useState(0)
   /**
@@ -221,16 +233,17 @@ function WritingAiPanel({
    * `phase` 一律先按 `unknown` 处理并要求用户点「查询状态」，因为离开时
    * 无法知道模型是否已经调用过（存在已计费的可能）。
    */
-  const hydratedFileRef = useRef<number | null>(null)
+  const hydratedFileRef = useRef<string | null>(null)
   useEffect(() => {
     if (fileId === null) {
       hydratedFileRef.current = null
       setRecord(null)
       return
     }
-    if (hydratedFileRef.current === fileId) return
-    hydratedFileRef.current = fileId
-    const entries = indexRef.current.filter((item) => item.fileId === fileId)
+    const identity = `${fileType}:${fileId}`
+    if (hydratedFileRef.current === identity) return
+    hydratedFileRef.current = identity
+    const entries = indexRef.current.filter((item) => item.fileId === fileId && (item.fileType ?? 'journal') === fileType)
     const latest = entries[entries.length - 1]
     if (latest === undefined) {
       // 换到另一篇：上一篇的结果不属于这一篇，不能留着误导。
@@ -250,7 +263,7 @@ function WritingAiPanel({
       applied: false,
     })
     setLastStatus(null)
-  }, [fileId])
+  }, [fileId, fileType])
 
   /* ------------------------------------------------------ 评论读取 */
 
@@ -259,7 +272,7 @@ function WritingAiPanel({
     setCommentsLoading(true)
     setCommentsError('')
     try {
-      const data = await listAIComments(fileId, page)
+      const data = await listAIComments(fileId, page, undefined, fileType)
       if (!mountedRef.current) return
       setComments(data.items)
       setCommentsPage(data.page)
@@ -271,7 +284,7 @@ function WritingAiPanel({
     } finally {
       if (mountedRef.current) setCommentsLoading(false)
     }
-  }, [fileId])
+  }, [fileId, fileType])
 
   useEffect(() => {
     setComments([])
@@ -284,7 +297,7 @@ function WritingAiPanel({
 
   useEffect(() => {
     if (settings === null || fileId === null) return
-    const key = `journal:${fileId}`
+    const key = `${fileType}:${fileId}`
     const current = autoRef.current
     if (current === null || current.fileKey !== key) {
       // 打开文件/会话：记录调度基线，已有旧文不算新输入。
@@ -295,7 +308,7 @@ function WritingAiPanel({
     }
     // 开关从关到开会重建基线；设置变化本身不触发请求。
     autoRef.current = syncSettings(current, settings, { userText, document: editorDocument })
-  }, [editorDocument, fileId, settings, userText])
+  }, [editorDocument, fileId, fileType, settings, userText])
 
   // 只有真实用户输入序号前进才算「用户输入」；系统写入（载入/AI 回写/模板/恢复）
   // 不会走到这里，因此不会形成付费循环。
@@ -325,12 +338,13 @@ function WritingAiPanel({
   ): Promise<boolean> => {
     if (sessionId === null) return false
     try {
-      await store.runFileCommand(sessionId, async () => {
+      const mutation = await store.runFileCommand(sessionId, async () => {
         const session = store.getSession(sessionId)
         if (session === null || session.revision === null) throw new Error('会话已关闭')
         const mutation = await applyAIWriting(requestId, session.revision)
         return toMutation(mutation.files, mutation.effects, requestId)
       })
+      if (mutation === null) throw new Error('文件会话已关闭')
       persistIndex(removeWritingEntry(indexRef.current, requestId))
       if (kind === 'minds_comments') {
         void reloadComments(commentsPage)
@@ -358,7 +372,7 @@ function WritingAiPanel({
     dedupeTuple?: string | null
   }): Promise<void> => {
     if (sessionId === null || fileId === null) {
-      notify('这篇还没有服务器版本：先保存成功，AI 才能读取它。')
+      notify(NO_SERVER_VERSION_NOTICE)
       return
     }
     if (busyRef.current) return
@@ -389,7 +403,7 @@ function WritingAiPanel({
       applied: false,
     }
     // 先登记再发送：进程被杀也能按 ID 查回状态，绝不靠猜。
-    persistIndex(addWritingEntry(indexRef.current, { requestId, kind: input.kind, fileId }))
+    persistIndex(addWritingEntry(indexRef.current, { requestId, kind: input.kind, fileId, fileType }))
     setRecord(base)
     setNotice('')
 
@@ -406,7 +420,7 @@ function WritingAiPanel({
             request_id: requestId,
             kind: input.kind,
             trigger: input.trigger,
-            source: { type: 'journal', id: session.fileId, expected_revision: session.revision },
+            source: { type: fileType, id: session.fileId, expected_revision: session.revision },
             ...(input.kind === 'go_deeper'
               ? (input.trigger === 'manual' && rawQuestion !== '' ? { question: rawQuestion } : {})
               : {
@@ -516,7 +530,7 @@ function WritingAiPanel({
       markBusy(false)
       if (mountedRef.current) setTickToken((value) => value + 1)
     }
-  }, [applyReady, fileId, markBusy, notify, persistIndex, presets, question, record, sessionId, store])
+  }, [applyReady, fileId, fileType, markBusy, notify, persistIndex, presets, question, record, sessionId, store])
 
   /* --------------------------------------------------- 自动触发循环 */
 
@@ -679,20 +693,29 @@ function WritingAiPanel({
   /* --------------------------------------------------------- 删除评论 */
 
   const removeComment = useCallback(async (comment: AIComment) => {
-    if (fileId === null) return
-    const session = sessionId === null ? null : store.getSession(sessionId)
-    if (session === null || session.revision === null) {
+    if (fileId === null || sessionId === null) {
       notify('还没读取到这篇的服务器版本，暂时不能删除评论。')
       return
     }
     try {
-      await deleteAIComment(fileId, comment.id, session.revision)
+      const mutation = await store.runFileCommand(sessionId, async () => {
+        const session = store.getSession(sessionId)
+        if (session === null || session.revision === null || session.fileId !== fileId) {
+          throw new Error('文件会话已变化')
+        }
+        const baseRevision = session.revision
+        await deleteAIComment(fileId, comment.id, baseRevision, undefined, fileType)
+        const file = fileType === 'journal' ? await getJournal(fileId) : await getInsight(fileId)
+        return toMutation([file], [{ type: fileType, id: fileId, base_revision: baseRevision,
+          revision: file.revision, ops: [] }], null)
+      })
+      if (mutation === null) throw new Error('文件会话已关闭')
       notify('已删除这条评论与它的正文标记；已消耗的 Token 不会回退。')
       void reloadComments(commentsPage)
     } catch (error: unknown) {
       notify(`删除评论失败：${errorText(error, '请先保存最新输入后重试')}`)
     }
-  }, [commentsPage, fileId, notify, reloadComments, sessionId, store])
+  }, [commentsPage, fileId, fileType, notify, reloadComments, sessionId, store])
 
   /* --------------------------------------------------------- 渲染 */
 

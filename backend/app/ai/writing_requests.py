@@ -13,6 +13,7 @@ from app.ai.models import AIRequest, AICheckpoint
 from app.ai.requests import RequestNotFound
 from app.journal.schemas import _is_blank, _validate_content
 from app.journal.service import get_journal
+from app.insight.service import get_insight
 from app.writing.documents import (DocumentError, _plain, convert_legacy_text, prepare_ai_placeholder,
                                    apply_ai_placeholder, project_document, user_text_document, validate_anchor)
 from app.writing.service import LegacyConversionRequired, WriteConflict, WritingError
@@ -150,13 +151,13 @@ def prepare(db, payload):
     row = lock_source(db, source)
     if not active(row):
         raise RequestNotFound('File not found')
-    if row.content_doc is None and (row.content_blocks is not None or payload.kind != 'go_deeper'):
+    if row.content_doc is None and (getattr(row, 'content_blocks', None) is not None or payload.kind != 'go_deeper'):
         raise LegacyConversionRequired('legacy body requires safe conversion')
     if row.revision != source['expected_revision']:
         if payload.trigger == 'automatic' and payload.kind == 'go_deeper' and row.content_doc is not None:
             candidates = db.scalars(select(AIRequest).where(
                 AIRequest.kind == 'go_deeper', AIRequest.auto_dedupe_key.is_not(None),
-                AIRequest.sources.contains([{'type':'journal','id':row.id}]))).all()
+                AIRequest.sources.contains([{'type':source['type'],'id':row.id}]))).all()
             nodes = row.content_doc['content']
             for candidate in candidates:
                 frozen = candidate.sources[0]
@@ -174,7 +175,7 @@ def prepare(db, payload):
                     return result
         raise WriteConflict('file revision has changed')
     doc = (deepcopy(row.content_doc) if row.content_doc is not None
-           else convert_legacy_text(row.content, row.content_blocks))
+           else convert_legacy_text(row.content, getattr(row, 'content_blocks', None)))
     current = user_text_document(doc)
     captured_settings = settings.settings_snapshot(db)
     scope = _capture_scope(doc, payload.scope or 'all') if payload.kind == 'minds_comments' else None
@@ -182,7 +183,8 @@ def prepare(db, payload):
                if payload.kind == 'minds_comments' else [])
     dedupe = None
     if payload.trigger == 'automatic':
-        dedupe = usage.call_payload_hash({'journal_id':row.id,'kind':payload.kind,
+        dedupe_source = {'journal_id': row.id} if source['type'] == 'journal' else {'insight_id': row.id}
+        dedupe = usage.call_payload_hash({**dedupe_source,'kind':payload.kind,
                  'snapshot_hash':hashlib.sha256(current.encode('utf-8')).hexdigest(),
                  'scope':scope,'presets':presets})
         old = db.scalar(select(AIRequest).where(AIRequest.auto_dedupe_key == dedupe))
@@ -192,17 +194,18 @@ def prepare(db, payload):
             return result
     inflight = db.scalar(select(AIRequest.id).where(
         AIRequest.status.in_(['prepared','pending']),
-        AIRequest.sources.contains([{'type':'journal','id':row.id}])).limit(1))
+        AIRequest.sources.contains([{'type':source['type'],'id':row.id}])).limit(1))
     if inflight is not None:
         raise WriteConflict('source already has an in-flight writing request')
-    checkpoint = db.get(AICheckpoint, ('journal', row.id))
+    checkpoint = db.get(AICheckpoint, (source['type'], row.id))
     increment = compute_increment(current, checkpoint.consumed_user_text if checkpoint else None)
     question = payload.question if payload.question and not _is_blank(payload.question) else None
     if payload.kind == 'go_deeper' and not increment.valid and question is None:
         db.rollback()
         return {'status':'noop','message':'要我分析啥啊？','request_id':None,'usage':None}
-    frozen = {'type':'journal','id':row.id,'revision':row.revision,'user_text':current,
-              'title':row.title,'folder_id':row.folder_id,'date':row.journal_date.isoformat(),
+    frozen = {'type':source['type'],'id':row.id,'revision':row.revision,'user_text':current,
+              'title':row.title,'folder_id':row.folder_id,
+              'date':row.journal_date.isoformat() if source['type'] == 'journal' else None,
               'format':'document_v1','document':doc,'scope':scope,
               'increment':{'text':increment.text,'revised':increment.revised,'position':increment.position},
               'mind_preset_ids':presets,'trigger':payload.trigger}
@@ -222,8 +225,9 @@ def prepare(db, payload):
         row.revision += 1
         row.updated_at = datetime.now(timezone.utc)
         db.flush()
-        files = [get_journal(db,row.id).model_dump(mode='json')]
-        effects = [{'type':'journal','id':row.id,'base_revision':base,'revision':row.revision,
+        detail = get_journal(db, row.id) if source['type'] == 'journal' else get_insight(db, row.id)
+        files = [detail.model_dump(mode='json')]
+        effects = [{'type':source['type'],'id':row.id,'base_revision':base,'revision':row.revision,
                     'ops':[{'kind':'replace_placeholder','node_id':updated['content'][-2]['attrs']['id']}]}]
     db.add(AIRequest(id=payload.request_id,kind=payload.kind,payload_hash=digest,
                      status='prepared',sources=[frozen],question=question,settings=captured_settings,
@@ -271,9 +275,9 @@ def apply(db, request_id, expected_revision):
         request.status = 'applied'
         request.completed_at = datetime.now(timezone.utc)
         db.flush()
-        detail = get_journal(db, row.id).model_dump(mode='json')
+        detail = (get_journal(db, row.id) if source['type'] == 'journal' else get_insight(db, row.id)).model_dump(mode='json')
         result = {'request_id':str(request_id),'status':'applied','files':[detail] if changed else [],
-                  'effects':[{'type':'journal','id':row.id,'base_revision':expected_revision,
+                  'effects':[{'type':source['type'],'id':row.id,'base_revision':expected_revision,
                               'revision':row.revision,'ops':[{'kind':'comment_marks'}]}] if changed else [],
                   'comments':[{'id':str(c.id),'anchor_state':c.anchor_state} for c in comments]}
         db.commit()
@@ -295,9 +299,9 @@ def apply(db, request_id, expected_revision):
     row.content_doc, row.content = doc, projection
     row.revision += 1
     row.updated_at = datetime.now(timezone.utc)
-    checkpoint = db.get(AICheckpoint, ('journal', row.id))
+    checkpoint = db.get(AICheckpoint, (source['type'], row.id))
     if checkpoint is None:
-        checkpoint = AICheckpoint(file_type='journal',file_id=row.id)
+        checkpoint = AICheckpoint(file_type=source['type'],file_id=row.id)
         db.add(checkpoint)
     checkpoint.consumed_user_text = source['user_text']
     checkpoint.last_request_id = request_id
@@ -305,9 +309,9 @@ def apply(db, request_id, expected_revision):
     request.status = 'applied'
     request.completed_at = datetime.now(timezone.utc)
     db.flush()
-    detail = get_journal(db, row.id).model_dump(mode='json')
+    detail = (get_journal(db, row.id) if source['type'] == 'journal' else get_insight(db, row.id)).model_dump(mode='json')
     result = {'request_id':str(request_id),'status':'applied','files':[detail],
-              'effects':[{'type':'journal','id':row.id,'base_revision':expected_revision,
+              'effects':[{'type':source['type'],'id':row.id,'base_revision':expected_revision,
                           'revision':row.revision,'ops':[{'kind':'replace_placeholder','node_id':node['attrs']['id']}]}]}
     db.commit()
     return result
