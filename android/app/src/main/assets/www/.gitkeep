@@ -1,0 +1,1 @@
+前端构建产物由 scripts/build-web.ps1 生成到本目录，不提交到 git。

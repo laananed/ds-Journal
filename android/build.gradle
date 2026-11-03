@@ -1,0 +1,5 @@
+// 根构建脚本：只声明 Android Gradle Plugin 版本，不做其他配置。
+// 版本与本机已缓存的 AGP/Gradle 组合一致（AGP 8.7.3 需要 Gradle 8.9+）。
+plugins {
+    id 'com.android.application' version '8.7.3' apply false
+}
