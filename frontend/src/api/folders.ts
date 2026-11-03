@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from './demoAuth'
 import type { Folder } from '../types/folder'
 import type { ContentFile, FilePage } from '../types/file'
 

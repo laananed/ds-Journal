@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from './demoAuth'
 import type { Journal, JournalCreate, JournalUpdate, JournalPage } from '../types/journal'
 import type { JournalKind } from '../types/document'
 

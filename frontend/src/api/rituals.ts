@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from './demoAuth'
 import type { BusinessDay, Rituals, RitualTemplates } from '../types/ritual'
 import type { RitualCopyRequest, RitualKind, RitualMutation, RitualQuestion, RitualRestoreRequest } from '../types/ritual'
 import { JournalApiError } from './journals'

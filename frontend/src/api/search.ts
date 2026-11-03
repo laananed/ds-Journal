@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from './demoAuth'
 import type { FileIdentity } from '../types/file'
 import type { SearchConditions, SearchItem, SearchPageData } from '../types/search'
 

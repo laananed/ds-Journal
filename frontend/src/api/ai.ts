@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from './demoAuth'
 /** Stage 3 / S3-T03：AI 设置与计量 API 客户端。
  *
  * 只调用后端已有的三个只读/设置接口。这里**不发送** Key、模型名或 base_url：

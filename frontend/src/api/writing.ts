@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from './demoAuth'
 /**
  * 结构化写作 API（Stage 3 / S3-T04）。
  *
