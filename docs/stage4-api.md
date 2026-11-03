@@ -227,3 +227,24 @@ T01 证明格式/作者/C/旧文/幂等/CAS，T02 证明即时导航/序号隔�
 日程是独立资源，与 Set 目标没有自动创建、更新、完成或删除同步，不复用目标关联接口。目标契约：`GET /api/schedules?page=1` 返回 `{items,page,has_next}`，按开始时间与 ID 稳定排序、每页20；`GET /api/schedules/{id}` 返回详情。对象字段 `id`、`title`（非空、最多80 Unicode码点）、`starts_at`（带时区 ISO 时间）、`ends_at`（同格式或 null，若有须晚于 starts_at）、`completed`（布尔）、`revision`、`created_at`、`updated_at`；时间存储为 UTC，显示按 Asia/Shanghai 转换。`POST /api/schedules` 接受 title、starts_at、ends_at、completed 及 UUID `client_create_id`；相同键和首个 payload 返回同一资源，不同 payload 409。`PATCH /api/schedules/{id}` 接受 `expected_revision` 和变化字段，实际变化原子增版；缺版本428、无效字段422、过期409；`DELETE` 以 If-Match 携版本，成功204、过期409。不存在返回404，GET零写。删除为硬删除且仅删除该日程，不触及 Set/End；若另需回收站须另行决定。
 
 建议/情绪经 AI 只产生候选供用户确认，查看或取消零日程写；保存统一走上述 POST。时间不足或非法需修改。模型失败不阻断手动日程；调用/幂等/unknown 与 usage 沿用 AI 现有契约，具体建议端点和付费预算在 C01 实施前单独补充，不引入自动保存猜测。此处不授权新接口、迁移或付费调用。
+
+
+## 14. 结题云端 / APK 接口交接（2026-11-03，待实现与验证）
+
+- APK 构建时以 `VITE_API_BASE_URL=https://<演示域名>` 指定后端根地址，不包含 `/api`，为公开配置而非凭据。现有多处客户端读取此变量，默认本机地址；须由前端责任人核对全部请求与构建产物。
+- APK 负责人提供实际页面 origin、资源加载和路由方案；禁止以 `file://` / `null` origin 或通配符作为默认放行。反向代理只对确定的单一可信 origin 响应预检及必要方法/请求头；CORS 不是认证。
+- 演示候选为 HTTPS 入口 HTTP Basic，账号密码由演示者运行时输入，客户端每次请求显式附 `Authorization`，不编入 APK、不持久化明文；代理认证覆盖全部路径（预检仅返回 CORS 元数据，不转发业务），错误响应也提供 CORS。该方案需要前端/API 和 Android 责任人明确交接并实机验证；尚未实现，未作为生产身份系统。凭据一旦泄漏可被重放，演示后撤销，日志禁记授权信息。
+- 401 提示重新认证，403 提示无权访问；网络/TLS 故障与 5xx 明确提示，保留未保存内容，不自动重发可能产生费用或重复写入的 AI 请求；409/422/428 沿用既有业务契约。前端负责 WebView 返回与内部路由，资源加载和刷新不能依赖云端静态站点；外链不可获得认证头。
+- 所有 AI 请求由后端调用供应商，`DEEPSEEK_API_KEY` 及可选搜索密钥只在服务端环境管理，供应商费用另经授权。上述为交接目标，未证明 Android、UI 或服务器已实现。
+
+
+2026-11-03 云端只读核对的 WorkBuddy Android 外壳使用 AndroidX `WebViewAssetLoader`，预期 origin 为 `https://appassets.androidplatform.net`。用户另交接 Codex Android 外壳采用原生 `WebViewClient` 映射包内资源，计划保留同一 origin；两套实现及其证据独立，最终 APK 尚未选定或冻结，真实 Origin、认证和真机行为未验证。拟定 API 根地址 `https://api.freirenlikesleep.cyou:8443`。两套外壳的现有交接均未实现认证头注入；前端共享 API 仍需明确单写者并接线。该 origin 不是应用身份认证，必须配合独立服务端认证。
+
+
+2026-11-03 用户指定手机 UI 对话为共享前端 API 与认证界面的单写者；Android 对话只负责外壳和打包，具体基线与交接方式见 tasks §17。既定 HTTPS / Basic / 错误处理为待实现接口目标，未因此声称完成或验证。
+
+
+2026-11-03 用户批准公网 IPv4 8443，VPS 已加载专用 Nginx 配置并添加 UFW 入站规则；使用 `https://api.freirenlikesleep.cyou:8443` 的客户端仍须准确匹配最终来源及认证契约。入口配置不等于认证/CORS/TLS 或真实公网业务已通过验证。
+
+
+2026-11-03 用户反馈手机可正常查看、可调用 API；公网 health 的认证请求与一次服务端真实 AI 合成请求已有记录，具体验证范围见 `deploy/README.md` §19–21。此前本节“候选、待实现/未验证”等是决策时的历史说明：当前代理与前端已有实现和开发产物，完整业务、认证安全、异常恢复及最终 APK 仍未全面验证。

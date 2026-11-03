@@ -36,6 +36,12 @@ C01 新建 `backend/app/schedule/` 的 router/service/model/schema 和专属前�
 
 迁移单写者为 Codex：T01 M4A 在隔离库验证、完成必要复核并获授权整合后，确认实际唯一 Alembic head，C01 才从该最新 head 开下一条迁移；不得在两个分支从旧 head 各开一条。C01 可提前做不碰迁移链和公共入口的设计/独立组件；`main.py`、迁移链、`prepare_test_db.py`/conftest、公共 types 和 `App.tsx` 的所有权和资源时段以 tasks §5–7 为准。
 
+## 2.2 结题云端演示架构（2026-11-03）
+
+APK 内置构建后的前端资源，WebView 的实际 origin 由 Android 负责人确认；其经 HTTPS 访问云端受保护入口，入口反向代理至仅回环监听的单进程 FastAPI，后端连接不对公网暴露的独立演示 PostgreSQL 并调用外部 AI。前端不承载供应商密钥。具体域名、证书、代理和端口须以 VPS 现有服务盘点为准；不预设与云端同源。以单进程维持现有进程内 AI 并发假设，容量未实测。
+
+本机后端 `lifespan` 调用 `recover_pending(restart=True)`，可写 AI 请求与计量；每次启动/重启及迁移前核对实际连接目标、专用演示库和单实例。当前代码只有本地开发 CORS 且无服务端认证；部署前须完成全入口认证、精确 origin 的 CORS 和客户端适配，参见 API §14 与 `deploy/README.md`。方案与配置是待集成工作，未宣称安全或已上线。
+
 ## 3. 正文 schema、作者与两种投影
 
 ### 3.1 单一正文权威
