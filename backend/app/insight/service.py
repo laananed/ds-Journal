@@ -243,10 +243,13 @@ def get_insight(db: Session, insight_id: int) -> InsightResponse | None:
 def update_insight(db: Session, insight_id: int, data: InsightUpdate) -> InsightResponse | None:
     require_revision(data.expected_revision)
     try:
-        row = _get_active_insight(db, insight_id)
+        row = db.scalar(select(Insight).where(Insight.id == insight_id, Insight.deleted_at.is_(None))
+                        .with_for_update().execution_options(populate_existing=True))
         if row is None:
             return None
-        changes = writing_changes(row, data)
+        if row.revision != data.expected_revision:
+            raise WriteConflict("file revision has changed")
+        changes = writing_changes(row, data, db=db)
         if not changes:
             return _project_required(db, insight_id)
         if row.revision != data.expected_revision:
@@ -261,12 +264,6 @@ def update_insight(db: Session, insight_id: int, data: InsightUpdate) -> Insight
                     updated_at=Insight.updated_at if row.content_doc is None and changes.keys() == {"content_doc"} else _utcnow())
             .execution_options(synchronize_session=False))
         if result.rowcount == 0:
-            db.expire_all()
-            row = _get_active_insight(db, insight_id)
-            if row is None:
-                return None
-            if not writing_changes(row, data):
-                return _project_required(db, insight_id)
             raise WriteConflict("file revision has changed")
         db.commit()
     except Exception as error:
@@ -293,6 +290,8 @@ def delete_insight(db: Session, insight_id: int, expected_revision: int | None =
             if _get_active_insight(db, insight_id) is None:
                 return False
             raise WriteConflict("file revision has changed")
+        from app.writing.service import invalidate_writing_ai
+        invalidate_writing_ai(db, insight_id, 'insight')
         db.commit()
     except Exception:
         db.rollback()

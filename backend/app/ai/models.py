@@ -34,7 +34,7 @@ class AIRequest(Base):
 
 class AICheckpoint(Base):
     __tablename__ = "ai_checkpoints"
-    __table_args__ = (CheckConstraint("file_type IN ('journal', 'inbox')", name="ck_ai_checkpoints_type"),)
+    __table_args__ = (CheckConstraint("file_type IN ('journal', 'inbox', 'insight')", name="ck_ai_checkpoints_type"),)
     file_type: Mapped[str] = mapped_column(Text, primary_key=True)
     file_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     consumed_user_text: Mapped[str] = mapped_column(Text, nullable=False)

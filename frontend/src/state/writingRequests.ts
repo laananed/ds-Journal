@@ -31,6 +31,7 @@ export interface WritingRecoveryEntry {
   requestId: string
   kind: WritingRequestKind
   fileId: number
+  fileType?: 'journal' | 'insight'
 }
 
 /** 后端 `AiRequest.status` 的写作子集（另有 prepared，前端统一表示）。 */
@@ -96,6 +97,7 @@ export function serializeWritingIndex(entries: WritingRecoveryEntry[]): string {
       requestId: entry.requestId,
       kind: entry.kind,
       fileId: entry.fileId,
+      ...(entry.fileType === 'insight' ? { fileType: 'insight' } : {}),
     })),
   })
 }
@@ -120,7 +122,9 @@ export function parseWritingIndex(raw: string | null): WritingRecoveryEntry[] {
     if (!isKind(record.kind)) continue
     const fileId = record.fileId
     if (typeof fileId !== 'number' || !Number.isInteger(fileId) || fileId < 1) continue
-    output.push({ requestId: record.requestId, kind: record.kind, fileId })
+    if (record.fileType !== undefined && record.fileType !== 'journal' && record.fileType !== 'insight') continue
+    output.push({ requestId: record.requestId, kind: record.kind, fileId,
+      ...(record.fileType === 'insight' ? { fileType: 'insight' as const } : {}) })
   }
   return output
 }
@@ -150,8 +154,9 @@ export function addWritingEntry(
   entry: WritingRecoveryEntry,
 ): WritingRecoveryEntry[] {
   const kept = entries.filter((item) => item.requestId !== entry.requestId
-    && !(item.fileId === entry.fileId && item.kind === entry.kind))
-  return [...kept, { requestId: entry.requestId, kind: entry.kind, fileId: entry.fileId }]
+    && !(item.fileId === entry.fileId && item.kind === entry.kind && (item.fileType ?? 'journal') === (entry.fileType ?? 'journal')))
+  return [...kept, { requestId: entry.requestId, kind: entry.kind, fileId: entry.fileId,
+    ...(entry.fileType === 'insight' ? { fileType: 'insight' as const } : {}) }]
     .slice(-WRITING_RECOVERY_LIMIT)
 }
 
@@ -166,10 +171,12 @@ export function findWritingEntry(
   entries: WritingRecoveryEntry[],
   fileId: number,
   kind?: WritingRequestKind,
+  fileType: 'journal' | 'insight' = 'journal',
 ): WritingRecoveryEntry | null {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]
     if (entry.fileId !== fileId) continue
+    if ((entry.fileType ?? 'journal') !== fileType) continue
     if (kind !== undefined && entry.kind !== kind) continue
     return entry
   }

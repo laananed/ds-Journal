@@ -109,7 +109,7 @@ class AIUsageResponse(BaseModel):
 class SourceIdentity(BaseModel):
     """Typed cross-table identity; no shared id space is assumed."""
 
-    type: Literal["journal", "inbox"]
+    type: Literal["journal", "inbox", "insight"]
     id: int
     revision: int | None = None
 
@@ -166,7 +166,7 @@ class LocalRequest(BaseModel):
 
 class WritingSource(BaseModel):
     model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
-    type: Literal['journal']
+    type: Literal['journal', 'insight']
     id: Annotated[int, Field(strict=True, ge=1)]
     expected_revision: Revision
 

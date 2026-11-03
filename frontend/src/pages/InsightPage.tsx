@@ -10,7 +10,12 @@ import FileCard from '../components/FileCard'
 import InsightDrafts from '../components/InsightDrafts'
 import MarkdownContent from '../components/MarkdownContent'
 import Pagination from '../components/Pagination'
-import RichTextEditor from '../editor/RichTextEditor.tsx'
+import RichTextEditor, { type EditorSelectionInfo } from '../editor/RichTextEditor.tsx'
+import WritingAiPanel, { NO_SERVER_VERSION_NOTICE } from '../components/WritingAiPanel'
+import { getAISettings } from '../api/ai'
+import type { AISettings } from '../types/ai'
+import type { AutoRange } from '../state/autoAi'
+import { userTextOf } from '../utils/writingSession'
 import { listFolders } from '../api/folders'
 import type { Insight, InsightPage as InsightPageData } from '../types/insight'
 import type { Folder } from '../types/folder'
@@ -199,6 +204,10 @@ function InsightPanel({
   // 卸载清理必须拿到「当时」的绑定键：清理不能在依赖变化时提前关会话。
   const sessionIdRef = useRef(sessionId)
   useEffect(() => { sessionIdRef.current = sessionId }, [sessionId])
+  useEffect(() => {
+    const scoped = sessionId
+    return () => { editSessionStore.setComposing(scoped, false) }
+  }, [sessionId])
 
   const [file, setFile] = useState<Insight | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(insightId === null ? 'ready' : 'loading')
@@ -209,6 +218,30 @@ function InsightPanel({
   const [deleteStage, setDeleteStage] = useState<'idle' | 'confirming' | 'deleting'>('idle')
   const [writeError, setWriteError] = useState('')
   const [notice, setNotice] = useState('')
+  useEffect(() => {
+    if (session?.fileId != null) {
+      setNotice((current) => current === NO_SERVER_VERSION_NOTICE ? '' : current)
+    }
+  }, [session?.fileId])
+  const [aiSettings, setAiSettings] = useState<AISettings | null>(null)
+  const [aiSettingsToken, setAiSettingsToken] = useState(0)
+  const [aiSelection, setAiSelection] = useState<AutoRange[] | null>(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    getAISettings(controller.signal).then((value) => {
+      if (!controller.signal.aborted) setAiSettings(value)
+    }).catch(() => {
+      if (!controller.signal.aborted) setAiSettings(null)
+    })
+    return () => controller.abort()
+  }, [aiSettingsToken])
+  const onAiSelection = useCallback((info: EditorSelectionInfo | null) => {
+    if (info === null || info.empty || info.blockId === null || info.end <= info.start) {
+      setAiSelection(null)
+    } else {
+      setAiSelection([{ node_id: info.blockId, start: info.start, end: info.end }])
+    }
+  }, [])
   const [converting, setConverting] = useState(false)
   /** 取消新建时确认「放弃未保存输入」；不确认就留在编辑器里。 */
   const [discardConfirm, setDiscardConfirm] = useState(false)
@@ -335,6 +368,7 @@ function InsightPanel({
   useEffect(() => {
     if (discardConfirm) return
     if (session === null || session.userInputSeq === 0) return
+    if (session.imeComposing) return
     if (session.status === 'conflict' || session.status === 'failed' || session.status === 'missing') return
     const timer = setTimeout(() => { void saveRef.current() }, SAVE_DEBOUNCE_MS)
     return () => clearTimeout(timer)
@@ -659,7 +693,10 @@ function InsightPanel({
               </div>
             </div>
           )}
-          <form className="editor-form" onSubmit={(event) => { event.preventDefault(); void saveRef.current() }}>
+          <form className="editor-form"
+            onCompositionStart={() => editSessionStore.setComposing(sessionId, true)}
+            onCompositionEnd={() => editSessionStore.setComposing(sessionId, false)}
+            onSubmit={(event) => { event.preventDefault(); void saveRef.current() }}>
             <label className="editor-field">
               <input type="text" value={draft.title} disabled={busy} aria-label="Insight 标题" placeholder="标题"
                 onChange={(event) => changeTitle(event.target.value)} />
@@ -668,7 +705,7 @@ function InsightPanel({
             {!legacyLocked && (
               <div className="editor-field">
                 <RichTextEditor doc={draft.content_doc as ContentDocument} label="Insight 正文"
-                  onUserChange={changeContent} onLink={onResolveLink} />
+                  onUserChange={changeContent} onLink={onResolveLink} onSelection={onAiSelection} />
               </div>
             )}
             {legacyLocked && <MarkdownContent source={file?.content ?? ''} onLink={onResolveLink} disabled={busy} />}
@@ -689,6 +726,14 @@ function InsightPanel({
               </div>
             )}
           </form>
+          {!legacyLocked && session !== null && (
+            <WritingAiPanel fileType="insight" sessionId={sessionId} fileId={session.fileId}
+              userText={userTextOf(draft.content_doc)} editorDocument={draft.content_doc}
+              saved={saveStatus === 'saved' && session.inputSeq === session.ackedSeq}
+              userInputSeq={session.userInputSeq} composing={session.imeComposing}
+              settings={aiSettings} selection={aiSelection} disabled={busy}
+              onNotice={setNotice} onReloadSettings={() => setAiSettingsToken((value) => value + 1)} />
+          )}
           {notice && <p className="detail-success" role="status">{notice}</p>}
           {writeError && <p className="detail-error" role="alert">{writeError}</p>}
         </>

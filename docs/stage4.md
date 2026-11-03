@@ -19,7 +19,7 @@ Stage 4 只覆盖本文明确升级项，其他 Stage 2/3 行为保留。文档�
 | `journal` / `journal_kind=end` | End The Day，日终 Ritual | **结束今天** |
 | `insight` | 观点文件，无业务日期 | Insight |
 
-Writing、开始今天、结束今天均属于 Journal，沿用 Journal ID、Folder、Trash 及版本机制；不新增第三张文件表。Insight 共用 Tiptap，本期 Go Deeper、Minds Comments 仅对 Journal 开放。Inbox/Daily 功能、API、当前模型和表全部移除，现有 Inbox 允许物理删除，其数据安全契约见 API §11、架构 §10。
+Writing、开始今天、结束今天均属于 Journal，沿用 Journal ID、Folder、Trash 及版本机制；不新增第三张文件表。Insight 共用 Tiptap。经用户批准，Journal（含计划和复盘）与 Insight 均支持 Go Deeper、自定义提问及 Minds Comments；以 `(type, id)` 区分文件，沿用保存屏障、版本冲突保护和请求恢复。Inbox/Daily 功能、API、当前模型和表全部移除，现有 Inbox 允许物理删除，其数据安全契约见 API §11、架构 §10。
 
 以下八项已确认决定已收口，不再以“待产品确认”阻塞：
 

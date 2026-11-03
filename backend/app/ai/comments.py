@@ -10,12 +10,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.journal.models import Journal
+from app.insight.models import Insight
 from app.writing.router import matched_revision
 from app.writing.service import WriteConflict
 import hashlib
 import json
 
 router = APIRouter(prefix='/api/journals', tags=['ai-comments'])
+insight_router = APIRouter(prefix='/api/insights', tags=['ai-comments'])
 
 
 def prompt_nodes(source):
@@ -73,6 +75,48 @@ def list_comments(journal_id: int, page: int = Query(1, ge=1), db: Session = Dep
         'mind_preset_id':c.mind_preset_id,'text':c.text,'quote':c.quote,'anchor':c.anchor,
         'anchor_state':c.anchor_state,'created_at':c.created_at} for c in rows],
         'page':page,'page_size':20,'total':total,'has_next':page*20 < total}
+
+
+@insight_router.get('/{insight_id}/comments')
+def list_insight_comments(insight_id: int, page: int = Query(1, ge=1), db: Session = Depends(get_db)):
+    if db.scalar(select(Insight.id).where(Insight.id == insight_id, Insight.deleted_at.is_(None))) is None:
+        raise HTTPException(status_code=404, detail='File not found')
+    condition = AIComment.insight_id == insight_id
+    total = db.scalar(select(func.count()).select_from(AIComment).where(condition))
+    rows = db.scalars(select(AIComment).where(condition).order_by(AIComment.created_at, AIComment.id)
+                      .offset((page-1)*20).limit(20)).all()
+    return {'items':[{'id':str(c.id),'request_id':str(c.request_id) if c.request_id else None,
+        'mind_preset_id':c.mind_preset_id,'text':c.text,'quote':c.quote,'anchor':c.anchor,
+        'anchor_state':c.anchor_state,'created_at':c.created_at} for c in rows],
+        'page':page,'page_size':20,'total':total,'has_next':page*20 < total}
+
+
+@insight_router.delete('/{insight_id}/comments/{comment_id}', status_code=204)
+def delete_insight_comment(insight_id: int, comment_id: UUID, revision: int = Depends(matched_revision),
+                           db: Session = Depends(get_db)):
+    from app.writing.documents import project_document, remove_comment_mark
+    try:
+        row = db.scalar(select(Insight).where(Insight.id == insight_id, Insight.deleted_at.is_(None))
+                        .with_for_update().execution_options(populate_existing=True))
+        if row is None:
+            raise HTTPException(status_code=404, detail='File not found')
+        if row.revision != revision:
+            raise WriteConflict('file revision has changed')
+        comment = db.scalar(select(AIComment).where(AIComment.id == comment_id,
+                            AIComment.insight_id == insight_id).with_for_update())
+        if comment is None:
+            raise HTTPException(status_code=404, detail='Comment not found')
+        if row.content_doc is not None:
+            row.content_doc = remove_comment_mark(row.content_doc, str(comment_id))
+            row.content = project_document(row.content_doc)
+        row.revision += 1
+        row.updated_at = datetime.now(timezone.utc)
+        db.delete(comment)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return Response(status_code=204)
 
 
 @router.delete('/{journal_id}/comments/{comment_id}', status_code=204)
@@ -133,7 +177,8 @@ def apply_comments(db, row, request, source):
             document = add_comment_mark(document, anchor, str(comment_id))
         except DocumentError:
             available = False
-        comment = AIComment(id=comment_id, journal_id=row.id, request_id=request.id,
+        owner = {'journal_id': row.id} if source['type'] == 'journal' else {'insight_id': row.id}
+        comment = AIComment(id=comment_id, **owner, request_id=request.id,
                 mind_preset_id=preset, text=body, quote=anchor['quote'], anchor=anchor,
                 anchor_state='available' if available else 'unavailable', created_at=datetime.now(timezone.utc))
         db.add(comment)
@@ -141,11 +186,11 @@ def apply_comments(db, row, request, source):
     return document, created
 
 
-def track_changed_minds(db, journal_id, document):
+def track_changed_minds(db, journal_id, document, file_type='journal'):
     from app.ai.models import AIRequest
     requests = db.scalars(select(AIRequest).where(
         AIRequest.kind == 'minds_comments', AIRequest.status.in_(['prepared','pending','ready']),
-        AIRequest.sources.contains([{'type':'journal','id':journal_id}])).with_for_update()).all()
+        AIRequest.sources.contains([{'type':file_type,'id':journal_id}])).with_for_update()).all()
     for request in requests:
         sources = deepcopy(request.sources)
         source = sources[0]
@@ -158,7 +203,7 @@ def track_changed_minds(db, journal_id, document):
             request.sources = sources
 
 
-def reconcile_comment_marks(db, journal_id, old_document, candidate):
+def reconcile_comment_marks(db, journal_id, old_document, candidate, file_type='journal'):
     """Verify ownership and preserve only anchors that still match at their old position."""
     from app.writing.documents import validate_document, remove_comment_mark
     validate_document(old_document)
@@ -190,7 +235,8 @@ def reconcile_comment_marks(db, journal_id, old_document, candidate):
         raise WritingError('comment mark cannot be introduced by a client')
     if not old:
         return candidate
-    rows = db.scalars(select(AIComment).where(AIComment.journal_id == journal_id,
+    owner_column = AIComment.journal_id if file_type == 'journal' else AIComment.insight_id
+    rows = db.scalars(select(AIComment).where(owner_column == journal_id,
                      AIComment.id.in_([UUID(cid) for cid in old])).with_for_update()).all()
     owned = {str(row.id):row for row in rows}
     if set(owned) != set(old):

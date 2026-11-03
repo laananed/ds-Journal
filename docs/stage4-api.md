@@ -135,11 +135,11 @@ Writing 左侧用 journals 的当日 writing 筛选；今日总览用当日 all 
 
 ## 7. 写作 AI 准备、执行、应用
 
-仅 Journal；Insight 或 inbox 来源 422。kind 为 `go_deeper | minds_comments`，trigger 为 `manual | automatic`。现有完整复盘继续使用 `/api/ai/reviews` 与其一次确认保存，不改成自动总结。
+来源支持 Journal 与 Insight，inbox 来源 422；跨类型按 `(type, id)` 区分。kind 为 `go_deeper | minds_comments`，trigger 为 `manual | automatic`。现有完整复盘继续使用 `/api/ai/reviews` 与其一次确认保存，不改成自动总结。Insight 的写作与评论沿用版本、保存屏障、请求幂等、占位符、冲突和恢复保护，评论只归属一个源文件。
 
 ### POST `/api/ai/writing/prepare`
 
-body：request_id UUID、kind、trigger、source `{type:"journal",id,expected_revision}`，可选 question（Go Deeper，最多 2,000 码点）、mind_preset_ids（Minds，1～3 个唯一合法预置）、scope（Minds，all 或节点范围）。不接收前端自报 delta/正文/检查点/回复/设置快照。
+body：request_id UUID、kind、trigger、source `{type:"journal"|"insight",id,expected_revision}`，可选 question（Go Deeper，最多 2,000 码点）、mind_preset_ids（Minds，1～3 个唯一合法预置）、scope（Minds，all 或节点范围）。不接收前端自报 delta/正文/检查点/回复/设置快照。
 
 2026-10-30 用户批准扩展：Minds 的 `scope` 还可为 `{"ranges":[{"node_id":"UUID","start":0,"end":3}]}`，含 1～100 个范围；每项指向保存快照内的用户 paragraph/heading，使用节点内 Unicode 码点半开区间，同一节点的范围不得重叠。单节点对象 `{node_id,start,end}` 与 `"all"` 仍保留。服务端按范围从快照取文字并校验节点、边界和评论归属，不接收客户端文字或自报 delta。自动调度所依据的真实输入及激活基线仍由 T09 客户端维护；服务端不能仅凭范围证明输入事件来源。自动请求发送的范围须覆盖本次实际新增/修订范围，跨节点时使用 ranges。
 
@@ -167,7 +167,7 @@ GET `/api/ai/requests/{request_id}` 继续只读，增加写作 kind、prepared�
 
 只有真实用户文本变更后调度；保存成功、当前可见、IME 已结束、无同源在途调用、增量达到阈值并满足停顿/冷却才 prepare。开关启用/打开会话时记录调度基线，旧文不冒充新增80码点；该客户端基线不是后端C，不把未分析旧文标为已消费。自动GoDeeper不读取未提交的独立提问栏，问题续聊仍由手动触发。冷却从该模式上次实际执行登记计时。两个模式均开启时同文件串行，Go Deeper 优先；Minds 的去重与消费范围独立，不能因 Go Deeper 推进 C 而跳过。
 
-自动请求以 `(journal_id,kind,用户快照hash,有效分析范围,预置集合)` 派生非正文 `auto_dedupe_key`，数据库唯一；同快照的多标签/重挂载/重放返回已有状态，不增加占位或收费。手动明确“再请求”使用新 request_id，不复用自动去重键。切页仅取消未执行的自动调度；已 prepared/在途请求由应用接续状态查询，不因 remount 新建付费请求。AI/模板/同步/恢复/格式/初次加载事件均无 user_input 标志，不能触发循环。
+自动请求以 `(文件类型,文件ID,kind,用户快照hash,有效分析范围,预置集合)` 派生非正文 `auto_dedupe_key`，数据库唯一；同快照的多标签/重挂载/重放返回已有状态，不增加占位或收费。保留既有 Journal 请求键的兼容性。手动明确“再请求”使用新 request_id，不复用自动去重键。切页仅取消未执行的自动调度；已 prepared/在途请求由应用接续状态查询，不因 remount 新建付费请求。AI/模板/同步/恢复/格式/初次加载事件均无 user_input 标志，不能触发循环。
 
 ## 9. 评论与既有 AI 能力
 
@@ -175,7 +175,7 @@ GET `/api/ai/requests/{request_id}` 继续只读，增加写作 kind、prepared�
 
 `DELETE /api/journals/{id}/comments/{comment_id}`：If-Match 文件版本；评论记录/对应 Mark 原子删除，204，usage/C 不回退。删除锚点正文可使评论 unavailable，但不能误挂其他位置；再次查看零模型调用。
 
-`DELETE /api/files/journal/{id}/ai-blocks/{block_id}` 保留专用 AI 段删除，改为定位 JSON 节点；支持已保存回复/总结/占位，删除占位使该请求不得附着，真实上游费用不保证取消。Inbox/Insight 路径不开放。
+`DELETE /api/files/journal/{id}/ai-blocks/{block_id}` 保留专用 AI 段删除，定位 JSON 节点；支持已保存回复/总结/占位，删除占位使该请求不得附着，真实上游费用不保证取消。Insight 须有同等的受保护节点删除与请求失效语义，Inbox 路径不开放。Insight Minds 评论的读取和删除须校验文件类型、文件 ID、评论归属及版本。
 
 完整复盘源最终仅 Journal，1～15 个 typed 唯一文件、最多7不同 journal_date；包括 writing/set/end，Insight 仍非法。来源快照和引用规则保持，JSON 作者提取排除 AI/系统内容；生成成功且源一致时 ready+C 的旧语义保留，确认保存时仍校验源变化，源变 409 保留预览。新建复盘目标为 writing；若追加到 Ritual，不改 kind/date、不创建第二个名额。Insight 草稿仍用户主动添加，一观点一文件、另加换键，正文用统一 JSON，来源作为文本/安全链接而非强事实图。
 

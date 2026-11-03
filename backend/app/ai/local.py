@@ -21,6 +21,7 @@ from app.ai.models import AIRequest, AICheckpoint, AIUsage
 from app.ai.prompts import local_messages
 from app.ai.requests import RequestNotFound, recover_pending, request_response
 from app.inbox.models import Inbox
+from app.insight.models import Insight
 from app.journal.models import Journal
 from app.journal.schemas import _is_blank
 from app.writing.service import WritingError, WriteConflict, LegacyConversionRequired, insert_ai_reply
@@ -36,7 +37,7 @@ class LocalError(WritingError):
 
 
 def lock_source(db, source):
-    model = Journal if source['type'] == 'journal' else Inbox
+    model = {'journal': Journal, 'inbox': Inbox, 'insight': Insight}[source['type']]
     return db.scalar(select(model).where(model.id == source['id']).with_for_update()
                      .execution_options(populate_existing=True))
 
