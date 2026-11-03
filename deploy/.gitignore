@@ -1,0 +1,8 @@
+# Local packaging and one-off runtime evidence; never commit generated bundles.
+/linux-wheels/
+/pip-temp/
+/*.tar
+/verify-ai-once.py
+/verify-private-backend.py
+# Live per-host unit contains a complete database connection value.
+/seekjournal-demo.service

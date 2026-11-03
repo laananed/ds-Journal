@@ -1,0 +1,29 @@
+# TEMPLATE ONLY — do not enable before filling placeholders and reviewing existing server.
+# Place inside a dedicated server block with an existing, valid TLS certificate.
+# The actual APK origin must be exact and must not be null or wildcard.
+server {
+    listen 443 ssl;
+    server_name REPLACE_DEMO_DOMAIN;
+    ssl_certificate /REPLACE/EXISTING/fullchain.pem;
+    ssl_certificate_key /REPLACE/EXISTING/privkey.pem;
+    auth_basic "SeekJournal demo";
+    auth_basic_user_file /REPLACE/RESTRICTED/htpasswd;
+
+    # Avoid credentials, request body, or query strings in logs.
+    access_log off;
+    add_header Access-Control-Allow-Origin "REPLACE_EXACT_ANDROID_ORIGIN" always;
+    add_header Access-Control-Allow-Methods "GET, POST, PATCH, DELETE, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Authorization, Content-Type, If-Match" always;
+    add_header Vary "Origin" always;
+    add_header Cache-Control "no-store" always;
+
+    location / {
+        # Rewrite-phase return: preflight receives metadata only, never reaches the app.
+        if ($request_method = OPTIONS) { return 204; }
+        proxy_set_header Authorization "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 300s;
+        proxy_pass http://127.0.0.1:REPLACE_DEDICATED_API_PORT;
+    }
+}

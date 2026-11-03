@@ -1,0 +1,12 @@
+[Unit]
+Description=SeekJournal demo HTTPS proxy (initially loopback only)
+After=network.target seekjournal-demo.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/nginx -t -c /etc/seekjournal/nginx.conf
+ExecStart=/usr/sbin/nginx -c /etc/seekjournal/nginx.conf -g "daemon off;"
+ExecReload=/usr/sbin/nginx -c /etc/seekjournal/nginx.conf -s reload
+Restart=no
+
+# Manual start; no [Install] section.

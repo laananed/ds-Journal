@@ -1,0 +1,17 @@
+# TEMPLATE ONLY — dedicated instance, filled and reviewed after VPS inspection.
+[Unit]
+Description=SeekJournal isolated demo API
+After=network.target
+
+[Service]
+Type=simple
+User=REPLACE_DEDICATED_USER
+Group=REPLACE_DEDICATED_GROUP
+WorkingDirectory=/REPLACE/RELEASE/backend
+EnvironmentFile=/REPLACE/RESTRICTED/seekjournal-demo.env
+ExecStart=/REPLACE/VENV/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port REPLACE_DEDICATED_API_PORT --workers 1
+Restart=no
+NoNewPrivileges=true
+PrivateTmp=true
+
+# No [Install] section: manual start only after confirming the database target.
