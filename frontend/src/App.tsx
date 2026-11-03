@@ -70,7 +70,7 @@ type Panel = { kind: 'list' } | { kind: 'create'; key: number } | { kind: 'detai
  * 命名统一：Writing → 速记、Set The Day → 计划、End The Day → 复盘；
  * 原「多篇 AI 复盘」改名「AI 复盘」，与「复盘（End）」区分，两者不共用入口。
  *
- * 左侧图标栏只放四个主入口；日程、AI 复盘、历史收件箱、文件夹收进「更多」，
+ * 左侧图标栏只放主入口；AI 复盘、历史收件箱、文件夹收进「更多」，
  * 搜索 / 设置 / 回收箱在页面右下角。**入口只搬位置，功能与数据都不删除。**
  */
 const navItems: ReadonlyArray<AppNavItem<Module>> = [
@@ -80,7 +80,6 @@ const navItems: ReadonlyArray<AppNavItem<Module>> = [
 ]
 
 const overflowItems: ReadonlyArray<AppNavItem<Module>> = [
-  { id: 'schedule', label: '日程', icon: 'schedule' },
   { id: 'review', label: 'AI 复盘', icon: 'review' },
   { id: 'inbox', label: '历史收件箱', icon: 'inbox' },
   { id: 'folder', label: '文件夹', icon: 'folder' },

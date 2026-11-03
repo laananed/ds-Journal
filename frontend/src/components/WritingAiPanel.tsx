@@ -42,6 +42,8 @@ import { getJournal } from '../api/journals'
 import { getInsight } from '../api/insights'
 import {
   addWritingEntry,
+  commentApplyMessage,
+  lastCommentsPage,
   decideRecovery,
   defaultMessage,
   mergeWritingDetail,
@@ -274,7 +276,10 @@ function WritingAiPanel({
     setCommentsLoading(true)
     setCommentsError('')
     try {
-      const data = await listAIComments(fileId, page, undefined, fileType)
+      let data = await listAIComments(fileId, page === 0 ? 1 : page, undefined, fileType)
+      if (page === 0 && data.has_next) {
+        data = await listAIComments(fileId, lastCommentsPage(data.total, data.page_size), undefined, fileType)
+      }
       if (!mountedRef.current) return
       setComments(data.items)
       setCommentsPage(data.page)
@@ -337,29 +342,30 @@ function WritingAiPanel({
   const applyReady = useCallback(async (
     requestId: string,
     kind: WritingRequestKind,
-  ): Promise<boolean> => {
-    if (sessionId === null) return false
+  ): Promise<string | null> => {
+    if (sessionId === null) return null
     try {
+      const captured: { value: AIWritingMutation | null } = { value: null }
       const mutation = await store.runFileCommand(sessionId, async () => {
         const session = store.getSession(sessionId)
         if (session === null || session.revision === null) throw new Error('会话已关闭')
         const mutation = await applyAIWriting(requestId, session.revision)
+        captured.value = mutation
         return toMutation(mutation.files, mutation.effects, requestId)
       })
       if (mutation === null) throw new Error('文件会话已关闭')
       persistIndex(removeWritingEntry(indexRef.current, requestId))
-      if (kind === 'minds_comments') {
-        void reloadComments(commentsPage)
-        notify('Minds 评论已写入：侧栏显示结果，正文出现评论标记。')
-      } else {
-        notify('Go Deeper 结果已附着在正文原位，可以继续往下写。')
-      }
-      return true
+      const message = kind === 'minds_comments'
+        ? commentApplyMessage(captured.value?.comments)
+        : 'Go Deeper 结果已附着在正文原位，可以继续往下写。'
+      if (kind === 'minds_comments') void reloadComments(0)
+      notify(message)
+      return message
     } catch (error: unknown) {
       notify(`结果已生成但没能写入正文：${errorText(error, '源或占位已变化')}。结果保留在服务端记录里，不会被自动重发。`)
-      return false
+      return null
     }
-  }, [commentsPage, notify, persistIndex, reloadComments, sessionId, store])
+  }, [notify, persistIndex, reloadComments, sessionId, store])
 
   /**
    * 一次完整写作请求：prepare（队列内）→ execute（队列外）→ apply（队列内）。
@@ -515,7 +521,7 @@ function WritingAiPanel({
       /* ---- 3. apply：队列内（保存屏障之后，只做窄应用） ---- */
       const applied = await applyReady(requestId, input.kind)
       setRecord(applied
-        ? { ...merged, phase: 'applied', applied: true, message: defaultMessage('applied', input.kind) }
+        ? { ...merged, phase: 'applied', applied: true, message: applied }
         : {
             ...merged,
             phase: 'conflict',
@@ -642,7 +648,7 @@ function WritingAiPanel({
     try {
       const ok = await applyReady(current.requestId, current.kind)
       setRecord(ok
-        ? { ...current, phase: 'applied', applied: true, message: defaultMessage('applied', current.kind) }
+        ? { ...current, phase: 'applied', applied: true, message: ok }
         : { ...current, phase: 'conflict', message: '结果已生成但没能写入正文（源或占位已变化）。' })
     } finally {
       markBusy(false)
@@ -669,7 +675,7 @@ function WritingAiPanel({
       if (merged.phase !== 'ready') return
       const ok = await applyReady(current.requestId, current.kind)
       setRecord(ok
-        ? { ...merged, phase: 'applied', applied: true, message: defaultMessage('applied', current.kind) }
+        ? { ...merged, phase: 'applied', applied: true, message: ok }
         : { ...merged, phase: 'conflict', message: '结果已生成但没能写入正文（源或占位已变化）。' })
     } catch (error: unknown) {
       if (!mountedRef.current) return
@@ -746,7 +752,7 @@ function WritingAiPanel({
         }}>
           <summary aria-label="更多 AI 功能">＋</summary>
           <div className="writing-ai-menu-content">
-            <button type="button" aria-label="Minds 评论" onClick={() => { setShowMinds((value) => !value); if (menuRef.current) menuRef.current.open = false }}>Minds 评论</button>
+            <button type="button" aria-label="DpSk 评价" onClick={() => { setShowMinds((value) => !value); if (menuRef.current) menuRef.current.open = false }}>DpSk 评价</button>
             <button type="button" aria-label="自定义提问" onClick={() => { setShowQuestion((value) => !value); if (menuRef.current) menuRef.current.open = false }}>自定义提问</button>
             {onOpenSettings !== undefined && <button type="button" aria-label="AI 设置" onClick={onOpenSettings}>AI 设置</button>}
           </div>

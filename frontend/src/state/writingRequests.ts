@@ -258,6 +258,17 @@ export function mergeWritingDetail(
   }
 }
 
+export function lastCommentsPage(total: number, pageSize: number): number {
+  return Math.max(1, Math.ceil(total / Math.max(1, pageSize)))
+}
+
+export function commentApplyMessage(comments: ReadonlyArray<{ anchor_state: string }> | undefined): string {
+  if (comments === undefined) return '评论结果已处理，但无法确认数量；请重新读取评论。'
+  if (comments.length === 0) return '本次没有生成评论；没有自动重试，也可能已消耗 Token。'
+  const unavailable = comments.filter((comment) => comment.anchor_state === 'unavailable').length
+  return `已生成 ${comments.length} 条评论。${unavailable > 0 ? `其中 ${unavailable} 条无法定位，仍可在评论列表查看。` : '可在评论列表查看。'}`
+}
+
 export function defaultMessage(phase: WritingPhase, kind: WritingRequestKind): string {
   const label = kind === 'minds_comments' ? 'Minds 评论' : 'Go Deeper'
   switch (phase) {
