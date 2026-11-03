@@ -281,18 +281,38 @@
 }
 
 @media (max-width: 520px) {
+  .sj-nav {
+    gap: 8px;
+  }
+  .sj-nav__main {
+    gap: 2px;
+  }
   .sj-nav__item,
   .sj-nav__brand {
     width: 40px;
     height: 40px;
   }
+  /* 「更多」菜单在最窄屏也要完整可见：贴右展开并限制宽度，不越出视口 */
+  .sj-nav__menu {
+    min-width: 0;
+    width: max-content;
+    max-width: calc(100vw - 24px);
+  }
+  /*
+   * 手机：右下角快捷入口由竖排改成横排。
+   *
+   * 竖排三个按钮约 124px 高，正好压在正文右下角；横排后只占一行，
+   * 同时把触控目标放大到 44px（原 36px 偏小，手机上容易点错）。
+   * 功能与图标不变，只改排列方向。
+   */
   .sj-shortcuts {
+    flex-direction: row;
     gap: 2px;
     padding: 4px;
     border-radius: 14px;
   }
   .sj-shortcuts__item {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
   }
 }

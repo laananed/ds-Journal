@@ -752,3 +752,71 @@
     transition: none;
   }
 }
+
+/* ==========================================================================
+ * 手机端（360～430px）：顶栏、正文可读性与触控目标
+ *
+ * 计划页的顶栏比速记页多一个「计划 / 复盘」标签，360px 下左侧标识 +
+ * 右侧「问题模板与目标」会挤在同一行；允许换行并放大按钮，避免文字被压成
+ * 两行窄条或按钮小到点不中。正文与上下文区只调字号、行距和高度上限，
+ * 折叠逻辑、保存与状态提示都不变。
+ * ========================================================================== */
+
+@media (max-width: 520px) {
+  .sj-ritual__bar {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    padding: 2px 0 10px;
+  }
+  .sj-ritual__ident {
+    gap: 8px;
+  }
+  .sj-ritual .sj-ritual__ghost {
+    padding: 9px 10px;
+    font-size: 13px;
+  }
+  .sj-ritual__context {
+    max-height: min(40vh, 340px);
+    padding-right: 2px;
+  }
+  .ritual-context {
+    padding: 12px;
+  }
+  .sj-ritual .sj-ritual__title {
+    font-size: 23px;
+    padding-bottom: 10px;
+  }
+  .sj-ritual .s4-editor-content {
+    font-size: 16.5px;
+    line-height: 1.85;
+  }
+  .sj-ritual__paper {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+  .ritual-button {
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 13.5px;
+  }
+  .ritual-questions-input {
+    padding: 9px 10px;
+    font-size: 15px;
+  }
+  .ritual-title-field input {
+    padding: 9px 10px;
+    font-size: 17px;
+  }
+  .ritual-restore-select select {
+    padding: 9px 10px;
+    font-size: 15px;
+  }
+  .ritual-goal-check {
+    font-size: 14px;
+  }
+  .ritual-recovery-callout {
+    padding: 12px 14px;
+  }
+  .ritual-status {
+    gap: 8px;
+  }
+}

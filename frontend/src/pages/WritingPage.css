@@ -640,6 +640,17 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
   }
+  /*
+   * 单列后「今天 N 篇」抽屉排到正文上方：取消 sticky 并限高自己滚动，
+   * 否则整列列表会把正文（真正的写作区）推到首屏之外。
+   */
+  .sj-write__drawer {
+    position: static;
+    max-height: 44dvh;
+    overflow: auto;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--sj-border, #e5e2ea);
+  }
 }
 
 .sj-write__drawer {
@@ -859,3 +870,54 @@
   font-weight: 600;
 }
 .app .sj-write .sj-write__ai-trigger:hover { opacity: .85; }
+
+/* ==========================================================================
+ * 手机端（360～430px）：只调可读性、触控目标与底部留白
+ *
+ * 约束：不改任何布局结构与业务逻辑，桌面样式完全保留。
+ * - 正文 17px 在手机上偏大且行距 1.95 偏松，收到 16.5px / 1.85，单行字数更稳；
+ * - 标题 27px 在 358px 宽度里会顶到两行，收到 23px；
+ * - 按钮最小 40px 高，避免手指点在两个按钮之间；
+ * - 纸面底部留白加上安全区与右下角快捷入口的高度。
+ * ========================================================================== */
+
+@media (max-width: 520px) {
+  .sj-write .sj-write__title {
+    font-size: 23px;
+    padding-bottom: 10px;
+  }
+  .sj-write .s4-editor-content {
+    font-size: 16.5px;
+    line-height: 1.85;
+  }
+  .sj-write__meta {
+    gap: 10px 14px;
+    padding-bottom: 10px;
+  }
+  .sj-write__paper {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+  .sj-write__status {
+    gap: 6px 10px;
+  }
+  .writing-page button {
+    min-height: 40px;
+  }
+  .writing-drafts,
+  .writing-conflict,
+  .writing-legacy {
+    padding: 14px;
+  }
+  .writing-drafts-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .writing-draft-item {
+    padding: 12px;
+    gap: 10px;
+  }
+  .writing-conflict-text {
+    max-height: 200px;
+  }
+}
